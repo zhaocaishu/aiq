@@ -30,7 +30,7 @@ class MultiTestStrategy(bt.Strategy):
             # 没有购买的票
             for secu in set(self.getdatanames()) - set(self.buy_list):
                 data = self.getdatabyname(secu)
-                # 如果突破20日均线买买买，不要在最后一根bar的前一天买
+                # 如果突破20日均线买买买
                 if data.close > self.sma[secu]:
                     # 买买买
                     order_value = self.broker.getvalue() * 0.48
@@ -42,7 +42,7 @@ class MultiTestStrategy(bt.Strategy):
             now_lst = []
             for secu in self.buy_list:
                 data = self.getdatabyname(secu)
-                # 执行卖出条件判断：收盘价格跌破20日均线，或者股票最后一根bar的前一天之剔除日
+                # 执行卖出条件判断：收盘价格跌破20日均线
                 if data.close[0] < self.sma[secu]:
                     # 卖卖卖
                     self.order = self.order_target_percent(data, 0, name=secu)
