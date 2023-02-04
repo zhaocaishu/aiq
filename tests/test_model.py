@@ -4,11 +4,11 @@ from aiq.models import XGBModel
 if __name__ == '__main__':
     train_dataset = Dataset('./data/features', symbols=['BABA', 'AAPL'], handler=Alpha100())
     model_params = {
-        'objective': 'reg:squarederror',
+        'objective': 'reg:absoluteerror',
         'learning_rate': 0.1,
         'colsample_bytree': 0.3,
-        'max_depth': 5,
-        'n_estimators': 10
+        'max_depth': 10,
+        'n_estimators': 100
     }
     model = XGBModel(feature_cols=['momentum_1d', 'sobv'], label_col=['label_reg'], model_params=model_params)
     model.fit(train_dataset=train_dataset)
