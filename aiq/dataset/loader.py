@@ -11,7 +11,6 @@ class DataLoader(abc.ABC):
     @staticmethod
     def load(data_dir, symbol_name, timestamp_col='Date', start_time=None, end_time=None) -> pd.DataFrame:
         """
-
         Args:
             data_dir (str): dataset directory
             symbol_name (str):  symbol name

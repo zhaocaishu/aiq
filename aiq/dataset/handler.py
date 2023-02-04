@@ -61,6 +61,7 @@ class Alpha100(DataHandler):
         df['macd'] = macd
 
         if not self.test_mode:
+            # regression target
             label_reg = np.ones(close.shape[0]) * np.NaN
             for i in range(1, label_reg.shape[0]):
                 label_reg[i] = ((close[i] - close[i-1]) / close[i-1])
