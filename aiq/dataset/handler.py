@@ -12,12 +12,15 @@ class DataHandler(abc.ABC):
     def fetch(self, df: pd.DataFrame = None) -> pd.DataFrame:
         pass
 
+
 class Alpha100(DataHandler):
     def __init__(self, test_mode=False):
         self.test_mode = test_mode
 
     def fetch(self, df: pd.DataFrame = None) -> pd.DataFrame:
         close = df['Close']
+        high = df['High']
+        low = df['Low']
         volume = df['Volume']
 
         momentum_1d = ta.MOM(close, timeperiod=1)
@@ -54,17 +57,28 @@ class Alpha100(DataHandler):
         df['vstd_30d'] = vstd_30d
 
         sobv = ta.OBV(close, volume)
-        rsi = ta.RSI(close, timeperiod=14)
-        macd, _, _ = ta.MACD(close, fastperiod=12, slowperiod=26, signalperiod=9)
         df['sobv'] = sobv
+
+        rsi = ta.RSI(close, timeperiod=14)
         df['rsi'] = rsi
+
+        dif, dea, macd = ta.MACD(close, fastperiod=12, slowperiod=26, signalperiod=9)
+        df['dif'] = dif
+        df['dea'] = dea
         df['macd'] = macd
+
+        kdj_k, kdj_d = ta.STOCH(high, low, close, fastk_period=9, slowk_period=3, slowk_matype=0, slowd_period=3,
+                                slowd_matype=0)
+        kdj_j = 3 * kdj_k - 2 * kdj_d
+        df['kdj_k'] = kdj_k
+        df['kdj_d'] = kdj_d
+        df['kdj_j'] = kdj_j
 
         if not self.test_mode:
             # regression target
             label_reg = np.ones(close.shape[0]) * np.NaN
             for i in range(1, label_reg.shape[0]):
-                label_reg[i] = ((close[i] - close[i-1]) / close[i-1])
+                label_reg[i] = ((close[i] - close[i - 1]) / close[i - 1])
             df['label_reg'] = label_reg
             df = df.dropna(subset=['label_reg'])
 

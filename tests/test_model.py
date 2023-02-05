@@ -16,7 +16,8 @@ if __name__ == '__main__':
     }
     model = XGBModel(feature_cols=['momentum_1d', 'momentum_3d', 'momentum_5d', 'momentum_15d', 'momentum_30d',
                                    'highlow_1d', 'highlow_3d', 'highlow_5d', 'highlow_15d', 'highlow_30d',
-                                   'vstd_1d', 'vstd_3d', 'vstd_5d', 'vstd_15d', 'vstd_30d', 'sobv', 'rsi', 'macd'],
+                                   'vstd_1d', 'vstd_3d', 'vstd_5d', 'vstd_15d', 'vstd_30d', 'sobv', 'rsi',
+                                   'dif', 'dea', 'macd', 'kdj_k', 'kdj_d', 'kdj_j'],
                      label_col=['label_reg'], model_params=model_params)
     model.fit(train_dataset=train_dataset, val_dataset=valid_dataset)
     result_dataset = model.predict(dataset=valid_dataset)
