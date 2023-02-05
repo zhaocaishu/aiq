@@ -3,7 +3,7 @@ from aiq.models import XGBModel
 
 if __name__ == '__main__':
     train_dataset = Dataset('./data', start_time='2021-08-30', end_time='2022-04-28', handler=Alpha100(), shuffle=True)
-    valid_dataset = Dataset('./data', start_time='2022-04-28', end_time='2022-08-26', handler=Alpha100())
+    valid_dataset = Dataset('./data', start_time='2022-04-29', end_time='2022-08-26', handler=Alpha100())
     model_params = {
         'objective': 'reg:squarederror',
         'eta': 0.0421,
@@ -19,4 +19,5 @@ if __name__ == '__main__':
                                    'vstd_1d', 'vstd_3d', 'vstd_5d', 'vstd_15d', 'vstd_30d', 'sobv', 'rsi', 'macd'],
                      label_col=['label_reg'], model_params=model_params)
     model.fit(train_dataset=train_dataset, val_dataset=valid_dataset)
-
+    result_dataset = model.predict(dataset=valid_dataset)
+    result_dataset.dump('./data/prediction_result')

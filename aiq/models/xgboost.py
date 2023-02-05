@@ -54,7 +54,9 @@ class XGBModel(BaseModel):
         if self.model is None:
             raise ValueError("model is not fitted yet!")
         x_test = dataset.to_dataframe()[self.feature_cols].values
-        return self.model.predict(xgb.DMatrix(x_test))
+        predict_result = self.model.predict(xgb.DMatrix(x_test))
+        dataset.add_column('prediction', predict_result)
+        return dataset
 
     def get_feature_importance(self, *args, **kwargs) -> pd.Series:
         """get feature importance
