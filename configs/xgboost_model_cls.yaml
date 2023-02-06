@@ -17,7 +17,6 @@ model:
     'eta': 0.0421,
     'colsample_bytree': 0.8879,
     'max_depth': 8,
-    'n_estimators': 647,
     'subsample': 0.8789,
     'nthread': 2,
     'eval_metric': 'rmse'
