@@ -64,3 +64,11 @@ class XGBModel(BaseModel):
                 https://xgboost.readthedocs.io/en/latest/python/python_api.html#xgboost.Booster.get_score
         """
         return pd.Series(self.model.get_score(*args, **kwargs)).sort_values(ascending=False)
+
+    def save(self, model_file):
+        self.model.save_model(model_file)
+
+    def load(self, model_file):
+        self.model = xgb.Booster()
+        self.model.load_model(model_file)
+
