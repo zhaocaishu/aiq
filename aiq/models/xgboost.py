@@ -21,7 +21,7 @@ class XGBModel(BaseModel):
         self,
         train_dataset: Dataset,
         val_dataset: Dataset=None,
-        num_boost_round=500,
+        num_boost_round=1000,
         early_stopping_rounds=50,
         verbose_eval=20,
         eval_results=dict()

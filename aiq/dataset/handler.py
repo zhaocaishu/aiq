@@ -77,8 +77,8 @@ class Alpha100(DataHandler):
         if not self.test_mode:
             # regression target
             label_reg = np.ones(close.shape[0]) * np.NaN
-            for i in range(1, label_reg.shape[0]):
-                label_reg[i] = ((close[i] - close[i - 1]) / close[i - 1])
+            for i in range(0, label_reg.shape[0] - 2):
+                label_reg[i] = (close[i + 2] / close[i + 1] - 1)
             df['label_reg'] = label_reg
             df = df.dropna(subset=['label_reg'])
 
