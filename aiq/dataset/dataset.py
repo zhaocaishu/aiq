@@ -21,9 +21,8 @@ class Dataset(abc.ABC):
             handler=None,
             shuffle=False
     ):
-        with open(os.path.join(data_dir, 'instruments/code.txt'), 'r') as f:
-            line = f.readline().strip()
-            self.symbols = [symbol for symbol in line.split(',')]
+        with open(os.path.join(data_dir, 'instruments/all.txt'), 'r') as f:
+            self.symbols = [line.strip() for line in f.readlines()]
 
         df_list = []
         for symbol in self.symbols:

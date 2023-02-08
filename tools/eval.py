@@ -14,6 +14,7 @@ def parse_args():
     parser.add_argument('--cfg_file', type=str, default=None, help='specify the config for evaluation')
     parser.add_argument('--data_dir', type=str, help='the data directory')
     parser.add_argument('--save_dir', type=str, help='the saved directory')
+    parser.add_argument('--dump_result', action='store_true', default=True, help='whether to save prediction result')
 
     args = parser.parse_args()
 
@@ -45,6 +46,9 @@ def main():
     label_reg = predict_result.to_dataframe()['label_reg'].values
     prediction = predict_result.to_dataframe()['prediction'].values
     print("rmse:", np.sqrt(mean_squared_error(label_reg, prediction)))
+
+    if args.dump_result:
+        predict_result.dump(os.path.join(args.save_dir, 'prediction_result'))
 
 
 if __name__ == '__main__':
