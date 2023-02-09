@@ -91,7 +91,8 @@ if __name__ == '__main__':
     cerebro = bt.Cerebro()
     cerebro.broker.setcash(100000.0)
     cerebro.broker.setcommission(commission=0.001)
-    cerebro.addstrategy(MultiTestStrategy, maperiod=20)
+    # cerebro.addstrategy(MultiTestStrategy, maperiod=20)
+    cerebro.addstrategy(TopkDropoutStrategy, topk=2, n_drop=1)
 
     # 添加多个股票回测数据
     codes = ['AAPL', 'BABA', 'GOOG']

@@ -22,8 +22,8 @@ def parse_args():
     parser.add_argument('--save_dir', type=str, help='the saved directory')
     parser.add_argument('--cash', type=float, default=100000, help='cash value')
     parser.add_argument('--commission', type=float, default=0.001, help='commission value')
-    parser.add_argument('--topk', type=int, default=50, help='number of stocks in the portfolio')
-    parser.add_argument('--n_drop', type=int, default=5, help='number of stocks to be replaced in each trading date')
+    parser.add_argument('--topk', type=int, default=10, help='number of stocks in the portfolio')
+    parser.add_argument('--n_drop', type=int, default=3, help='number of stocks to be replaced in each trading date')
     parser.add_argument('--visualize', action='store_true', default=False, help='whether to plot chart')
 
     args = parser.parse_args()
@@ -46,7 +46,7 @@ if __name__ == '__main__':
         codes = {line.strip() for line in f.readlines()}
 
     with open(os.path.join(args.data_dir, 'calendars/days.txt'), 'r') as f:
-        days = {line.strip() for line in f.readlines()}
+        days = [line.strip() for line in f.readlines()]
 
     code_cnt = 0
     for code in codes:
