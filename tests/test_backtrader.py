@@ -90,7 +90,7 @@ if __name__ == '__main__':
     # 初始化Cerebro
     cerebro = bt.Cerebro()
     cerebro.broker.setcash(100000.0)
-    cerebro.broker.setcommission(commission=0.001)
+    cerebro.broker.setcommission(commission=0.00012)
     # cerebro.addstrategy(MultiTestStrategy, maperiod=20)
     cerebro.addstrategy(TopkDropoutStrategy, topk=2, n_drop=1)
 

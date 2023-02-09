@@ -21,7 +21,7 @@ def parse_args():
     parser.add_argument('--data_dir', type=str, help='the data directory')
     parser.add_argument('--save_dir', type=str, help='the saved directory')
     parser.add_argument('--cash', type=float, default=100000, help='cash value')
-    parser.add_argument('--commission', type=float, default=0.001, help='commission value')
+    parser.add_argument('--commission', type=float, default=0.00012, help='commission value')
     parser.add_argument('--topk', type=int, default=10, help='number of stocks in the portfolio')
     parser.add_argument('--n_drop', type=int, default=3, help='number of stocks to be replaced in each trading date')
     parser.add_argument('--visualize', action='store_true', default=False, help='whether to plot chart')
