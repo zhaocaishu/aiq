@@ -18,8 +18,6 @@ if __name__ == '__main__':
 
     fp = open(os.path.join(args.data_dir, 'calendars/days.txt'), 'w')
     data = pd.read_csv(args.csv_file)
-    dates = []
     for date in data['Date']:
-        dates.append(date)
         fp.write(date + '\n')
     fp.close()

@@ -54,7 +54,7 @@ if __name__ == '__main__':
         if not os.path.exists(file_path):
             continue
         data = pd.read_csv(file_path)
-        if not (data['Date'].values == days).all():
+        if list(data['Date'].values) != days:
             continue
         code_cnt += 1
         data.index = pd.to_datetime(data['Date'])
