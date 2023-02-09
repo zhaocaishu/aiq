@@ -3,6 +3,8 @@ import os
 import backtrader as bt
 import pandas as pd
 
+from aiq.strategies import TopkDropoutStrategy
+
 
 class MultiTestStrategy(bt.Strategy):
     params = (
@@ -56,7 +58,7 @@ class MultiTestStrategy(bt.Strategy):
 
         # Check if an order has been completed
         # Attention: broker could reject order if not enough cash
-        if order.status in [order.Completed, order.Canceled, order.Margin]:
+        if order.status in [order.Completed]:
             if order.isbuy():
                 self.log(f"""买入{order.info['name']}, 成交量{order.executed.size}，成交价{order.executed.price:.2f}""")
                 self.log(
@@ -65,6 +67,8 @@ class MultiTestStrategy(bt.Strategy):
                 self.log(f"""卖出{order.info['name']}, 成交量{order.executed.size}，成交价{order.executed.price:.2f}""")
                 self.log(
                     f'资产：{self.broker.getvalue():.2f} 持仓：{[(x, self.getpositionbyname(x).size) for x in self.buy_list]}')
+        elif order.status in [order.Canceled, order.Margin, order.Rejected]:
+            self.log('订单取消/金额不足/拒绝')
 
         # Write down: no pending order
         self.order = None
@@ -90,7 +94,7 @@ if __name__ == '__main__':
     cerebro.addstrategy(MultiTestStrategy, maperiod=20)
 
     # 添加多个股票回测数据
-    codes = ['AAPL', 'BABA']
+    codes = ['AAPL', 'BABA', 'GOOG']
     for code in codes:
         file_path = os.path.join('./data/features', code + '.csv')
         data = pd.read_csv(file_path)
