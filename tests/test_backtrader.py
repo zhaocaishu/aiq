@@ -60,13 +60,13 @@ class MultiTestStrategy(bt.Strategy):
         # Attention: broker could reject order if not enough cash
         if order.status in [order.Completed]:
             if order.isbuy():
-                self.log(f"""买入{order.info['name']}, 成交量{order.executed.size}，成交价{order.executed.price:.2f}""")
+                self.log(f"""买入: {order.info['name']}, 成交量: {order.executed.size}，成交价: {order.executed.price:.2f}""")
                 self.log(
-                    f'资产：{self.broker.getvalue():.2f} 持仓：{[(x, self.getpositionbyname(x).size) for x in self.buy_list]}')
+                    f'资产: {self.broker.getvalue():.2f} 持仓: {[(x, self.getpositionbyname(x).size) for x in self.buy_list]}')
             elif order.issell():
-                self.log(f"""卖出{order.info['name']}, 成交量{order.executed.size}，成交价{order.executed.price:.2f}""")
+                self.log(f"""卖出: {order.info['name']}, 成交量: {order.executed.size}，成交价: {order.executed.price:.2f}""")
                 self.log(
-                    f'资产：{self.broker.getvalue():.2f} 持仓：{[(x, self.getpositionbyname(x).size) for x in self.buy_list]}')
+                    f'资产: {self.broker.getvalue():.2f} 持仓: {[(x, self.getpositionbyname(x).size) for x in self.buy_list]}')
         elif order.status in [order.Canceled, order.Margin, order.Rejected]:
             self.log('订单取消/金额不足/拒绝')
 
@@ -101,7 +101,7 @@ if __name__ == '__main__':
         data.index = pd.to_datetime(data['Date'])
         data_feed = ZCSPandasData(dataname=data)
         cerebro.adddata(data_feed, name=code)
-        print('添加股票数据：code: %s' % code)
+    print('合计添加%d个股票数据' % len(codes))
 
     cerebro.run()
 

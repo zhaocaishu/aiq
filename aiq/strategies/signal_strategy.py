@@ -129,11 +129,11 @@ class TopkDropoutStrategy(bt.Strategy):
         # Attention: broker could reject order if not enough cash
         if order.status in [order.Completed]:
             if order.isbuy():
-                self.log(f"""买入{order.info['name']}, 成交量{order.executed.size}，成交价:{order.executed.price:.2f}""")
+                self.log(f"""买入: {order.info['name']}, 成交量: {order.executed.size}，成交价: {order.executed.price:.2f}""")
                 self.log(
                     f'资产：{self.broker.getvalue():.2f} 持仓: {[(x, self.getpositionbyname(x).size) for x in self.current_stock_list]}')
             elif order.issell():
-                self.log(f"""卖出{order.info['name']}, 成交量{order.executed.size}，成交价{order.executed.price:.2f}""")
+                self.log(f"""卖出: {order.info['name']}, 成交量: {order.executed.size}，成交价: {order.executed.price:.2f}""")
                 self.log(
                     f'资产：{self.broker.getvalue():.2f} 持仓：{[(x, self.getpositionbyname(x).size) for x in self.current_stock_list]}')
         elif order.status in [order.Canceled, order.Margin, order.Rejected]:

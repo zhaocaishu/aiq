@@ -1,7 +1,7 @@
 import os
 import argparse
 
-import backtest as bt
+import backtrader as bt
 import pandas as pd
 
 from aiq.strategies import TopkDropoutStrategy
@@ -24,7 +24,6 @@ def parse_args():
     parser.add_argument('--commission', type=float, default=0.001, help='commission value')
     parser.add_argument('--topk', type=int, default=50, help='number of stocks in the portfolio')
     parser.add_argument('--n_drop', type=int, default=5, help='number of stocks to be replaced in each trading date')
-    parser.add_argument('--fixed_days', type=int, default=240, help='fixed number of days')
     parser.add_argument('--visualize', action='store_true', default=False, help='whether to plot chart')
 
     args = parser.parse_args()
@@ -46,17 +45,22 @@ if __name__ == '__main__':
     with open(os.path.join(args.data_dir, 'instruments/csi300.txt'), 'r') as f:
         codes = {line.strip() for line in f.readlines()}
 
+    with open(os.path.join(args.data_dir, 'calendars/days.txt'), 'r') as f:
+        days = {line.strip() for line in f.readlines()}
+
+    code_cnt = 0
     for code in codes:
         file_path = os.path.join(args.save_dir, code + '.csv')
         if not os.path.exists(file_path):
             continue
         data = pd.read_csv(file_path)
-        if data.shape[0] != args.fixed_days:
+        if not (data['Date'].values == days).all():
             continue
+        code_cnt += 1
         data.index = pd.to_datetime(data['Date'])
         data_feed = ZCSPandasData(dataname=data)
         cerebro.adddata(data_feed, name=code)
-        print('添加股票数据：code: %s' % code)
+    print('合计添加%d个股票数据' % code_cnt)
 
     # 开始资金
     portvalue = cerebro.broker.getvalue()
