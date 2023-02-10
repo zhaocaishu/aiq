@@ -1,7 +1,7 @@
 import argparse
 import os
 
-from aiq.dataset import Dataset, Alpha100
+from aiq.dataset import Dataset, Alpha158
 from aiq.models import XGBModel
 from aiq.utils.config import config as cfg
 
@@ -27,19 +27,20 @@ def main():
 
     # dataset
     print(cfg.dataset.segments)
+    handler = Alpha158()
     train_dataset = Dataset(args.data_dir,
                             start_time=cfg.dataset.segments['train'][0],
                             end_time=cfg.dataset.segments['train'][1],
-                            handler=Alpha100(),
+                            handler=handler,
                             shuffle=True)
     valid_dataset = Dataset(args.data_dir,
                             start_time=cfg.dataset.segments['valid'][0],
                             end_time=cfg.dataset.segments['valid'][1],
-                            handler=Alpha100())
+                            handler=handler)
 
     # train model
-    model = XGBModel(feature_cols=cfg.dataset.feature_cols,
-                     label_col=cfg.dataset.label_col,
+    model = XGBModel(feature_cols=handler.feature_names,
+                     label_col=handler.label_name,
                      model_params=cfg.model.params)
     model.fit(train_dataset=train_dataset, val_dataset=valid_dataset)
 

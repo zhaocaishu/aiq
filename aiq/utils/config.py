@@ -56,9 +56,7 @@ class Config(edict):
 config = Config(
     edict(
         dataset=edict(
-            segments=None,
-            feature_cols=[],
-            label_col=''
+            segments=None
         ),
         model=edict(
             params=None

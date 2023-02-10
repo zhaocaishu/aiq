@@ -4,6 +4,9 @@ import numpy as np
 import pandas as pd
 import talib as ta
 
+from aiq.ops import Greater, Less, Ref, Mean, Std, Rsquare, Resi, Slope, Skew, Max, Min, Quantile, Rank, IdxMax, IdxMin, \
+    Corr, Log, Sum, Abs
+
 
 class DataHandler(abc.ABC):
     def __init__(self):
@@ -13,73 +16,274 @@ class DataHandler(abc.ABC):
         pass
 
 
-class Alpha100(DataHandler):
+class Alpha158(DataHandler):
     def __init__(self, test_mode=False):
         self.test_mode = test_mode
 
+        self._feature_names = None
+        self._label_name = None
+
     def fetch(self, df: pd.DataFrame = None) -> pd.DataFrame:
+        open = df['Open']
         close = df['Close']
         high = df['High']
         low = df['Low']
         volume = df['Volume']
 
-        momentum_1d = ta.MOM(close, timeperiod=1)
-        momentum_3d = ta.MOM(close, timeperiod=3)
-        momentum_5d = ta.MOM(close, timeperiod=5)
-        momentum_15d = ta.MOM(close, timeperiod=15)
-        momentum_30d = ta.MOM(close, timeperiod=30)
-        df['momentum_1d'] = momentum_1d
-        df['momentum_3d'] = momentum_3d
-        df['momentum_5d'] = momentum_5d
-        df['momentum_15d'] = momentum_15d
-        df['momentum_30d'] = momentum_30d
+        # kbar
+        features = [(close - open) / open,
+                    (high - low) / open,
+                    (close - open) / (high - low + 1e-12),
+                    (high - Greater()(open, close)) / open,
+                    (high - Greater()(open, close)) / (high - low + 1e-12),
+                    (Less()(open, close) - low) / open,
+                    (Less()(open, close) - low) / (high - low + 1e-12),
+                    (2 * close - high - low) / open,
+                    (2 * close - high - low) / (high - low + 1e-12)]
+        names = ['KMID', 'KLEN', 'KMID2', 'KUP', 'KUP2', 'KLOW', 'KLOW2', 'KSFT', 'KSFT2']
 
-        highlow_1d = close.rolling(window=1).max() / close.rolling(window=1).min()
-        highlow_3d = close.rolling(window=3).max() / close.rolling(window=3).min()
-        highlow_5d = close.rolling(window=5).max() / close.rolling(window=5).min()
-        highlow_15d = close.rolling(window=15).max() / close.rolling(window=15).min()
-        highlow_30d = close.rolling(window=30).max() / close.rolling(window=30).min()
-        df['highlow_1d'] = highlow_1d
-        df['highlow_3d'] = highlow_3d
-        df['highlow_5d'] = highlow_5d
-        df['highlow_15d'] = highlow_15d
-        df['highlow_30d'] = highlow_30d
+        # price
+        for field in ['Open', 'High', 'Low', 'Close']:
+            for d in range(5):
+                if d != 0:
+                    features.append(Ref(d)(df[field]) / close)
+                else:
+                    features.append(df[field] / close)
+                names.append(field.upper() + str(d))
 
-        vstd_1d = volume.rolling(window=1).std()
-        vstd_3d = volume.rolling(window=3).std()
-        vstd_5d = volume.rolling(window=5).std()
-        vstd_15d = volume.rolling(window=15).std()
-        vstd_30d = volume.rolling(window=30).std()
-        df['vstd_1d'] = vstd_1d
-        df['vstd_3d'] = vstd_3d
-        df['vstd_5d'] = vstd_5d
-        df['vstd_15d'] = vstd_15d
-        df['vstd_30d'] = vstd_30d
+        # volume
+        for d in range(5):
+            field = 'Volume'
+            feature = field.upper() + str(d)
+            if d != 0:
+                features.append(Ref(d)(df[field]) / (volume + 1e-12))
+            else:
+                features.append(df[field] / (volume + 1e-12))
+            names.append(feature)
 
-        sobv = ta.OBV(close, volume)
-        df['sobv'] = sobv
+        # rolling
+        windows = [5, 10, 20, 30, 60]
+        include = None
+        exclude = []
 
-        rsi = ta.RSI(close, timeperiod=14)
-        df['rsi'] = rsi
+        def use(x):
+            return x not in exclude and (include is None or x in include)
 
-        dif, dea, macd = ta.MACD(close, fastperiod=12, slowperiod=26, signalperiod=9)
-        df['dif'] = dif
-        df['dea'] = dea
-        df['macd'] = macd
+        if use("ROC"):
+            # https://www.investopedia.com/terms/r/rateofchange.asp
+            # Rate of change, the price change in the past d days, divided by latest close price to remove unit
+            for d in windows:
+                features.append(Ref(d)(close) / close)
+                names.append('ROC%d' % d)
 
-        kdj_k, kdj_d = ta.STOCH(high, low, close, fastk_period=9, slowk_period=3, slowk_matype=0, slowd_period=3,
-                                slowd_matype=0)
-        kdj_j = 3 * kdj_k - 2 * kdj_d
-        df['kdj_k'] = kdj_k
-        df['kdj_d'] = kdj_d
-        df['kdj_j'] = kdj_j
+        if use("MA"):
+            # https://www.investopedia.com/ask/answers/071414/whats-difference-between-moving-average-and-weighted-moving-average.asp
+            # Simple Moving Average, the simple moving average in the past d days, divided by latest close price to remove unit
+            for d in windows:
+                features.append(Mean(d)(close) / close)
+                names.append('MA%d' % d)
+
+        if use("STD"):
+            # The standard diviation of close price for the past d days, divided by latest close price to remove unit
+            for d in windows:
+                features.append(Std(d)(close) / close)
+                names.append('STD%d' % d)
+
+        if use("BETA"):
+            # The rate of close price change in the past d days, divided by latest close price to remove unit
+            # For example, price increase 10 dollar per day in the past d days, then Slope will be 10.
+            for d in windows:
+                features.append(Slope(d)(close) / close)
+                names.append('BETA%d' % d)
+
+        if use("RSQR"):
+            # The R-sqaure value of linear regression for the past d days, represent the trend linear
+            for d in windows:
+                features.append(Rsquare(d)(close))
+                names.append('RSQR%d' % d)
+
+        if use("RESI"):
+            # The redisdual for linear regression for the past d days, represent the trend linearity for past d days.
+            for d in windows:
+                features.append(Resi(d)(close) / close)
+                names.append('RESI%d' % d)
+
+        if use("MAX"):
+            # The max price for past d days, divided by latest close price to remove unit
+            for d in windows:
+                features.append(Max(d)(high) / close)
+                names.append('MAX%d' % d)
+
+        if use("LOW"):
+            # The low price for past d days, divided by latest close price to remove unit
+            for d in windows:
+                features.append(Min(d)(low) / close)
+                names.append('MIN%d' % d)
+
+        if use("QTLU"):
+            # The 80% quantile of past d day's close price, divided by latest close price to remove unit
+            # Used with MIN and MAX
+            for d in windows:
+                features.append(Quantile(d, 0.8)(close) / close)
+                names.append('QTLU%d' % d)
+
+        if use("QTLD"):
+            # The 20% quantile of past d day's close price, divided by latest close price to remove unit
+            for d in windows:
+                features.append(Quantile(d, 0.2)(close) / close)
+                names.append('QTLD%d' % d)
+
+        if use("RANK"):
+            # Get the percentile of current close price in past d day's close price.
+            # Represent the current price level comparing to past N days, add additional information to moving average.
+            for d in windows:
+                features.append(Rank(d)(close))
+                names.append('RANK%d' % d)
+
+        if use("RSV"):
+            # Represent the price position between upper and lower resistent price for past d days.
+            for d in windows:
+                features.append((close - Min(d)(low)) / (Max(d)(high) - Min(d)(low) + 1e-12))
+                names.append('RSV%d' % d)
+
+        if use("IMAX"):
+            # The number of days between current date and previous highest price date.
+            # Part of Aroon Indicator https://www.investopedia.com/terms/a/aroon.asp
+            # The indicator measures the time between highs and the time between lows over a time period.
+            # The idea is that strong uptrends will regularly see new highs, and strong downtrends will regularly see new lows.
+            for d in windows:
+                features.append(IdxMax(d)(high) / d)
+                names.append('IMAX%d' % d)
+
+        if use("IMIN"):
+            # The number of days between current date and previous lowest price date.
+            # Part of Aroon Indicator https://www.investopedia.com/terms/a/aroon.asp
+            # The indicator measures the time between highs and the time between lows over a time period.
+            # The idea is that strong uptrends will regularly see new highs, and strong downtrends will regularly see new lows.
+            for d in windows:
+                features.append(IdxMin(d)(low) / d)
+                names.append('IMIN%d' % d)
+
+        if use("IMXD"):
+            # The time period between previous lowest-price date occur after highest price date.
+            # Large value suggest downward momemtum.
+            for d in windows:
+                features.append((IdxMax(d)(high) - IdxMin(d)(low)) / d)
+                names.append('IMXD%d' % d)
+
+        if use("CORR"):
+            # The correlation between absolute close price and log scaled trading volume
+            for d in windows:
+                features.append(Corr(d)(close, Log()(volume + 1)))
+                names.append('CORR%d' % d)
+
+        if use("CORD"):
+            # The correlation between price change ratio and volume change ratio
+            for d in windows:
+                features.append(Corr(d)(close / Ref(1)(close), Log()(volume / Ref(1)(volume) + 1)))
+                names.append('CORD%d' % d)
+
+        if use("CNTP"):
+            # The percentage of days in past d days that price go up.
+            for d in windows:
+                features.append(Mean(d)(close > Ref(1)(close)))
+                names.append('CNTP%d' % d)
+
+        if use("CNTN"):
+            # The percentage of days in past d days that price go down.
+            for d in windows:
+                features.append(Mean(d)(close < Ref(1)(close)))
+                names.append('CNTN%d' % d)
+
+        if use("CNTD"):
+            # The diff between past up day and past down day
+            for d in windows:
+                features.append(Mean(d)(close > Ref(1)(close)) - Mean(d)(close < Ref(1)(close)))
+                names.append('CNTD%d' % d)
+
+        if use("SUMP"):
+            # The total gain / the absolute total price changed
+            # Similar to RSI indicator. https://www.investopedia.com/terms/r/rsi.asp
+            for d in windows:
+                features.append(
+                    Sum(d)(Greater()(close - Ref(1)(close), 0)) / (Sum(d)(Abs()(close - Ref(1)(close))) + 1e-12))
+                names.append('SUMP%d' % d)
+
+        if use("SUMN"):
+            # The total lose / the absolute total price changed
+            # Can be derived from SUMP by SUMN = 1 - SUMP
+            # Similar to RSI indicator. https://www.investopedia.com/terms/r/rsi.asp
+            for d in windows:
+                features.append(
+                    Sum(d)(Greater()(Ref(1)(close) - close, 0)) / (Sum(d)(Abs()(close - Ref(1)(close))) + 1e-12))
+                names.append('SUMN%d' % d)
+
+        if use("SUMD"):
+            # The diff ratio between total gain and total lose
+            # Similar to RSI indicator. https://www.investopedia.com/terms/r/rsi.asp
+            for d in windows:
+                features.append(
+                    (Sum(d)(Greater()(close - Ref(1)(close), 0)) - Sum(d)(Greater()(Ref(1)(close) - close, 0))) / (
+                            Sum(d)(Abs()(close - Ref(1)(close))) + 1e-12))
+                names.append('SUMD%d' % d)
+
+        if use("VMA"):
+            # Simple Volume Moving average: https://www.barchart.com/education/technical-indicators/volume_moving_average
+            for d in windows:
+                features.append(Mean(d)(volume) / (volume + 1e-12))
+                names.append('VMA%d' % d)
+
+        if use("VSTD"):
+            # The standard deviation for volume in past d days.
+            for d in windows:
+                features.append(Std(d)(volume) / (volume + 1e-12))
+                names.append('VSTD%d' % d)
+
+        if use("WVMA"):
+            # The volume weighted price change volatility
+            for d in windows:
+                features.append(Std(d)(Abs()(close / Ref(1)(close) - 1) * volume) / (
+                        Mean(d)(Abs()(close / Ref(1)(close) - 1) * volume) + 1e-12))
+                names.append('WVMA%d' % d)
+
+        if use("VSUMP"):
+            # The total volume increase / the absolute total volume changed
+            for d in windows:
+                features.append(
+                    Sum(d)(Greater()(volume - Ref(1)(volume), 0)) / (Sum(d)(Abs()(volume - Ref(1)(volume))) + 1e-12))
+                names.append('VSUMP%d' % d)
+
+        if use("VSUMN"):
+            # The total volume increase / the absolute total volume changed
+            for d in windows:
+                features.append(
+                    Sum(d)(Greater()(Ref(1)(volume) - volume, 0)) / (Sum(d)(Abs()(volume - Ref(1)(volume))) + 1e-12))
+                names.append('VSUMN%d' % d)
+
+        if use("VSUMD"):
+            # The diff ratio between total volume increase and total volume decrease
+            # RSI indicator for volume
+            for d in windows:
+                features.append(
+                    (Sum(d)(Greater()(volume - Ref(1)(volume), 0)) - Sum(d)(Greater()(Ref(1)(volume) - volume, 0))) / (
+                                Sum(d)(Abs()(volume - Ref(1)(volume))) + 1e-12))
+                names.append('VSUMD%d' % d)
+
+        self._feature_names = names
+        self._label_name = 'LABEL'
+        df = pd.concat([df, pd.concat([features[i].rename(names[i]) for i in range(len(names))], axis=1)])
 
         if not self.test_mode:
             # regression target
-            label_reg = np.ones(close.shape[0]) * np.NaN
-            for i in range(0, label_reg.shape[0] - 2):
-                label_reg[i] = (close[i + 2] / close[i + 1] - 1)
-            df['label_reg'] = label_reg
-            df = df.dropna(subset=['label_reg'])
+            df[self._label_name] = Ref(-2)(close) / Ref(-1)(close) - 1
+            df = df.dropna(subset=[self._label_name])
 
         return df
+
+    @property
+    def feature_names(self):
+        return self._feature_names
+
+    @property
+    def label_name(self):
+        return self._label_name

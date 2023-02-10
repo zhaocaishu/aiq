@@ -4,13 +4,6 @@ dataset:
     'valid': ['2022-04-29', '2022-08-26']
   }
 
-  feature_cols: ['momentum_1d', 'momentum_3d', 'momentum_5d', 'momentum_15d', 'momentum_30d',
-                 'highlow_1d', 'highlow_3d', 'highlow_5d', 'highlow_15d', 'highlow_30d',
-                 'vstd_1d', 'vstd_3d', 'vstd_5d', 'vstd_15d', 'vstd_30d', 'sobv', 'rsi',
-                 'dif', 'dea', 'macd', 'kdj_k', 'kdj_d', 'kdj_j']
-
-  label_col: 'label_reg'
-
 model:
   params: {
     'objective': 'reg:squarederror',

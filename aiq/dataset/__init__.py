@@ -1,4 +1,4 @@
 from .dataset import Dataset
-from .handler import Alpha100
+from .handler import Alpha158
 
-__all__ = ['Dataset', 'Alpha100']
+__all__ = ['Dataset', 'Alpha158']
