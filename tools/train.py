@@ -50,6 +50,8 @@ def main():
     # save model
     model.save(os.path.join(args.save_dir, 'model.json'))
 
+    print('Model training has been finished successfully!')
+
 
 if __name__ == '__main__':
     main()
