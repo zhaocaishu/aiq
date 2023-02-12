@@ -3,8 +3,8 @@ from aiq.models import XGBModel
 
 if __name__ == '__main__':
     handler = Alpha158()
-    train_dataset = Dataset('./data', start_time='2021-08-30', end_time='2022-04-28', handler=handler, shuffle=True)
-    valid_dataset = Dataset('./data', start_time='2022-04-29', end_time='2022-08-26', handler=handler)
+    train_dataset = Dataset('./data', instruments='all', start_time='2021-08-30', end_time='2022-04-28', handler=handler, shuffle=True)
+    valid_dataset = Dataset('./data', instruments='all', start_time='2022-04-29', end_time='2022-08-26', handler=handler)
     model_params = {
         'objective': 'reg:squarederror',
         'eta': 0.0421,

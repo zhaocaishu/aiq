@@ -266,12 +266,12 @@ class Alpha158(DataHandler):
             for d in windows:
                 features.append(
                     (Sum(d)(Greater()(volume - Ref(1)(volume), 0)) - Sum(d)(Greater()(Ref(1)(volume) - volume, 0))) / (
-                                Sum(d)(Abs()(volume - Ref(1)(volume))) + 1e-12))
+                            Sum(d)(Abs()(volume - Ref(1)(volume))) + 1e-12))
                 names.append('VSUMD%d' % d)
 
         self._feature_names = names
         self._label_name = 'LABEL'
-        df = pd.concat([df, pd.concat([features[i].rename(names[i]) for i in range(len(names))], axis=1)])
+        df = pd.concat([df, pd.concat([features[i].rename(names[i]) for i in range(len(names))], axis=1)], axis=1)
 
         if not self.test_mode:
             # regression target

@@ -1,7 +1,7 @@
-from aiq.dataset import Dataset, Alpha100
+from aiq.dataset import Dataset, Alpha158
 
 
 if __name__ == '__main__':
-    dataset = Dataset('./data', handler=Alpha100(), shuffle=False)
+    dataset = Dataset('./data', instruments='all', handler=Alpha158(), shuffle=False)
 
     print(dataset.to_dataframe().shape)

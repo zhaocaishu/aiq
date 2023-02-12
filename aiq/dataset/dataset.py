@@ -9,20 +9,21 @@ from .loader import DataLoader
 
 class Dataset(abc.ABC):
     """
-    Preparing data for model training and inferencing.
+    Preparing data for model training and inference.
     """
 
     def __init__(
             self,
             data_dir,
+            instruments,
             start_time=None,
             end_time=None,
             min_periods=30,
             handler=None,
             shuffle=False
     ):
-        with open(os.path.join(data_dir, 'instruments/all.txt'), 'r') as f:
-            self.symbols = [line.strip() for line in f.readlines()]
+        with open(os.path.join(data_dir, 'instruments/%s.txt' % instruments), 'r') as f:
+            self.symbols = [line.strip().split()[0] for line in f.readlines()]
 
         df_list = []
         for symbol in self.symbols:
@@ -50,7 +51,7 @@ class Dataset(abc.ABC):
     def add_column(self, name: str, data: np.array):
         self.df[name] = data
 
-    def dump(self, output_dir: str=None):
+    def dump(self, output_dir: str = None):
         if output_dir is None:
             return
 
@@ -60,7 +61,7 @@ class Dataset(abc.ABC):
         for symbol in self.symbols:
             df_symbol = self.df[self.df['Symbol'] == symbol]
             if df_symbol.shape[0] > 0:
-                df_symbol.to_csv(os.path.join(output_dir, symbol + '.csv'), na_rep='NaN')
+                df_symbol.to_csv(os.path.join(output_dir, symbol + '.csv'), na_rep='NaN', index=False)
 
     def __getitem__(self, index):
         return self.df.iloc[[index]]

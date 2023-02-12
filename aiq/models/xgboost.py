@@ -18,13 +18,13 @@ class XGBModel(BaseModel):
         self.model = None
 
     def fit(
-        self,
-        train_dataset: Dataset,
-        val_dataset: Dataset=None,
-        num_boost_round=1000,
-        early_stopping_rounds=50,
-        verbose_eval=20,
-        eval_results=dict()
+            self,
+            train_dataset: Dataset,
+            val_dataset: Dataset = None,
+            num_boost_round=1000,
+            early_stopping_rounds=50,
+            verbose_eval=20,
+            eval_results=dict()
     ):
         train_df = train_dataset.to_dataframe()
         x_train, y_train = train_df[self.feature_cols].values, train_df[self.label_col].values
@@ -55,7 +55,7 @@ class XGBModel(BaseModel):
             raise ValueError("model is not fitted yet!")
         x_test = dataset.to_dataframe()[self.feature_cols].values
         predict_result = self.model.predict(xgb.DMatrix(x_test))
-        dataset.add_column('prediction', predict_result)
+        dataset.add_column('PREDICTION', predict_result)
         return dataset
 
     def get_feature_importance(self, *args, **kwargs) -> pd.Series:
@@ -73,4 +73,3 @@ class XGBModel(BaseModel):
     def load(self, model_file):
         self.model = xgb.Booster()
         self.model.load_model(model_file)
-

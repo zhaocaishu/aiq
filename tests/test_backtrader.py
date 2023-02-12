@@ -60,11 +60,13 @@ class MultiTestStrategy(bt.Strategy):
         # Attention: broker could reject order if not enough cash
         if order.status in [order.Completed]:
             if order.isbuy():
-                self.log(f"""买入: {order.info['name']}, 成交量: {order.executed.size}，成交价: {order.executed.price:.2f}""")
+                self.log(
+                    f"""买入: {order.info['name']}, 成交量: {order.executed.size}，成交价: {order.executed.price:.2f}""")
                 self.log(
                     f'资产: {self.broker.getvalue():.2f} 持仓: {[(x, self.getpositionbyname(x).size) for x in self.buy_list]}')
             elif order.issell():
-                self.log(f"""卖出: {order.info['name']}, 成交量: {order.executed.size}，成交价: {order.executed.price:.2f}""")
+                self.log(
+                    f"""卖出: {order.info['name']}, 成交量: {order.executed.size}，成交价: {order.executed.price:.2f}""")
                 self.log(
                     f'资产: {self.broker.getvalue():.2f} 持仓: {[(x, self.getpositionbyname(x).size) for x in self.buy_list]}')
         elif order.status in [order.Canceled, order.Margin, order.Rejected]:
@@ -76,6 +78,7 @@ class MultiTestStrategy(bt.Strategy):
     def log(self, txt, dt=None):
         dt = dt or self.datetime.date(0)  # 现在的日期
         print('%s , %s' % (dt.isoformat(), txt))
+
 
 class ZCSPandasData(bt.feeds.PandasData):
     lines = ('score',)
@@ -91,8 +94,8 @@ if __name__ == '__main__':
     cerebro = bt.Cerebro()
     cerebro.broker.setcash(100000.0)
     cerebro.broker.setcommission(commission=0.00012)
-    # cerebro.addstrategy(MultiTestStrategy, maperiod=20)
-    cerebro.addstrategy(TopkDropoutStrategy, topk=2, n_drop=1)
+    cerebro.addstrategy(MultiTestStrategy, maperiod=20)
+    # cerebro.addstrategy(TopkDropoutStrategy, topk=2, n_drop=1)
 
     # 添加多个股票回测数据
     codes = ['AAPL', 'BABA', 'GOOG']
