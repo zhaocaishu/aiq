@@ -26,7 +26,6 @@ class Dataset(abc.ABC):
         with open(os.path.join(data_dir, 'instruments/%s.txt' % instruments), 'r') as f:
             self.symbols = [line.strip().split()[0] for line in f.readlines()]
 
-        # read each symbol's features and concat
         df_list = []
         for symbol in self.symbols:
             df = DataLoader.load(os.path.join(data_dir, 'features'), symbol=symbol, start_time=start_time,
@@ -44,7 +43,9 @@ class Dataset(abc.ABC):
                 df = handler.fetch(df)
 
             df_list.append(df)
+        # concat and reset index
         self.df = pd.concat(df_list)
+        self.df.reset_index(inplace=True)
         print('Loaded %d symbols to build dataset' % len(df_list))
 
         # processors
