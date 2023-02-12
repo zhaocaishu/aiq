@@ -42,6 +42,7 @@ class Dataset(abc.ABC):
             df['Symbol'] = symbol
             df_list.append(df)
         self.df = pd.concat(df_list)
+        print('Loaded %d symbols to build dataset' % len(df_list))
 
         if shuffle:
             self.df = self.df.sample(frac=1)
