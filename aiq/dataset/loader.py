@@ -29,6 +29,5 @@ class DataLoader(abc.ABC):
             df = df[(df[timestamp_col] >= start_time)]
         if end_time is not None:
             df = df[(df[timestamp_col] <= end_time)]
-        df.index = df[timestamp_col]
-        df.sort_index(inplace=True)
+        df = df.sort_values(by=timestamp_col, ascending=True)
         return df

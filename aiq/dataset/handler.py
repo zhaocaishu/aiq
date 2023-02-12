@@ -269,12 +269,14 @@ class Alpha158(DataHandler):
                                 Sum(Abs(volume - Ref(volume, 1)), d) + 1e-12))
                 names.append('VSUMD%d' % d)
 
+        # features
         self._feature_names = names
-        self._label_name = 'LABEL'
         df = pd.concat([df, pd.concat([features[i].rename(names[i]) for i in range(len(names))], axis=1)], axis=1)
 
+        # labels
         if not self.test_mode:
             # regression target
+            self._label_name = 'LABEL'
             df[self._label_name] = Ref(close, -2) / Ref(close, -1) - 1
             df = df.dropna(subset=[self._label_name])
 

@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 
 from .loader import DataLoader
+from .processor import CSZScoreNorm
 
 
 class Dataset(abc.ABC):
@@ -13,22 +14,26 @@ class Dataset(abc.ABC):
     """
 
     def __init__(
-            self,
-            data_dir,
-            instruments,
-            start_time=None,
-            end_time=None,
-            min_periods=30,
-            handler=None,
-            shuffle=False
+        self,
+        data_dir,
+        instruments,
+        start_time=None,
+        end_time=None,
+        min_periods=30,
+        handler=None,
+        shuffle=False
     ):
         with open(os.path.join(data_dir, 'instruments/%s.txt' % instruments), 'r') as f:
             self.symbols = [line.strip().split()[0] for line in f.readlines()]
 
+        # read each symbol's features and concat
         df_list = []
         for symbol in self.symbols:
             df = DataLoader.load(os.path.join(data_dir, 'features'), symbol=symbol, start_time=start_time,
                                  end_time=end_time)
+
+            # append ticker symbol
+            df['Symbol'] = symbol
 
             # skip ticker of non-existed or small periods
             if df is None or df.shape[0] < min_periods:
@@ -38,12 +43,20 @@ class Dataset(abc.ABC):
             if handler is not None:
                 df = handler.fetch(df)
 
-            # append ticker symbol
-            df['Symbol'] = symbol
             df_list.append(df)
         self.df = pd.concat(df_list)
         print('Loaded %d symbols to build dataset' % len(df_list))
 
+        # processors
+        self.processors = []
+        if handler is not None and handler.label_name is not None:
+            processor = CSZScoreNorm(fields_group=handler.label_name)
+            self.processors.append(processor)
+
+        for processor in self.processors:
+            self.df = processor(self.df)
+
+        # random shuffle
         if shuffle:
             self.df = self.df.sample(frac=1)
 
