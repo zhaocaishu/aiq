@@ -32,12 +32,12 @@ class Dataset(abc.ABC):
             df = DataLoader.load(os.path.join(data_dir, 'features'), symbol=symbol, start_time=start_time,
                                  end_time=end_time)
 
-            # append ticker symbol
-            df['Symbol'] = symbol
-
             # skip ticker of non-existed or small periods
             if df is None or df.shape[0] < min_periods:
                 continue
+
+            # append ticker symbol
+            df['Symbol'] = symbol
 
             # extract ticker factors
             if handler is not None:
