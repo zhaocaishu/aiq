@@ -29,8 +29,9 @@ class Dataset(abc.ABC):
         for symbol in self.symbols:
             df = DataLoader.load(os.path.join(data_dir, 'features'), symbol=symbol, start_time=start_time,
                                  end_time=end_time)
-            # skip ticker of small periods
-            if df.shape[0] < min_periods:
+
+            # skip ticker of non-existed or small periods
+            if df is None or df.shape[0] < min_periods:
                 continue
 
             # extract ticker factors

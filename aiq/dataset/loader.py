@@ -22,6 +22,8 @@ class DataLoader(abc.ABC):
             pd.DataFrame: dataset load from the files
         """
         file_path = os.path.join(data_dir, symbol + '.csv')
+        if not os.path.exists(file_path):
+            return None
         df = pd.read_csv(file_path)
         if start_time is not None:
             df = df[(df[timestamp_col] >= start_time)]
