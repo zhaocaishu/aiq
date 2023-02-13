@@ -278,14 +278,22 @@ class Alpha158(DataHandler):
             names += ['OBV', 'RSI', 'DIF', 'DEA', 'MACD', 'KDJK', 'KDJD', 'KDJJ']
 
         # features
-        self._feature_names = names
-        df = pd.concat([df, pd.concat([features[i].rename(names[i]) for i in range(len(names))], axis=1).astype('float32')], axis=1)
+        self._feature_names = names.copy()
 
         # labels
         if not self.test_mode:
             # regression target
             self._label_name = 'LABEL'
-            df[self._label_name] = Ref(close, -2) / Ref(close, -1) - 1
+            features.append(Ref(close, -2) / Ref(close, -1) - 1)
+            names.append(self._label_name)
+
+        # concat all features and labels
+        df = pd.concat(
+            [df, pd.concat([features[i].rename(names[i]) for i in range(len(names))], axis=1).astype('float32')],
+            axis=1)
+
+        # remove nan labels
+        if not self.test_mode:
             df = df.dropna(subset=[self._label_name])
 
         return df

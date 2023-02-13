@@ -20,4 +20,3 @@ if __name__ == '__main__':
                      model_params=model_params)
     model.fit(train_dataset=train_dataset, val_dataset=valid_dataset)
     result_dataset = model.predict(dataset=valid_dataset)
-    result_dataset.dump('./data/prediction_result')
