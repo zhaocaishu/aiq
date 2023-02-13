@@ -19,6 +19,7 @@ class TopkDropoutStrategy(bt.Strategy):
         """
         self.method_sell = 'bottom'
         self.method_buy = 'top'
+        self.reserve = 0.05  # 5% reserve capital
 
         # 初始化交易指令
         self.order = None
@@ -36,6 +37,7 @@ class TopkDropoutStrategy(bt.Strategy):
 
         # generate order list for this adjust date
         sell_order_list = []
+        keep_order_list = []
         buy_order_list = []
 
         # load score
@@ -84,17 +86,19 @@ class TopkDropoutStrategy(bt.Strategy):
 
         # Get the stock list we really want to buy and sell
         buy = today[:len(sell) + self.p.topk - len(last)]
-        for code in self.current_stock_list:
-            if code in sell:
-                sell_order_list.append(code)
-
         for code in buy:
             buy_order_list.append(code)
 
-        # Get current stock list
-        self.current_stock_list = list(set(self.current_stock_list + buy_order_list) - set(sell_order_list))
+        for code in self.current_stock_list:
+            if code in sell:
+                sell_order_list.append(code)
+            else:
+                keep_order_list.append(code)
 
-        return buy_order_list, sell_order_list
+        # Get current stock list
+        self.current_stock_list = buy_order_list + keep_order_list
+
+        return buy_order_list, keep_order_list, sell_order_list
 
     def downcast(self, amount, lot):
         return abs(amount // lot * lot)
@@ -104,18 +108,29 @@ class TopkDropoutStrategy(bt.Strategy):
         if self.order:
             return
 
-        buy_order_list, sell_order_list = self.generate_trade_decision()
+        buy_order_list, keep_order_list, sell_order_list = self.generate_trade_decision()
 
-        # sell
+        # remove those no longer top ranked
+        # do this first to issue sell orders and free cash
         for secu in sell_order_list:
             data = self.getdatabyname(secu)
             self.order = self.order_target_percent(data, 0, name=secu)
             self.log(f"Sell {secu}, price:{data.close[0]:.2f}, pct: 0")
 
-        # buy
+        # rebalance those already top ranked and still there
+        for secu in keep_order_list:
+            data = self.getdatabyname(secu)
+            order_price = data.close[0]
+            order_value = self.broker.getvalue() * (1 - self.reserve) / self.p.topk
+            order_amount = self.downcast(order_value / order_price, 100)
+            self.order_target_size(data, target=order_amount)
+            self.log(f"Keep {secu}, price:{order_price:.2f}, amount: {order_amount:.2f}")
+
+        # issue a target order for the newly top ranked stocks
+        # do this last, as this will generate buy orders consuming cash
         for secu in buy_order_list:
             data = self.getdatabyname(secu)
-            order_value = self.broker.getvalue() * 0.98 / self.p.topk
+            order_value = self.broker.getvalue() * (1 - self.reserve) / self.p.topk
             order_amount = self.downcast(order_value / data.close[0], 100)
             self.order = self.buy(data, size=order_amount, name=secu)
             self.log(f"Buy {secu}, price:{data.close[0]:.2f}, amount: {order_amount}")
