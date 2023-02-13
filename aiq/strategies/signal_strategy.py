@@ -123,7 +123,7 @@ class TopkDropoutStrategy(bt.Strategy):
             order_price = data.close[0]
             order_value = self.broker.getvalue() * (1 - self.reserve) / self.p.topk
             order_amount = self.downcast(order_value / order_price, 100)
-            self.order_target_size(data, target=order_amount)
+            self.order = self.order_target_size(data, target=order_amount)
             self.log(f"Keep {secu}, price:{order_price:.2f}, amount: {order_amount:.2f}")
 
         # issue a target order for the newly top ranked stocks
