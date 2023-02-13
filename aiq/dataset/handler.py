@@ -279,7 +279,7 @@ class Alpha158(DataHandler):
 
         # features
         self._feature_names = names
-        df = pd.concat([df, pd.concat([features[i].rename(names[i]) for i in range(len(names))], axis=1)], axis=1)
+        df = pd.concat([df, pd.concat([features[i].rename(names[i]) for i in range(len(names))], axis=1).astype('float32')], axis=1)
 
         # labels
         if not self.test_mode:
