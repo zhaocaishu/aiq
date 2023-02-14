@@ -4,6 +4,10 @@ import pandas as pd
 import numpy as np
 import backtrader as bt
 
+from aiq.utils.logging import get_logger
+
+logger = get_logger('Signal Strategy')
+
 
 class TopkDropoutStrategy(bt.Strategy):
     # topk(int): number of stocks in the portfolio
@@ -160,4 +164,4 @@ class TopkDropoutStrategy(bt.Strategy):
 
     def log(self, txt, dt=None):
         dt = dt or self.datetime.date(0)
-        logging.info('%s, %s' % (dt.isoformat(), txt))
+        logger.info('%s, %s' % (dt.isoformat(), txt))
