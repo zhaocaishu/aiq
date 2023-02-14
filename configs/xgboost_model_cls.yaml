@@ -8,9 +8,12 @@ model:
   params: {
     'objective': 'reg:squarederror',
     'eta': 0.0421,
+    'tree_method': 'hist',
     'colsample_bytree': 0.8879,
     'max_depth': 8,
     'subsample': 0.8789,
-    'nthread': 2,
-    'eval_metric': 'rmse'
+    'reg_alpha': 10,
+    'reg_lambda': 10,
+    'eval_metric': 'rmse',
+    'nthread': 4
   }
