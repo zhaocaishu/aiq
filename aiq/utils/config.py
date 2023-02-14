@@ -59,6 +59,7 @@ config = Config(
             segments=None
         ),
         model=edict(
+            name=None,
             params=None
         )
     )

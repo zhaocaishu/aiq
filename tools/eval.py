@@ -5,7 +5,7 @@ import numpy as np
 from sklearn.metrics import mean_squared_error
 
 from aiq.dataset import Dataset, Alpha158
-from aiq.models import XGBModel
+from aiq.models import XGBModel, LGBModel
 from aiq.utils.config import config as cfg
 
 
@@ -39,9 +39,14 @@ def main():
                             handler=handler)
 
     # evaluation
-    model = XGBModel(feature_cols=handler.feature_names,
-                     label_col=handler.label_name,
-                     model_params=cfg.model.params)
+    if cfg.model.name == 'XGB':
+        model = XGBModel(feature_cols=handler.feature_names,
+                         label_col=handler.label_name,
+                         model_params=cfg.model.params)
+    elif cfg.model.name == 'LGB':
+        model = LGBModel(feature_cols=handler.feature_names,
+                         label_col=handler.label_name,
+                         model_params=cfg.model.params)
     model.load(os.path.join(args.save_dir, 'model.json'))
     df_prediction = model.predict(valid_dataset).to_dataframe()
 

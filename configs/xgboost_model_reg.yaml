@@ -1,0 +1,20 @@
+dataset:
+  segments: {
+    'train': ['2021-08-30', '2022-04-28'],
+    'valid': ['2022-04-29', '2022-08-26']
+  }
+
+model:
+  name: 'XGB'
+  params: {
+    'objective': 'reg:squarederror',
+    'eta': 0.0421,
+    'tree_method': 'hist',
+    'colsample_bytree': 0.8879,
+    'max_depth': 8,
+    'subsample': 0.8789,
+    'reg_alpha': 10,
+    'reg_lambda': 10,
+    'eval_metric': 'rmse',
+    'nthread': 4
+  }
