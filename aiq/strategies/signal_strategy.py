@@ -1,3 +1,5 @@
+import logging
+
 import pandas as pd
 import numpy as np
 import backtrader as bt
@@ -117,7 +119,7 @@ class TopkDropoutStrategy(bt.Strategy):
             self.order = self.order_target_percent(data, 0, name=secu)
             self.log(f"Sell {secu}, price:{data.close[0]:.2f}, pct: 0")
 
-        # rebalance those already top ranked and still there
+        # re-balance those already top ranked and still there
         for secu in keep_order_list:
             data = self.getdatabyname(secu)
             order_value = self.broker.getvalue() * (1 - self.reserve) / self.p.topk
@@ -143,11 +145,11 @@ class TopkDropoutStrategy(bt.Strategy):
         # Attention: broker could reject order if not enough cash
         if order.status in [order.Completed]:
             if order.isbuy():
-                self.log(f"""买入: {order.info['name']}, 成交量: {order.executed.size}，成交价: {order.executed.price:.2f}""")
+                self.log(f"""买入: {order.data._name}, 成交量: {order.executed.size}，成交价: {order.executed.price:.2f}""")
                 self.log(
                     f'资产：{self.broker.getvalue():.2f} 持仓: {[(x, self.getpositionbyname(x).size) for x in self.current_stock_list]}')
             elif order.issell():
-                self.log(f"""卖出: {order.info['name']}, 成交量: {order.executed.size}，成交价: {order.executed.price:.2f}""")
+                self.log(f"""卖出: {order.data._name}, 成交量: {order.executed.size}，成交价: {order.executed.price:.2f}""")
                 self.log(
                     f'资产：{self.broker.getvalue():.2f} 持仓：{[(x, self.getpositionbyname(x).size) for x in self.current_stock_list]}')
         elif order.status in [order.Canceled, order.Margin, order.Rejected]:
@@ -158,4 +160,4 @@ class TopkDropoutStrategy(bt.Strategy):
 
     def log(self, txt, dt=None):
         dt = dt or self.datetime.date(0)
-        print('%s , %s' % (dt.isoformat(), txt))
+        logging.info('%s, %s' % (dt.isoformat(), txt))
