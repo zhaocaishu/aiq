@@ -8,7 +8,7 @@ model:
   name: 'LGB'
   params: {
     'objective': 'mse',
-    'learning_rate': 0.2,
+    'learning_rate': 0.1,
     'colsample_bytree': 0.8879,
     'max_depth': 8,
     'num_leaves': 210,

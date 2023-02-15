@@ -72,4 +72,4 @@ class LGBModel(BaseModel):
         self.model.save_model(model_file)
 
     def load(self, model_file):
-        self.model = lgb.Booster(model_file)
+        self.model = lgb.Booster(model_file=model_file)

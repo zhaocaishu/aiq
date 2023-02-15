@@ -4,3 +4,4 @@ Ta-Lib
 easydict
 PyYAML
 scikit-learn
+lightgbm

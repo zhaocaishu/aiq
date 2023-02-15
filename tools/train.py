@@ -49,7 +49,7 @@ def main():
     elif cfg.model.name == 'LGB':
         model = LGBModel(feature_cols=handler.feature_names,
                          label_col=handler.label_name,
-                         model_params=cfg.model.params)
+                         model_params=dict(cfg.model.params))
     model.fit(train_dataset=train_dataset, val_dataset=valid_dataset)
 
     # save model
