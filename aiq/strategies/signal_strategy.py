@@ -127,7 +127,6 @@ class TopkDropoutStrategy(bt.Strategy):
         for secu in sell_order_list:
             data = self.getdatabyname(secu)
             self.order = self.order_target_percent(data, 0, name=secu)
-            self.log(f"Sell {secu}, price:{data.close[0]:.2f}, pct: 0")
 
         # re-balance those already top ranked and still there
         for secu in keep_order_list:
@@ -135,7 +134,6 @@ class TopkDropoutStrategy(bt.Strategy):
             order_value = self.broker.getvalue() * (1 - self.reserve) / self.p.topk
             order_amount = self.downcast(order_value / data.close[0], 100)
             self.order = self.order_target_size(data, target=order_amount)
-            self.log(f"Keep {secu}, price:{data.close[0]:.2f}, amount: {order_amount:.2f}")
 
         # issue a target order for the newly top ranked stocks
         # do this last, as this will generate buy orders consuming cash
@@ -144,7 +142,6 @@ class TopkDropoutStrategy(bt.Strategy):
             order_value = self.broker.getvalue() * (1 - self.reserve) / self.p.topk
             order_amount = self.downcast(order_value / data.close[0], 100)
             self.order = self.buy(data, size=order_amount, name=secu)
-            self.log(f"Buy {secu}, price:{data.close[0]:.2f}, amount: {order_amount}")
 
     def notify_order(self, order):
         if order.status in [order.Submitted, order.Accepted]:

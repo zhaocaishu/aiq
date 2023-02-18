@@ -36,7 +36,6 @@ class MultiTestStrategy(bt.Strategy):
                     order_value = self.broker.getvalue() * 0.48
                     order_amount = self.downcast(order_value / data.close[0], 100)
                     self.order = self.buy(data, size=order_amount, name=secu)
-                    self.log(f"买{secu}, price:{data.close[0]:.2f}, amout: {order_amount}")
                     self.buy_list.append(secu)
         elif self.position:
             now_list = []
@@ -46,7 +45,6 @@ class MultiTestStrategy(bt.Strategy):
                 if data.close[0] < self.sma[secu]:
                     # 卖卖卖
                     self.order = self.order_target_percent(data, 0, name=secu)
-                    self.log(f"卖{secu}, price:{data.close[0]:.2f}, pct: 0")
                     continue
                 now_list.append(secu)
             self.buy_list = now_list
