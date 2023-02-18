@@ -17,8 +17,7 @@ class TopkDropoutStrategy(bt.Strategy):
         ('topk', None),
         ('n_drop', None),
         ('hold_thresh', 1),
-        ('buy_min_score', 0.01),
-        ('sell_max_score', -0.01),
+        ('buy_thresh', 0.01)
     )
 
     def __init__(self):
@@ -28,7 +27,6 @@ class TopkDropoutStrategy(bt.Strategy):
         self.method_sell = 'bottom'
         self.method_buy = 'top'
         self.reserve = 0.05  # 5% reserve capital
-        self.min_score = 0.01  # minimum confidence score to keep/buy a stock
 
         # 当前持仓股票列表
         self.current_stock_list = []
@@ -39,9 +37,6 @@ class TopkDropoutStrategy(bt.Strategy):
 
         def get_last_n(li, n):
             return list(li)[-n:]
-
-        def filter_stock(li):
-            return li
 
         # generate order list for this adjust date
         sell_order_list = []
@@ -65,14 +60,6 @@ class TopkDropoutStrategy(bt.Strategy):
                 pred_score[~pred_score.index.isin(last)].sort_values(by='score', ascending=False).index,
                 self.p.n_drop + self.p.topk - len(last),
             )
-        elif self.method_buy == "random":
-            topk_candi = get_first_n(pred_score.sort_values(by='score', ascending=False).index, self.p.topk)
-            candi = list(filter(lambda x: x not in last, topk_candi))
-            n = self.p.n_drop + self.p.topk - len(last)
-            try:
-                today = np.random.choice(candi, n, replace=False)
-            except ValueError:
-                today = candi
         else:
             raise NotImplementedError(f"This type of input is not supported")
 
@@ -83,12 +70,6 @@ class TopkDropoutStrategy(bt.Strategy):
         # Get the stock list we really want to sell (After filtering the case that we sell high and buy low)
         if self.method_sell == "bottom":
             sell = last[last.isin(get_last_n(comb, self.p.n_drop))]
-        elif self.method_sell == "random":
-            candi = filter_stock(last)
-            try:
-                sell = pd.Index(np.random.choice(candi, self.p.n_drop, replace=False) if len(last) else [])
-            except ValueError:  # No enough candidates
-                sell = candi
         else:
             raise NotImplementedError(f"This type of input is not supported")
 
@@ -96,12 +77,11 @@ class TopkDropoutStrategy(bt.Strategy):
         buy = today[:len(sell) + self.p.topk - len(last)]
         for code in buy:
             score = pred_score['score'][code]
-            if score > self.p.buy_min_score:
+            if score > self.p.buy_thresh:
                 buy_order_list.append(code)
 
         for code in self.current_stock_list:
-            score = pred_score['score'][code]
-            if code in sell or score < self.p.sell_max_score:
+            if code in sell:
                 sell_order_list.append(code)
             else:
                 keep_order_list.append(code)

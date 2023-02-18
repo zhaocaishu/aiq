@@ -48,15 +48,6 @@ class Dataset(abc.ABC):
         self.df.reset_index(inplace=True)
         print('Loaded %d symbols to build dataset' % len(df_list))
 
-        # processors
-        self.processors = []
-        if handler is not None and handler.label_name is not None:
-            processor = CSZScoreNorm(fields_group=handler.label_name)
-            self.processors.append(processor)
-
-        for processor in self.processors:
-            self.df = processor(self.df)
-
         # random shuffle
         if shuffle:
             self.df = self.df.sample(frac=1)
