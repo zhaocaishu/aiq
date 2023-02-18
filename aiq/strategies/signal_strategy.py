@@ -26,6 +26,7 @@ class TopkDropoutStrategy(bt.Strategy):
         self.method_sell = 'bottom'
         self.method_buy = 'top'
         self.reserve = 0.05  # 5% reserve capital
+        self.min_score = 0.01  # minimum confidence score to keep/buy a stock
 
         # 初始化交易指令
         self.order = None
@@ -93,10 +94,15 @@ class TopkDropoutStrategy(bt.Strategy):
         # Get the stock list we really want to buy and sell
         buy = today[:len(sell) + self.p.topk - len(last)]
         for code in buy:
-            buy_order_list.append(code)
+            score = pred_score['score'][code]
+            if score > self.min_score:
+                buy_order_list.append(code)
+            else:
+                sell_order_list.append(code)
 
         for code in self.current_stock_list:
-            if code in sell:
+            score = pred_score['score'][code]
+            if code in sell or score < -self.min_score:
                 sell_order_list.append(code)
             else:
                 keep_order_list.append(code)
