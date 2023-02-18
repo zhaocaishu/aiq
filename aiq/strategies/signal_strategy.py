@@ -30,8 +30,7 @@ class TopkDropoutStrategy(bt.Strategy):
         self.reserve = 0.05  # 5% reserve capital
         self.min_score = 0.01  # minimum confidence score to keep/buy a stock
 
-        # 初始化交易指令
-        self.order = None
+        # 当前持仓股票列表
         self.current_stock_list = []
 
     def generate_trade_decision(self):
@@ -116,24 +115,20 @@ class TopkDropoutStrategy(bt.Strategy):
         return abs(amount // lot * lot)
 
     def next(self):
-        # 检查是否有指令等待执行
-        if self.order:
-            return
-
         buy_order_list, keep_order_list, sell_order_list = self.generate_trade_decision()
 
         # remove those no longer top ranked
         # do this first to issue sell orders and free cash
         for secu in sell_order_list:
             data = self.getdatabyname(secu)
-            self.order = self.order_target_percent(data, 0, name=secu)
+            self.order_target_percent(data, 0, name=secu)
 
         # re-balance those already top ranked and still there
         for secu in keep_order_list:
             data = self.getdatabyname(secu)
             order_value = self.broker.getvalue() * (1 - self.reserve) / self.p.topk
             order_amount = self.downcast(order_value / data.close[0], 100)
-            self.order = self.order_target_size(data, target=order_amount)
+            self.order_target_size(data, target=order_amount)
 
         # issue a target order for the newly top ranked stocks
         # do this last, as this will generate buy orders consuming cash
@@ -141,7 +136,7 @@ class TopkDropoutStrategy(bt.Strategy):
             data = self.getdatabyname(secu)
             order_value = self.broker.getvalue() * (1 - self.reserve) / self.p.topk
             order_amount = self.downcast(order_value / data.close[0], 100)
-            self.order = self.buy(data, size=order_amount, name=secu)
+            self.buy(data, size=order_amount, name=secu)
 
     def notify_order(self, order):
         if order.status in [order.Submitted, order.Accepted]:
@@ -161,9 +156,6 @@ class TopkDropoutStrategy(bt.Strategy):
                     f'资产：{self.broker.getvalue():.2f} 持仓：{[(x, self.getpositionbyname(x).size) for x in self.current_stock_list]}')
         elif order.status in [order.Canceled, order.Margin, order.Rejected]:
             self.log('订单取消/金额不足/拒绝')
-
-        # Write down: no pending order
-        self.order = None
 
     def log(self, txt, dt=None):
         dt = dt or self.datetime.date(0)
