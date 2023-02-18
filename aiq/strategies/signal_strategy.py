@@ -16,7 +16,9 @@ class TopkDropoutStrategy(bt.Strategy):
     params = (
         ('topk', None),
         ('n_drop', None),
-        ('hold_thresh', 1)
+        ('hold_thresh', 1),
+        ('min_buy_score', 0.01),
+        ('max_sell_score', -0.01),
     )
 
     def __init__(self):
@@ -95,14 +97,12 @@ class TopkDropoutStrategy(bt.Strategy):
         buy = today[:len(sell) + self.p.topk - len(last)]
         for code in buy:
             score = pred_score['score'][code]
-            if score > self.min_score:
+            if score > self.p.min_buy_score:
                 buy_order_list.append(code)
-            else:
-                sell_order_list.append(code)
 
         for code in self.current_stock_list:
             score = pred_score['score'][code]
-            if code in sell or score < -self.min_score:
+            if code in sell or score < self.p.max_sell_score:
                 sell_order_list.append(code)
             else:
                 keep_order_list.append(code)
