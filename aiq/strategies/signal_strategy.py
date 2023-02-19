@@ -19,7 +19,7 @@ class TopkDropoutStrategy(bt.Strategy):
         ('n_drop', None),
         ('hold_thresh', 1),
         ('buy_thresh', 0.01),
-        ('dump_file', None)
+        ('log_writer', None)
     )
 
     def __init__(self):
@@ -32,11 +32,6 @@ class TopkDropoutStrategy(bt.Strategy):
 
         # 当前持仓股票列表
         self.current_stock_list = []
-
-        if self.p.dump_file is not None:
-            self.fp = open(self.p.dump_file, 'w')
-        else:
-            self.fp = None
 
     def generate_trade_decision(self):
         def get_first_n(li, n):
@@ -105,11 +100,11 @@ class TopkDropoutStrategy(bt.Strategy):
         buy_order_list, keep_order_list, sell_order_list = self.generate_trade_decision()
         assert len(buy_order_list + keep_order_list) == len(self.current_stock_list)
 
-        if self.fp is not None:
+        if self.p.log_writer is not None:
             order_str = json.dumps({'Date': str(self.datetime.date(0)),
                                     'BUY': buy_order_list + keep_order_list,
                                     'SELL': sell_order_list})
-            self.fp.write(order_str + '\n')
+            self.p.log_writer.write(order_str + '\n')
 
         # remove those no longer top ranked
         # do this first to issue sell orders and free cash

@@ -49,7 +49,7 @@ def parse_args():
     parser.add_argument('--commission', type=float, default=0.00012, help='commission value')
     parser.add_argument('--topk', type=int, default=10, help='number of stocks in the portfolio')
     parser.add_argument('--n_drop', type=int, default=3, help='number of stocks to be replaced in each trading date')
-    parser.add_argument('--dump_file', type=str, default=None, help='the file to save decision result')
+    parser.add_argument('--dump_result', action='store_true', default=False, help='whether to dump decision result')
     parser.add_argument('--visualize', action='store_true', default=False, help='whether to plot chart')
 
     args = parser.parse_args()
@@ -91,7 +91,12 @@ if __name__ == '__main__':
     cerebro.broker.setcash(args.cash)
     comminfo = StampDutyCommissionScheme(stamp_duty=args.stamp_duty, commission=args.commission)
     cerebro.broker.addcommissioninfo(comminfo)
-    cerebro.addstrategy(TopkDropoutStrategy, topk=args.topk, n_drop=args.n_drop, dump_file=args.dump_file)
+
+    if args.dump_result:
+        log_writer = open(os.path.join(args.save_dir, 'decision_result.txt'), 'w')
+    else:
+        log_writer = None
+    cerebro.addstrategy(TopkDropoutStrategy, topk=args.topk, n_drop=args.n_drop, log_writer=log_writer)
 
     # 添加多个股票回测数据
     with open(os.path.join(args.data_dir, 'instruments/%s.txt' % args.instruments), 'r') as f:
@@ -125,6 +130,10 @@ if __name__ == '__main__':
     # 结果资金
     portvalue = cerebro.broker.getvalue()
     print(f'结束资金: {round(portvalue, 2)}')
+
+    # 关闭文件句柄
+    if log_writer is not None:
+        log_writer.close()
 
     # 可视化结果
     if args.visualize:
