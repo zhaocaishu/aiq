@@ -102,7 +102,7 @@ class TopkDropoutStrategy(bt.Strategy):
 
         if self.p.log_writer is not None:
             order_str = json.dumps({'Date': str(self.datetime.date(0)),
-                                    'BUY': buy_order_list + keep_order_list,
+                                    'BUY': buy_order_list,
                                     'SELL': sell_order_list})
             self.p.log_writer.write(order_str + '\n')
 
