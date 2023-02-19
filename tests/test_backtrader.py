@@ -15,11 +15,28 @@ class ZCSPandasData(bt.feeds.PandasData):
     )
 
 
+class StampDutyCommissionScheme(bt.CommInfoBase):
+    params = (
+        ('stamp_duty', 0.001),
+        ('commision', 0.00012),
+        ('percabs', True)
+    )
+
+    def _getcommission(self, size, price, pseudoexec):
+        if size > 0:
+            return size * price * self.p.commission
+        elif size < 0:
+            return -size * price * (self.p.stamp_duty + self.p.commission)
+        else:
+            return 0
+
+
 if __name__ == '__main__':
     # 初始化Cerebro
     cerebro = bt.Cerebro()
     cerebro.broker.setcash(100000.0)
-    cerebro.broker.setcommission(commission=0.00012)
+    comminfo = StampDutyCommissionScheme(stamp_duty=0.001, commision=0.00012)
+    cerebro.broker.addcommissioninfo(comminfo)
     cerebro.addstrategy(TopkDropoutStrategy, topk=2, n_drop=1)
 
     # 添加多个股票回测数据

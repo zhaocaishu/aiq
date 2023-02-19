@@ -19,6 +19,22 @@ class ZCSPandasData(bt.feeds.PandasData):
     )
 
 
+class StampDutyCommissionScheme(bt.CommInfoBase):
+    params = (
+        ('stamp_duty', 0.001),
+        ('commision', 0.00012),
+        ('percabs', True)
+    )
+
+    def _getcommission(self, size, price, pseudoexec):
+        if size > 0:
+            return size * price * self.p.commission
+        elif size < 0:
+            return -size * price * (self.p.stamp_duty + self.p.commission)
+        else:
+            return 0
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Run backtrader')
     # model args
@@ -29,6 +45,7 @@ def parse_args():
 
     # strategy args
     parser.add_argument('--cash', type=float, default=100000, help='cash value')
+    parser.add_argument('--stamp_duty', type=float, default=0.001, help='stamp duty')
     parser.add_argument('--commission', type=float, default=0.00012, help='commission value')
     parser.add_argument('--topk', type=int, default=10, help='number of stocks in the portfolio')
     parser.add_argument('--n_drop', type=int, default=3, help='number of stocks to be replaced in each trading date')
@@ -71,7 +88,8 @@ if __name__ == '__main__':
     # 初始化策略
     cerebro = bt.Cerebro()
     cerebro.broker.setcash(args.cash)
-    cerebro.broker.setcommission(args.commission)
+    comminfo = StampDutyCommissionScheme(stamp_duty=args.stamp_duty, commision=args.commision)
+    cerebro.broker.addcommissioninfo(comminfo)
     cerebro.addstrategy(TopkDropoutStrategy, topk=args.topk, n_drop=args.n_drop)
 
     # 添加多个股票回测数据
