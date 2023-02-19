@@ -18,7 +18,7 @@ class ZCSPandasData(bt.feeds.PandasData):
 class StampDutyCommissionScheme(bt.CommInfoBase):
     params = (
         ('stamp_duty', 0.001),
-        ('commision', 0.00012),
+        ('commission', 0.00012),
         ('percabs', True)
     )
 
@@ -35,7 +35,7 @@ if __name__ == '__main__':
     # 初始化Cerebro
     cerebro = bt.Cerebro()
     cerebro.broker.setcash(100000.0)
-    comminfo = StampDutyCommissionScheme(stamp_duty=0.001, commision=0.00012)
+    comminfo = StampDutyCommissionScheme(stamp_duty=0.001, commission=0.00012)
     cerebro.broker.addcommissioninfo(comminfo)
     cerebro.addstrategy(TopkDropoutStrategy, topk=2, n_drop=1)
 
