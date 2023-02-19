@@ -1,4 +1,5 @@
 import logging
+import json
 
 import pandas as pd
 import numpy as np
@@ -17,7 +18,8 @@ class TopkDropoutStrategy(bt.Strategy):
         ('topk', None),
         ('n_drop', None),
         ('hold_thresh', 1),
-        ('buy_thresh', 0.01)
+        ('buy_thresh', 0.01),
+        ('dump_file', None)
     )
 
     def __init__(self):
@@ -30,6 +32,11 @@ class TopkDropoutStrategy(bt.Strategy):
 
         # 当前持仓股票列表
         self.current_stock_list = []
+
+        if self.p.dump_file is not None:
+            self.fp = open(self.p.dump_file, 'w')
+        else:
+            self.fp = None
 
     def generate_trade_decision(self):
         def get_first_n(li, n):
@@ -98,6 +105,12 @@ class TopkDropoutStrategy(bt.Strategy):
         buy_order_list, keep_order_list, sell_order_list = self.generate_trade_decision()
         assert len(buy_order_list + keep_order_list) == len(self.current_stock_list)
 
+        if self.fp is not None:
+            order_str = json.dumps({'Date': str(self.datetime.date(0)),
+                                    'BUY': buy_order_list + keep_order_list,
+                                    'SELL': sell_order_list})
+            self.fp.write(order_str + '\n')
+
         # remove those no longer top ranked
         # do this first to issue sell orders and free cash
         for secu in sell_order_list:
@@ -128,11 +141,13 @@ class TopkDropoutStrategy(bt.Strategy):
         # Attention: broker could reject order if not enough cash
         if order.status in [order.Completed]:
             if order.isbuy():
-                self.log(f"""买入: {order.data._name}, 成交量: {order.executed.size}，成交价: {order.executed.price:.2f}""")
+                self.log(
+                    f"""买入: {order.data._name}, 成交量: {order.executed.size}，成交价: {order.executed.price:.2f}""")
                 self.log(
                     f'资产：{self.broker.getvalue():.2f} 持仓: {[(x, self.getpositionbyname(x).size) for x in self.current_stock_list]}')
             elif order.issell():
-                self.log(f"""卖出: {order.data._name}, 成交量: {order.executed.size}，成交价: {order.executed.price:.2f}""")
+                self.log(
+                    f"""卖出: {order.data._name}, 成交量: {order.executed.size}，成交价: {order.executed.price:.2f}""")
                 self.log(
                     f'资产：{self.broker.getvalue():.2f} 持仓：{[(x, self.getpositionbyname(x).size) for x in self.current_stock_list]}')
         elif order.status in [order.Canceled, order.Margin, order.Rejected]:
