@@ -107,7 +107,7 @@ class TopkDropoutStrategy(bt.Strategy):
         # re-balance those already top ranked and still there
         for secu in keep_order_list:
             data = self.getdatabyname(secu)
-            order_value = self.broker.getvalue() * (1 - self.reserve) / len(self.current_stock_list)
+            order_value = self.broker.getvalue() * (1 - self.reserve) / self.p.topk
             order_amount = self.downcast(order_value / data.close[0], 100)
             self.order_target_size(data, target=order_amount)
 
@@ -115,7 +115,7 @@ class TopkDropoutStrategy(bt.Strategy):
         # do this last, as this will generate buy orders consuming cash
         for secu in buy_order_list:
             data = self.getdatabyname(secu)
-            order_value = self.broker.getvalue() * (1 - self.reserve) / len(self.current_stock_list)
+            order_value = self.broker.getvalue() * (1 - self.reserve) / self.p.topk
             order_amount = self.downcast(order_value / data.close[0], 100)
             self.buy(data, size=order_amount, name=secu)
 
