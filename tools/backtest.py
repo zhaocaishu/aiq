@@ -14,7 +14,7 @@ class ZCSPandasData(bt.feeds.PandasData):
     lines = ('score',)
     params = {
         'datetime': None,
-        'score': 'Volume'
+        'score': 'PREDICTION'
     }
 
 
