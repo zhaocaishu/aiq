@@ -126,7 +126,7 @@ class TopkDropoutStrategy(bt.Strategy):
             data = self.getdatabyname(secu)
             order_price = data.close[0]
             order_amount = self.downcast(target_value / order_price, 100)
-            self.order[secu] = self.order_target_size(data=data, price=order_price, target=order_amount)
+            self.order[secu] = self.order_target_size(data=data, target=order_amount)
 
         # issue a target order for the newly top ranked stocks
         # do this last, as this will generate buy orders consuming cash
