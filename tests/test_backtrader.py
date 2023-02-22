@@ -8,19 +8,18 @@ from aiq.strategies import TopkDropoutStrategy
 
 class ZCSPandasData(bt.feeds.PandasData):
     lines = ('score',)
-    params = (
-        ('datetime', None),
-        ('close', 'Close'),
-        ('score', 'Volume')
-    )
+    params = {
+        'datetime': None,
+        'score': 'Volume'
+    }
 
 
 class StampDutyCommissionScheme(bt.CommInfoBase):
-    params = (
-        ('stamp_duty', 0.001),
-        ('commission', 0.00012),
-        ('percabs', True)
-    )
+    params = {
+        'stamp_duty': 0.001,
+        'commission': 0.00012,
+        'percabs': True
+    }
 
     def _getcommission(self, size, price, pseudoexec):
         if size > 0:

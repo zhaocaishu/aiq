@@ -1,8 +1,6 @@
-import logging
 import json
 
 import pandas as pd
-import numpy as np
 import backtrader as bt
 
 from aiq.utils.logging import get_logger
@@ -11,16 +9,13 @@ logger = get_logger('Signal Strategy')
 
 
 class TopkDropoutStrategy(bt.Strategy):
-    # topk(int): number of stocks in the portfolio
-    # n_drop(int): number of stocks to be replaced in each trading date
-    # hold_thresh(int): minimum holding days
-    params = (
-        ('topk', None),
-        ('n_drop', None),
-        ('hold_thresh', 1),
-        ('buy_thresh', 0.01),
-        ('log_writer', None)
-    )
+    params = {
+        'topk': None,           # number of stocks in the portfolio
+        'n_drop': None,         # number of stocks to be replaced in each trading date
+        'hold_thresh': 1,       # minimum holding days
+        'buy_thresh': 0.01,     # minimum confidence score to buy a stock
+        'log_writer': None      # write handler
+    }
 
     def __init__(self):
         """
@@ -33,6 +28,11 @@ class TopkDropoutStrategy(bt.Strategy):
         # 当前持仓股票列表
         self.current_stock_list = []
 
+        # To keep track of pending orders
+        self.order = {}
+        for i, data in enumerate(self.datas):
+            self.order[data._name] = None
+
     def generate_trade_decision(self):
         def get_first_n(li, n):
             return list(li)[:n]
@@ -42,7 +42,6 @@ class TopkDropoutStrategy(bt.Strategy):
 
         # generate order list for this adjust date
         sell_order_list = []
-        keep_order_list = []
         buy_order_list = []
 
         # load score
@@ -85,20 +84,26 @@ class TopkDropoutStrategy(bt.Strategy):
         for code in self.current_stock_list:
             if code in sell:
                 sell_order_list.append(code)
-            else:
-                keep_order_list.append(code)
 
         # Get current stock list
-        self.current_stock_list = buy_order_list + keep_order_list
+        self.current_stock_list = list(set(self.current_stock_list + buy_order_list) - set(sell_order_list))
 
-        return buy_order_list, keep_order_list, sell_order_list
+        return buy_order_list, sell_order_list
 
-    def downcast(self, amount, lot):
+    @staticmethod
+    def downcast(amount, lot):
         return abs(amount // lot * lot)
 
     def next(self):
-        buy_order_list, keep_order_list, sell_order_list = self.generate_trade_decision()
-        assert len(buy_order_list + keep_order_list) == len(self.current_stock_list)
+        # 如果是指数的最后一个bar，则退出，防止取下一日开盘价越界错
+        if len(self.datas[0]) == self.data0.buflen():
+            return
+
+        for i, data in enumerate(self.datas):
+            if self.order[data._name]:
+                return
+
+        buy_order_list, sell_order_list = self.generate_trade_decision()
 
         if self.p.log_writer is not None:
             order_str = json.dumps({'Date': str(self.datetime.date(0)),
@@ -110,22 +115,14 @@ class TopkDropoutStrategy(bt.Strategy):
         # do this first to issue sell orders and free cash
         for secu in sell_order_list:
             data = self.getdatabyname(secu)
-            self.order_target_percent(data, 0, name=secu)
+            self.order[secu] = self.order_target_percent(data, 0, name=secu)
 
-        # re-balance those already top ranked and still there
-        for secu in keep_order_list:
+        # issue a target order for the top ranked stocks
+        order_value = self.broker.getvalue() * (1 - self.reserve) / self.p.topk
+        for secu in self.current_stock_list:
             data = self.getdatabyname(secu)
-            order_value = self.broker.getvalue() * (1 - self.reserve) / self.p.topk
-            order_amount = self.downcast(order_value / data.close[0], 100)
-            self.order_target_size(data, target=order_amount)
-
-        # issue a target order for the newly top ranked stocks
-        # do this last, as this will generate buy orders consuming cash
-        for secu in buy_order_list:
-            data = self.getdatabyname(secu)
-            order_value = self.broker.getvalue() * (1 - self.reserve) / self.p.topk
-            order_amount = self.downcast(order_value / data.close[0], 100)
-            self.buy(data, size=order_amount, name=secu)
+            order_amount = self.downcast(order_value / data.open[1], 100)
+            self.order[secu] = self.order_target_size(data, order_amount, name=secu)
 
     def notify_order(self, order):
         if order.status in [order.Submitted, order.Accepted]:
@@ -139,14 +136,17 @@ class TopkDropoutStrategy(bt.Strategy):
                 self.log(
                     f"""买入: {order.data._name}, 成交量: {order.executed.size}，成交价: {order.executed.price:.2f}""")
                 self.log(
-                    f'资产：{self.broker.getvalue():.2f} 持仓: {[(x, self.getpositionbyname(x).size) for x in self.current_stock_list]}')
+                    f'现金：{self.broker.getcash():.2f} 资产：{self.broker.getvalue():.2f} 持仓: {[(x, self.getpositionbyname(x).size) for x in self.current_stock_list]}')
             elif order.issell():
                 self.log(
                     f"""卖出: {order.data._name}, 成交量: {order.executed.size}，成交价: {order.executed.price:.2f}""")
                 self.log(
-                    f'资产：{self.broker.getvalue():.2f} 持仓：{[(x, self.getpositionbyname(x).size) for x in self.current_stock_list]}')
+                    f'现金：{self.broker.getcash():.2f} 资产：{self.broker.getvalue():.2f} 持仓：{[(x, self.getpositionbyname(x).size) for x in self.current_stock_list]}')
         elif order.status in [order.Canceled, order.Margin, order.Rejected]:
             self.log('订单取消/金额不足/拒绝')
+
+        # Write down: no pending order
+        self.order[order.data._name] = None
 
     def log(self, txt, dt=None):
         dt = dt or self.datetime.date(0)
