@@ -47,7 +47,7 @@ def main():
         model = LGBModel(feature_cols=handler.feature_names,
                          label_col=handler.label_name,
                          model_params=cfg.model.params)
-    model.load(os.path.join(args.save_dir, 'model.json'))
+    model.load(args.save_dir)
     df_prediction = model.predict(valid_dataset).to_dataframe()
 
     label_reg = df_prediction[handler.label_name].values

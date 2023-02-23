@@ -53,7 +53,7 @@ def main():
     model.fit(train_dataset=train_dataset, val_dataset=valid_dataset)
 
     # save model
-    model.save(os.path.join(args.save_dir, 'model.json'))
+    model.save(model_dir=args.save_dir)
 
     print('Model training has been finished successfully!')
 

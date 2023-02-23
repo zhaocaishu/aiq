@@ -1,3 +1,6 @@
+import os
+import json
+
 import xgboost as xgb
 import pandas as pd
 
@@ -67,9 +70,25 @@ class XGBModel(BaseModel):
         """
         return pd.Series(self.model.get_score(*args, **kwargs)).sort_values(ascending=False)
 
-    def save(self, model_file):
+    def save(self, model_dir):
+        if not os.path.exists(model_dir):
+            os.makedirs(model_dir)
+
+        model_file = os.path.join(model_dir, 'model.json')
         self.model.save_model(model_file)
 
-    def load(self, model_file):
-        self.model = xgb.Booster()
-        self.model.load_model(model_file)
+        model_params = {
+            'feature_cols': self.feature_cols,
+            'label_col': self.label_col,
+            'model_params': self.model_params
+        }
+        with open(os.path.join(model_dir, 'model.params'), 'w') as f:
+            json.dump(model_params, f)
+
+    def load(self, model_dir):
+        self.model = lgb.Booster(model_file=os.path.join(model_dir, 'model.json'))
+        with open(os.path.join(model_dir, 'model.params'), 'r') as f:
+            model_params = json.load(f)
+            self.feature_cols = model_params['feature_cols']
+            self.label_col = model_params['label_col']
+            self.model_params = model_params['model_params']

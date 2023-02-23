@@ -17,8 +17,15 @@ if __name__ == '__main__':
         'metric': 'rmse',
         'nthread': 4
     }
+
+    # train stage
     model = LGBModel(feature_cols=handler.feature_names,
                      label_col=[handler.label_name],
                      model_params=model_params)
     model.fit(train_dataset=train_dataset, val_dataset=valid_dataset)
-    result_dataset = model.predict(dataset=valid_dataset)
+    model.save(model_dir='./temp')
+
+    # predict stage
+    model_eval = LGBModel()
+    model_eval.load(model_dir='./temp')
+    model_eval.predict(dataset=valid_dataset)
