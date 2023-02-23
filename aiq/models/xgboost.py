@@ -86,7 +86,7 @@ class XGBModel(BaseModel):
             json.dump(model_params, f)
 
     def load(self, model_dir):
-        self.model = lgb.Booster(model_file=os.path.join(model_dir, 'model.json'))
+        self.model = xgb.Booster(model_file=os.path.join(model_dir, 'model.json'))
         with open(os.path.join(model_dir, 'model.params'), 'r') as f:
             model_params = json.load(f)
             self.feature_cols = model_params['feature_cols']
