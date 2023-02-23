@@ -12,7 +12,7 @@ from .base import BaseModel
 class XGBModel(BaseModel):
     """XGBModel Model"""
 
-    def __init__(self, feature_cols, label_col, model_params):
+    def __init__(self, feature_cols=None, label_col=None, model_params=None):
         self.feature_cols = feature_cols
         self.label_col = label_col
 
