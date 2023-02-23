@@ -269,6 +269,17 @@ class Alpha158(DataHandler):
                                 Sum(Abs(volume - Ref(volume, 1)), d) + 1e-12))
                 names.append('VSUMD%d' % d)
 
+        if use("RETURN"):
+            for d in windows:
+                features.append(close.pct_change(d))
+                names.append('RETURN%d' % d)
+
+        if use("VOLAT"):
+            for d in windows:
+                features.append(close.diff().rolling(d).std())
+                names.append('VOLAT%d' % d)
+
+
         if use('TIND'):
             DIF, DEA, MACD = ta.MACD(close, fastperiod=12, slowperiod=26, signalperiod=9)
             KDJK, KDJD = ta.STOCH(high, low, close, fastk_period=9, slowk_period=3, slowk_matype=0, slowd_period=3,
