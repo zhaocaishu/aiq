@@ -14,14 +14,14 @@ class Dataset(abc.ABC):
     """
 
     def __init__(
-        self,
-        data_dir,
-        instruments,
-        start_time=None,
-        end_time=None,
-        min_periods=30,
-        handler=None,
-        shuffle=False
+            self,
+            data_dir,
+            instruments,
+            start_time=None,
+            end_time=None,
+            min_periods=30,
+            handler=None,
+            shuffle=False
     ):
         with open(os.path.join(data_dir, 'instruments/%s.txt' % instruments), 'r') as f:
             self.symbols = [line.strip().split()[0] for line in f.readlines()]
@@ -38,6 +38,9 @@ class Dataset(abc.ABC):
             # append ticker symbol
             df['Symbol'] = symbol
 
+            # adjust price with factor
+            df = self.adjust_price(df)
+
             # extract ticker factors
             if handler is not None:
                 df = handler.fetch(df)
@@ -51,6 +54,13 @@ class Dataset(abc.ABC):
         # random shuffle
         if shuffle:
             self.df = self.df.sample(frac=1)
+
+    @staticmethod
+    def adjust_price(df):
+        price_cols = ['Open', 'High', 'Low', 'Close']
+        for col in price_cols:
+            df[col] = df[col] * df['Adj_factor'] / df['Adj_factor'].iloc[-1]
+        return df
 
     def to_dataframe(self):
         return self.df
