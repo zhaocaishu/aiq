@@ -279,15 +279,6 @@ class Alpha158(DataHandler):
                 features.append(close.diff().rolling(d).std())
                 names.append('VOLAT%d' % d)
 
-
-        if use('TIND'):
-            DIF, DEA, MACD = ta.MACD(close, fastperiod=12, slowperiod=26, signalperiod=9)
-            KDJK, KDJD = ta.STOCH(high, low, close, fastk_period=9, slowk_period=3, slowk_matype=0, slowd_period=3,
-                                  slowd_matype=0)
-            KDJJ = 3 * KDJK - 2 * KDJD
-            features += [ta.OBV(close, volume), ta.RSI(close, timeperiod=14), DIF, DEA, MACD, KDJK, KDJD, KDJJ]
-            names += ['OBV', 'RSI', 'DIF', 'DEA', 'MACD', 'KDJK', 'KDJD', 'KDJJ']
-
         # features
         self._feature_names = names.copy()
 
