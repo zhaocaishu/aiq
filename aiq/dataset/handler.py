@@ -282,12 +282,12 @@ class Alpha158(DataHandler):
 
         if use("MTURN"):
             for d in windows:
-                features.append(Mean(turnover, d) / turnover)
+                features.append(Mean(turnover, d))
                 names.append('MTURN%d' % d)
 
         if use("STDTURN"):
             for d in windows:
-                features.append(Std(turnover, d) / turnover)
+                features.append(Std(turnover, d))
                 names.append('STDTURN%d' % d)
 
         # features
