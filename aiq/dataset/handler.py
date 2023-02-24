@@ -269,16 +269,6 @@ class Alpha158(DataHandler):
                                 Sum(Abs(volume - Ref(volume, 1)), d) + 1e-12))
                 names.append('VSUMD%d' % d)
 
-        if use("RETURN"):
-            for d in windows:
-                features.append(close.pct_change(d))
-                names.append('RETURN%d' % d)
-
-        if use("VOLAT"):
-            for d in windows:
-                features.append(close.diff().rolling(d).std())
-                names.append('VOLAT%d' % d)
-
         # features
         self._feature_names = names.copy()
 
