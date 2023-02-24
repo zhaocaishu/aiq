@@ -290,8 +290,6 @@ class Alpha158(DataHandler):
 
         # features
         self._feature_names = names.copy()
-        for name in ['Open', 'Close', 'High', 'Low', 'Volume']:
-            self._feature_names.append(name)
 
         # labels
         if not self.test_mode:
