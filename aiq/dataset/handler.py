@@ -280,10 +280,15 @@ class Alpha158(DataHandler):
                 features.append(close.diff().rolling(d).std())
                 names.append('VOLAT%d' % d)
 
-        if use("TURNOVER"):
+        if use("MTURN"):
             for d in windows:
-                features.append(Log(Sum(turnover, d)))
-                names.append('TURNOVER%d' % d)
+                features.append(Mean(turnover, d) / turnover)
+                names.append('MTURN%d' % d)
+
+        if use("STDTURN"):
+            for d in windows:
+                features.append(Std(turnover, d) / turnover)
+                names.append('STDTURN%d' % d)
 
         # features
         self._feature_names = names.copy()
