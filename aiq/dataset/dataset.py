@@ -14,14 +14,15 @@ class Dataset(abc.ABC):
     """
 
     def __init__(
-            self,
-            data_dir,
-            instruments,
-            start_time=None,
-            end_time=None,
-            min_periods=30,
-            handler=None,
-            shuffle=False
+        self,
+        data_dir,
+        instruments,
+        start_time=None,
+        end_time=None,
+        handler=None,
+        min_periods=60,
+        adjust_price=False,
+        shuffle=False
     ):
         with open(os.path.join(data_dir, 'instruments/%s.txt' % instruments), 'r') as f:
             self.symbols = [line.strip().split()[0] for line in f.readlines()]
@@ -39,7 +40,8 @@ class Dataset(abc.ABC):
             df['Symbol'] = symbol
 
             # adjust price with factor
-            df = self.adjust_price(df)
+            if adjust_price:
+                df = self.adjust_price(df)
 
             # extract ticker factors
             if handler is not None:
