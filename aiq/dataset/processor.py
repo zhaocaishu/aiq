@@ -45,7 +45,6 @@ class Processor(abc.ABC):
 
 class CSZScoreNorm(Processor):
     """Cross Sectional ZScore Normalization"""
-
     def __init__(self, fields_group=None, method="zscore"):
         self.fields_group = fields_group
         if method == "zscore":

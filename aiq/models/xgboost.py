@@ -21,13 +21,13 @@ class XGBModel(BaseModel):
         self.model = None
 
     def fit(
-            self,
-            train_dataset: Dataset,
-            val_dataset: Dataset = None,
-            num_boost_round=1000,
-            early_stopping_rounds=50,
-            verbose_eval=20,
-            eval_results=dict()
+        self,
+        train_dataset: Dataset,
+        val_dataset: Dataset = None,
+        num_boost_round=1000,
+        early_stopping_rounds=50,
+        verbose_eval=20,
+        eval_results=dict()
     ):
         train_df = train_dataset.to_dataframe()
         x_train, y_train = train_df[self.feature_cols].values, train_df[self.label_col].values
