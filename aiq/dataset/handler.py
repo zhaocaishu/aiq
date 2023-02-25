@@ -29,7 +29,6 @@ class Alpha158(DataHandler):
         high = df['High']
         low = df['Low']
         volume = df['Volume']
-        turnover = df['Turnover_rate']
 
         # kbar
         features = [(close - open) / open,
@@ -279,16 +278,6 @@ class Alpha158(DataHandler):
             for d in windows:
                 features.append(close.diff().rolling(d).std())
                 names.append('VOLAT%d' % d)
-
-        if use("MTURN"):
-            for d in windows:
-                features.append(Mean(turnover, d))
-                names.append('MTURN%d' % d)
-
-        if use("STDTURN"):
-            for d in windows:
-                features.append(Std(turnover, d))
-                names.append('STDTURN%d' % d)
 
         # features
         self._feature_names = names.copy()

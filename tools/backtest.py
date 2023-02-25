@@ -101,24 +101,33 @@ if __name__ == '__main__':
     with open(os.path.join(args.data_dir, 'instruments/%s.txt' % args.instruments), 'r') as f:
         codes = {line.strip().split()[0] for line in f.readlines()}
 
-    # 获取评测时间范围内的交易日期
+    # 获取评测时间范围内的全部交易日期，区分交易所
     with open(os.path.join(args.data_dir, 'calendars/days.txt'), 'r') as f:
-        days = []
+        days = dict()
         for line in f.readlines():
-            date = line.strip()
+            exchange, date = line.strip().split()
             if cfg.dataset.segments['valid'][0] <= date <= cfg.dataset.segments['valid'][1]:
-                days.append(date)
+                if exchange in days:
+                    days[exchange].append(date)
+                else:
+                    days[exchange] = [date]
+        for exchange in days:
+            days[exchange] = sorted(days[exchange])
 
+    # 加入回测数据
     code_cnt = 0
     for code in codes:
+        exchange = code.split('.')[-1]
+        assert exchange in ['SH', 'SZ']
+        trade_days = days[exchange]
         data = df_prediction[df_prediction['Symbol'] == code]
-        if list(data['Date'].values) != days:
+        if list(data['Date'].values) != trade_days:
             continue
         code_cnt += 1
         data.index = pd.to_datetime(data['Date'])
         data_feed = ZCSPandasData(dataname=data)
         cerebro.adddata(data_feed, name=code)
-    print('合计添加%d个股票数据' % code_cnt)
+    print('共计%d个股票，添加%d个股票进入回测数据' % code_cnt)
 
     # 开始资金
     portvalue = cerebro.broker.getvalue()
