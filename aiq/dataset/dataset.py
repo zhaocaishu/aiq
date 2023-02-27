@@ -84,7 +84,7 @@ class Dataset(abc.ABC):
                 df_symbol.to_csv(os.path.join(output_dir, symbol + '.csv'), na_rep='NaN', index=False)
 
     def slice(self, start_time, end_time):
-        return self.df[(self.df['Date'] >= start_time) & (self.df['Date'] <= end_time)]
+        return self.df[(self.df['Date'] >= start_time) & (self.df['Date'] <= end_time)].copy()
 
     def __getitem__(self, index):
         return self.df.iloc[[index]]
