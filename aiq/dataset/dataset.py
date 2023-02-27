@@ -95,5 +95,5 @@ class Subset(Dataset):
         self.df = df[(df['Date'] >= start_time) & (df['Date'] <= end_time)]
 
 
-def random_split(dataset: Dataset, segments):
+def random_split(dataset: Dataset, segments: List[List[str]]):
     return [Subset(dataset, segment[0], segment[1]) for segment in segments]
