@@ -87,3 +87,13 @@ class Dataset(abc.ABC):
 
     def __len__(self):
         return self.df.shape[0]
+
+
+class Subset(Dataset):
+    def __init__(self, dataset, start_time, end_time):
+        df = dataset.to_dataframe()
+        self.df = df[(df['Date'] >= start_time) & (df['Date'] <= end_time)]
+
+
+def random_split(dataset: Dataset, segments):
+    return [Subset(dataset, segment[0], segment[1]) for segment in segments]

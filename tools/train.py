@@ -1,7 +1,7 @@
 import argparse
 import os
 
-from aiq.dataset import Dataset, Alpha158
+from aiq.dataset import Dataset, Alpha158, random_split
 from aiq.models import XGBModel, LGBModel
 from aiq.utils.config import config as cfg
 
@@ -29,17 +29,13 @@ def main():
     # dataset
     print(cfg.dataset.segments)
     handler = Alpha158()
-    train_dataset = Dataset(args.data_dir,
-                            instruments=args.instruments,
-                            start_time=cfg.dataset.segments['train'][0],
-                            end_time=cfg.dataset.segments['train'][1],
-                            handler=handler,
-                            shuffle=True)
-    valid_dataset = Dataset(args.data_dir,
-                            instruments=args.instruments,
-                            start_time=cfg.dataset.segments['valid'][0],
-                            end_time=cfg.dataset.segments['valid'][1],
-                            handler=handler)
+    dataset = Dataset(args.data_dir,
+                      instruments=args.instruments,
+                      start_time=cfg.dataset.segments['train'][0],
+                      end_time=cfg.dataset.segments['valid'][1],
+                      handler=handler,
+                      shuffle=True)
+    train_dataset, valid_dataset = random_split(dataset, [cfg.dataset.segments['train'], cfg.dataset.segments['valid']])
 
     # train model
     if cfg.model.name == 'XGB':
