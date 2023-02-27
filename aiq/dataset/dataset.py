@@ -1,5 +1,6 @@
 import abc
 import os
+from typing import List
 
 import numpy as np
 import pandas as pd
@@ -82,6 +83,9 @@ class Dataset(abc.ABC):
             if df_symbol.shape[0] > 0:
                 df_symbol.to_csv(os.path.join(output_dir, symbol + '.csv'), na_rep='NaN', index=False)
 
+    def slice(self, start_time, end_time):
+        return self.df[(self.df['Date'] >= start_time) & (self.df['Date'] <= end_time)]
+
     def __getitem__(self, index):
         return self.df.iloc[[index]]
 
@@ -91,8 +95,7 @@ class Dataset(abc.ABC):
 
 class Subset(Dataset):
     def __init__(self, dataset, start_time, end_time):
-        df = dataset.to_dataframe()
-        self.df = df[(df['Date'] >= start_time) & (df['Date'] <= end_time)]
+        self.df = dataset.slice(start_time, end_time)
 
 
 def random_split(dataset: Dataset, segments: List[List[str]]):
