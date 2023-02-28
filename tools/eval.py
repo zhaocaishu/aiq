@@ -36,9 +36,8 @@ def main():
                       instruments=args.instruments,
                       start_time=cfg.dataset.segments['train'][0],
                       end_time=cfg.dataset.segments['valid'][1],
-                      handler=handler,
-                      shuffle=True)
-    valid_dataset = random_split(dataset, [cfg.dataset.segments['train'], cfg.dataset.segments['valid']])[1]
+                      handler=handler)
+    valid_dataset = random_split(dataset, [cfg.dataset.segments['valid']])[0]
 
     # evaluation
     if cfg.model.name == 'XGB':
