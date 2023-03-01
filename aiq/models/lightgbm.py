@@ -12,14 +12,6 @@ from .base import BaseModel
 class LGBModel(BaseModel):
     """LGBModel Model"""
 
-    def __init__(self, feature_cols=None, label_col=None, model_params=None):
-        self.feature_cols = feature_cols
-        self.label_col = label_col
-
-        self.model_params = model_params
-
-        self.model = None
-
     def fit(
         self,
         train_dataset: Dataset,
@@ -30,13 +22,13 @@ class LGBModel(BaseModel):
         eval_results=dict()
     ):
         train_df = train_dataset.to_dataframe()
-        x_train, y_train = train_df[self.feature_cols].values, train_df[self.label_col].values
+        x_train, y_train = train_df[self._feature_cols].values, train_df[self.label_col].values
         dtrain = lgb.Dataset(x_train, label=y_train)
         evals = [dtrain]
 
         if val_dataset is not None:
             valid_df = val_dataset.to_dataframe()
-            x_valid, y_valid = valid_df[self.feature_cols].values, valid_df[self.label_col].values
+            x_valid, y_valid = valid_df[self._feature_cols].values, valid_df[self.label_col].values
             dvalid = lgb.Dataset(x_valid, label=y_valid)
             evals.append(dvalid)
 
@@ -57,7 +49,7 @@ class LGBModel(BaseModel):
     def predict(self, dataset: Dataset):
         if self.model is None:
             raise ValueError("model is not fitted yet!")
-        x_test = dataset.to_dataframe()[self.feature_cols].values
+        x_test = dataset.to_dataframe()[self._feature_cols].values
         predict_result = self.model.predict(x_test)
         dataset.add_column('PREDICTION', predict_result)
         return dataset
@@ -79,8 +71,8 @@ class LGBModel(BaseModel):
         self.model.save_model(model_file)
 
         model_params = {
-            'feature_cols': self.feature_cols,
-            'label_col': self.label_col,
+            'feature_cols': self._feature_cols,
+            'label_col': self._label_col,
             'model_params': self.model_params
         }
         with open(os.path.join(model_dir, 'model.params'), 'w') as f:
@@ -90,6 +82,6 @@ class LGBModel(BaseModel):
         self.model = lgb.Booster(model_file=os.path.join(model_dir, 'model.json'))
         with open(os.path.join(model_dir, 'model.params'), 'r') as f:
             model_params = json.load(f)
-            self.feature_cols = model_params['feature_cols']
-            self.label_col = model_params['label_col']
+            self._feature_cols = model_params['feature_cols']
+            self._label_col = model_params['label_col']
             self.model_params = model_params['model_params']
