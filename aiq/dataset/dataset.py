@@ -22,7 +22,7 @@ class Dataset(abc.ABC):
         end_time=None,
         handler=None,
         min_periods=60,
-        adjust_price=False,
+        adjust_price=True,
         shuffle=False
     ):
         # symbol of instruments
@@ -72,7 +72,7 @@ class Dataset(abc.ABC):
     def adjust_price(df):
         price_cols = ['Open', 'High', 'Low', 'Close']
         for col in price_cols:
-            df[col] = df[col] * df['Adj_factor'] / df['Adj_factor'].iloc[-1]
+            df[col] = df[col] * df['Adj_factor']
         return df
 
     def to_dataframe(self):
