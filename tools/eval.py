@@ -41,17 +41,13 @@ def main():
 
     # evaluation
     if cfg.model.name == 'XGB':
-        model = XGBModel(feature_cols=handler.feature_names,
-                         label_col=handler.label_name,
-                         model_params=cfg.model.params)
+        model = XGBModel()
     elif cfg.model.name == 'LGB':
-        model = LGBModel(feature_cols=handler.feature_names,
-                         label_col=handler.label_name,
-                         model_params=cfg.model.params)
+        model = LGBModel()
     model.load(args.save_dir)
     df_prediction = model.predict(valid_dataset).to_dataframe()
 
-    label_reg = df_prediction[handler.label_name].values
+    label_reg = df_prediction[dataset.label_name].values
     prediction = df_prediction['PREDICTION'].values
     print("RMSE:", np.sqrt(mean_squared_error(label_reg, prediction)))
 

@@ -43,12 +43,12 @@ def main():
 
     # train model
     if cfg.model.name == 'XGB':
-        model = XGBModel(feature_cols=handler.feature_names,
-                         label_col=handler.label_name,
+        model = XGBModel(train_dataset=train_dataset.feature_names,
+                         label_col=train_dataset.label_name,
                          model_params=cfg.model.params)
     elif cfg.model.name == 'LGB':
-        model = LGBModel(feature_cols=handler.feature_names,
-                         label_col=handler.label_name,
+        model = LGBModel(feature_cols=train_dataset.feature_names,
+                         label_col=train_dataset.label_name,
                          model_params=dict(cfg.model.params))
     model.fit(train_dataset=train_dataset, val_dataset=valid_dataset)
 

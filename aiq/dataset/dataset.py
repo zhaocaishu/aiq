@@ -25,9 +25,11 @@ class Dataset(abc.ABC):
         adjust_price=False,
         shuffle=False
     ):
+        # symbol of instruments
         with open(os.path.join(data_dir, 'instruments/%s.txt' % instruments), 'r') as f:
             self.symbols = [line.strip().split()[0] for line in f.readlines()]
 
+        # process per symbol
         df_list = []
         for symbol in self.symbols:
             df = DataLoader.load(os.path.join(data_dir, 'features'), symbol=symbol, start_time=start_time,
@@ -49,10 +51,18 @@ class Dataset(abc.ABC):
                 df = handler.fetch(df)
 
             df_list.append(df)
+
         # concat and reset index
         self.df = pd.concat(df_list)
         self.df.reset_index(inplace=True)
         print('Loaded %d symbols to build dataset' % len(df_list))
+
+        # assign features and label name
+        self._feature_names = None
+        self._label_name = None
+        if handler is not None:
+            self._feature_names = handler.feature_names
+            self._label_name = handler.label_name
 
         # random shuffle
         if shuffle:
@@ -85,6 +95,14 @@ class Dataset(abc.ABC):
 
     def slice(self, start_time, end_time):
         return self.df[(self.df['Date'] >= start_time) & (self.df['Date'] <= end_time)].copy()
+
+    @property
+    def feature_names(self):
+        return self._feature_names
+
+    @property
+    def label_name(self):
+        return self._label_name
 
     def __getitem__(self, index):
         return self.df.iloc[[index]]

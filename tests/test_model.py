@@ -19,8 +19,8 @@ if __name__ == '__main__':
     }
 
     # train stage
-    model = LGBModel(feature_cols=handler.feature_names,
-                     label_col=[handler.label_name],
+    model = LGBModel(feature_cols=train_dataset.feature_names,
+                     label_col=[train_dataset.label_name],
                      model_params=model_params)
     model.fit(train_dataset=train_dataset, val_dataset=valid_dataset)
     model.save(model_dir='./temp')
