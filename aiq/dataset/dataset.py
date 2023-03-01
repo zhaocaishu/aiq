@@ -22,7 +22,7 @@ class Dataset(abc.ABC):
         end_time=None,
         handler=None,
         min_periods=60,
-        adjust_price=True,
+        adjust_price=False,
         shuffle=False
     ):
         # symbol of instruments
@@ -81,18 +81,6 @@ class Dataset(abc.ABC):
     def add_column(self, name: str, data: np.array):
         self.df[name] = data
 
-    def dump(self, output_dir: str = None):
-        if output_dir is None:
-            return
-
-        if not os.path.exists(path=output_dir):
-            os.makedirs(output_dir)
-
-        for symbol in self.symbols:
-            df_symbol = self.df[self.df['Symbol'] == symbol]
-            if df_symbol.shape[0] > 0:
-                df_symbol.to_csv(os.path.join(output_dir, symbol + '.csv'), na_rep='NaN', index=False)
-
     def slice(self, start_time, end_time):
         return self.df[(self.df['Date'] >= start_time) & (self.df['Date'] <= end_time)].copy()
 
@@ -103,6 +91,17 @@ class Dataset(abc.ABC):
     @property
     def label_name(self):
         return self._label_name
+
+    def dump(self, output_dir: str = None):
+        if output_dir is None:
+            return
+
+        if not os.path.exists(path=output_dir):
+            os.makedirs(output_dir)
+
+        for symbol in self.symbols:
+            df_symbol = self.df[self.df['Symbol'] == symbol]
+            df_symbol.to_csv(os.path.join(output_dir, symbol + '.csv'), na_rep='NaN', index=False)
 
     def __getitem__(self, index):
         return self.df.iloc[[index]]
