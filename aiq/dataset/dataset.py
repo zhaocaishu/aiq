@@ -34,7 +34,7 @@ class Dataset(abc.ABC):
             self.symbols = [line.strip().split()[0] for line in f.readlines()]
 
         # process per symbol
-        df_list = []
+        self.df = None
         for symbol in self.symbols:
             df = DataLoader.load(os.path.join(data_dir, 'features'), symbol=symbol, start_time=start_time,
                                  end_time=end_time)
@@ -54,10 +54,10 @@ class Dataset(abc.ABC):
             if handler is not None:
                 df = handler.fetch(df)
 
-            df_list.append(df)
-
-        # concat and reset index
-        self.df = pd.concat(df_list)
+            if self.df is None:
+                self.df = df
+            else:
+                self.df = pd.concat([self.df, df], ignore_index=True)
         self.df.reset_index(inplace=True)
 
         # assign features and label name
@@ -69,7 +69,7 @@ class Dataset(abc.ABC):
         if shuffle:
             self.df = self.df.sample(frac=1)
 
-        print('Loaded %d symbols to build dataset' % len(df_list))
+        print('Loaded %d items to build dataset' % len(self))
 
     @staticmethod
     def adjust_price(df):
