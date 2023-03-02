@@ -125,16 +125,20 @@ class TopkDropoutStrategy(bt.Strategy):
         target_value = self.broker.getvalue() * (1 - self.reserve) / self.p.topk
         for secu in keep_order_list:
             data = self.getdatabyname(secu)
-            current_value = self.broker.getvalue(datas=[data])
             order_price = data.open[1]
-            if current_value < target_value:
-                order_size = self.downcast((target_value - current_value) / order_price, 100)
-                if order_size > 0:
-                    self.order[secu] = self.buy(data=data, size=order_size, price=order_price, name=secu)
-            elif current_value > target_value:
-                order_size = self.downcast((current_value - target_value) / order_price, 100)
-                if order_size > 0:
-                    self.order[secu] = self.sell(data=data, size=order_size, price=order_price, name=secu)
+            order_size = self.downcast(target_value / order_price, 100)
+            self.order[secu] = self.order_target_size(data=data, target=order_size, price=order_price, name=secu)
+
+            # current_value = self.broker.getvalue(datas=[data])
+            # order_price = data.open[1]
+            # if current_value < target_value:
+            #     order_size = self.downcast((target_value - current_value) / order_price, 100)
+            #     if order_size > 0:
+            #         self.order[secu] = self.buy(data=data, size=order_size, price=order_price, name=secu)
+            # elif current_value > target_value:
+            #     order_size = self.downcast((current_value - target_value) / order_price, 100)
+            #     if order_size > 0:
+            #         self.order[secu] = self.sell(data=data, size=order_size, price=order_price, name=secu)
 
         # issue a target order for the newly top ranked stocks
         # do this last, as this will generate buy orders consuming cash
