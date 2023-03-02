@@ -58,11 +58,17 @@ class Dataset(abc.ABC):
         print('Loaded %d symbols to build dataset' % len(df_list))
 
         # assign features and label name
-        self._feature_names = None
-        self._label_name = None
         if handler is not None:
             self._feature_names = handler.feature_names
             self._label_name = handler.label_name
+        else:
+            self._feature_names = None
+            self._label_name = None
+
+        # label zscore
+        if self._label_name is not None:
+            csznorm = CSZScoreNorm(fields_group=self._label_name)
+            self.df = csznorm(self.df)
 
         # random shuffle
         if shuffle:
