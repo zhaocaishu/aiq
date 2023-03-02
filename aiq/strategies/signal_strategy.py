@@ -10,11 +10,11 @@ logger = get_logger('Signal Strategy')
 
 class TopkDropoutStrategy(bt.Strategy):
     params = {
-        'topk': None,           # number of stocks in the portfolio
-        'n_drop': None,         # number of stocks to be replaced in each trading date
-        'hold_thresh': 1,       # minimum holding days
-        'buy_thresh': 0.01,     # minimum confidence score to buy a stock
-        'log_writer': None      # write handler
+        'topk': None,  # number of stocks in the portfolio
+        'n_drop': None,  # number of stocks to be replaced in each trading date
+        'hold_thresh': 1,  # minimum holding days
+        'buy_thresh': 0.01,  # minimum confidence score to buy a stock
+        'log_writer': None  # write handler
     }
 
     def __init__(self):
@@ -109,32 +109,41 @@ class TopkDropoutStrategy(bt.Strategy):
         buy_order_list, keep_order_list, sell_order_list = self.generate_trade_decision()
 
         if self.p.log_writer is not None:
-            order_str = json.dumps({'Date': str(self.datetime.date(0)),
-                                    'BUY': buy_order_list,
-                                    'SELL': sell_order_list})
+            order_str = json.dumps({'date': str(self.datetime.date(0)),
+                                    'buy': buy_order_list,
+                                    'sell': sell_order_list})
             self.p.log_writer.write(order_str + '\n')
 
         # remove those no longer top ranked
         # do this first to issue sell orders and free cash
         for secu in sell_order_list:
             data = self.getdatabyname(secu)
-            self.order[secu] = self.order_target_percent(data, 0, name=secu)
+            order_price = data.close[1]
+            self.order[secu] = self.order_target_percent(data=data, target=0.0, price=order_price, name=secu)
 
         # re-balance those already top ranked and still there
         target_value = self.broker.getvalue() * (1 - self.reserve) / self.p.topk
         for secu in keep_order_list:
             data = self.getdatabyname(secu)
-            order_price = data.close[0]
-            order_amount = self.downcast(target_value / order_price, 100)
-            self.order[secu] = self.order_target_size(data=data, target=order_amount)
+            current_value = self.broker.getvalue(datas=[data])
+            if current_value < target_value:
+                order_price = data.open[1]
+                order_size = self.downcast((target_value - current_value) / order_price, 100)
+                if order_size > 0:
+                    self.order[secu] = self.buy(data=data, size=order_size, price=order_price, name=secu)
+            elif current_value > target_value:
+                order_price = data.close[1]
+                order_size = self.downcast((current_value - target_value) / order_price, 100)
+                if order_size > 0:
+                    self.order[secu] = self.sell(data=data, size=order_size, price=order_price, name=secu)
 
         # issue a target order for the newly top ranked stocks
         # do this last, as this will generate buy orders consuming cash
         for secu in buy_order_list:
             data = self.getdatabyname(secu)
-            order_price = data.close[0]
-            order_amount = self.downcast(target_value / order_price, 100)
-            self.order[secu] = self.buy(data=data, size=order_amount, name=secu)
+            order_price = data.open[1]
+            order_size = self.downcast(target_value / order_price, 100)
+            self.order[secu] = self.buy(data=data, size=order_size, price=order_price, name=secu)
 
     def notify_order(self, order):
         if order.status in [order.Submitted, order.Accepted]:
