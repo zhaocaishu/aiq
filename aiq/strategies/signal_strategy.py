@@ -131,8 +131,8 @@ class TopkDropoutStrategy(bt.Strategy):
                 order_size = self.downcast((target_value - current_value) / order_price, 100)
                 self.order[secu] = self.buy(data=data, size=order_size, price=order_price, name=secu)
             elif current_value > target_value:
-                order_size = self.downcast((current_value - target_value) / order_price, 100)
                 order_price = data.close[1]
+                order_size = self.downcast((current_value - target_value) / order_price, 100)
                 self.order[secu] = self.sell(data=data, size=order_size, price=order_price, name=secu)
 
         # issue a target order for the newly top ranked stocks
