@@ -25,6 +25,10 @@ class Dataset(abc.ABC):
         adjust_price=True,
         shuffle=False
     ):
+        # feature and label names
+        self._feature_names = None
+        self._label_name = None
+
         # symbol of instruments
         with open(os.path.join(data_dir, 'instruments/%s.txt' % instruments), 'r') as f:
             self.symbols = [line.strip().split()[0] for line in f.readlines()]
@@ -55,19 +59,17 @@ class Dataset(abc.ABC):
         # concat and reset index
         self.df = pd.concat(df_list)
         self.df.reset_index(inplace=True)
-        print('Loaded %d symbols to build dataset' % len(df_list))
 
         # assign features and label name
         if handler is not None:
             self._feature_names = handler.feature_names
             self._label_name = handler.label_name
-        else:
-            self._feature_names = None
-            self._label_name = None
 
         # random shuffle
         if shuffle:
             self.df = self.df.sample(frac=1)
+
+        print('Loaded %d symbols to build dataset' % len(df_list))
 
     @staticmethod
     def adjust_price(df):
