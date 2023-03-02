@@ -118,7 +118,7 @@ class TopkDropoutStrategy(bt.Strategy):
         # do this first to issue sell orders and free cash
         for secu in sell_order_list:
             data = self.getdatabyname(secu)
-            order_price = data.close[1]
+            order_price = data.open[1]
             self.order[secu] = self.order_target_percent(data=data, target=0.0, price=order_price, name=secu)
 
         # re-balance those already top ranked and still there
@@ -126,13 +126,12 @@ class TopkDropoutStrategy(bt.Strategy):
         for secu in keep_order_list:
             data = self.getdatabyname(secu)
             current_value = self.broker.getvalue(datas=[data])
+            order_price = data.open[1]
             if current_value < target_value:
-                order_price = data.open[1]
                 order_size = self.downcast((target_value - current_value) / order_price, 100)
                 if order_size > 0:
                     self.order[secu] = self.buy(data=data, size=order_size, price=order_price, name=secu)
             elif current_value > target_value:
-                order_price = data.close[1]
                 order_size = self.downcast((current_value - target_value) / order_price, 100)
                 if order_size > 0:
                     self.order[secu] = self.sell(data=data, size=order_size, price=order_price, name=secu)
