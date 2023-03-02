@@ -65,11 +65,6 @@ class Dataset(abc.ABC):
             self._feature_names = None
             self._label_name = None
 
-        # label zscore
-        if self._label_name is not None:
-            csznorm = CSZScoreNorm(fields_group=self._label_name)
-            self.df = csznorm(self.df)
-
         # random shuffle
         if shuffle:
             self.df = self.df.sample(frac=1)
