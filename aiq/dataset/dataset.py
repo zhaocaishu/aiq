@@ -22,7 +22,7 @@ class Dataset(abc.ABC):
         end_time=None,
         handler=None,
         min_periods=60,
-        adjust_price=False,
+        adjust_price=True,
         shuffle=False
     ):
         # symbol of instruments
