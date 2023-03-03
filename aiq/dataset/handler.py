@@ -53,13 +53,11 @@ class Alpha158(DataHandler):
 
         # volume
         for d in range(5):
-            field = 'Volume'
-            feature = field.upper() + str(d)
             if d != 0:
-                features.append(Ref(df[field], d) / (volume + 1e-12))
+                features.append(Ref(volume, d) / (volume + 1e-12))
             else:
-                features.append(df[field] / (volume + 1e-12))
-            names.append(feature)
+                features.append(volume / (volume + 1e-12))
+            names.append('VOLUME' % d)
 
         # rolling
         windows = [5, 10, 20, 30, 60]

@@ -65,11 +65,6 @@ class Dataset(abc.ABC):
             self._feature_names = handler.feature_names
             self._label_name = handler.label_name
 
-        # add mean features
-        group_mean = FeatureGroupMean()
-        self.df, mean_feature_names = group_mean(self.df)
-        self._feature_names += mean_feature_names
-
         # random shuffle
         if shuffle:
             self.df = self.df.sample(frac=1)
