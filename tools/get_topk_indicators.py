@@ -41,7 +41,8 @@ def main():
         topk_indicators.append(model.feature_cols[feature_index])
         count += 1
 
-    print(','.join(topk_indicators))
+    topk_indicators = ['\'' + indicator + '\'' for indicator in topk_indicators]
+    print(', '.join(topk_indicators))
 
 
 if __name__ == '__main__':

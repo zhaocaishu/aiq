@@ -67,7 +67,17 @@ class CSZScoreNorm(Processor):
 class FeatureGroupMean(Processor):
     """Feature mean group by group id"""
     def __init__(self, fields_group=None, group_names=['Date', 'Industry_id']):
-        self.fields_group = fields_group
+        if fields_group is None:
+            self.fields_group = [
+                'CNTN20', 'CNTN30', 'KSFT', 'CNTN5', 'MAX20', 'RSQR5', 'MAX30', 'HIGH0', 'RETURN60', 'RETURN20',
+                'QTLU60', 'RESI30', 'RETURN30', 'KLOW', 'ROC30', 'LOW1', 'CNTP5', 'MAX5', 'HIGH1', 'RESI60', 'RETURN5',
+                'MA20', 'HIGH2', 'IMIN60', 'OPEN1', 'KSFT2', 'ROC20', 'VOLUME1', 'CLOSE3', 'OPEN4', 'CLOSE4', 'OPEN3',
+                'KLEN', 'RESI5', 'VOLAT60', 'VMA30', 'BETA60', 'MA5', 'ROC60', 'VSUMN5', 'QTLU20', 'STD5', 'CLOSE1',
+                'MAX10', 'KUP', 'HIGH3', 'MA60', 'LOW0', 'BETA20', 'SUMP5'
+            ]
+        else:
+            self.fields_group = fields_group
+
         self.group_names = group_names
 
     def __call__(self, df):
