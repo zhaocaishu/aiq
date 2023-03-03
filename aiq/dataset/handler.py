@@ -57,7 +57,7 @@ class Alpha158(DataHandler):
                 features.append(Ref(volume, d) / (volume + 1e-12))
             else:
                 features.append(volume / (volume + 1e-12))
-            names.append('VOLUME' % d)
+            names.append('VOLUME%d' % d)
 
         # rolling
         windows = [5, 10, 20, 30, 60]
