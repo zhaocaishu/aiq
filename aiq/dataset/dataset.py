@@ -34,7 +34,7 @@ class Dataset(abc.ABC):
             self.symbols = [line.strip().split()[0] for line in f.readlines()]
 
         # process per symbol
-        self.df = None
+        dfs = []
         for symbol in self.symbols:
             df = DataLoader.load(os.path.join(data_dir, 'features'), symbol=symbol, start_time=start_time,
                                  end_time=end_time)
@@ -54,10 +54,10 @@ class Dataset(abc.ABC):
             if handler is not None:
                 df = handler.fetch(df)
 
-            if self.df is None:
-                self.df = df
-            else:
-                self.df = pd.concat([self.df, df], ignore_index=True)
+            dfs.append(df)
+
+        # concat and reset index
+        self.df = pd.concat(dfs)
         self.df.reset_index(inplace=True)
 
         # assign features and label name

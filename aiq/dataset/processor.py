@@ -62,3 +62,20 @@ class CSZScoreNorm(Processor):
             cols = get_group_columns(df, g)
             df[cols] = df.groupby("Date", group_keys=False)[cols].apply(self.zscore_func)
         return df
+
+
+class FeatureGroupMean(Processor):
+    """Feature mean group by group id"""
+    def __init__(self, fields_group=None, group_names=['Date', 'Industry_id']):
+        self.fields_group = fields_group
+        self.group_names = group_names
+
+    def __call__(self, df):
+        if not isinstance(self.fields_group, list):
+            self.fields_group = [self.fields_group]
+
+        feature_names = []
+        for col in self.fields_group:
+            df[f'M{col}'] = df.groupby(self.group_names)[col].transform('mean')
+            feature_names.append(f'M{col}')
+        return df, feature_names
