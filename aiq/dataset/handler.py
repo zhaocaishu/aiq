@@ -276,7 +276,7 @@ class Alpha158(DataHandler):
 
         if use("VOLAT"):
             for d in windows:
-                features.append(close.diff().rolling(d).std())
+                features.append(Log(close).diff().rolling(d).std())
                 names.append('VOLAT%d' % d)
 
         # features
