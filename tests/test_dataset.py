@@ -2,7 +2,7 @@ from aiq.dataset import Dataset, Alpha158, random_split
 
 
 if __name__ == '__main__':
-    dataset = Dataset('./data', instruments='all', handler=Alpha158(), adjust_price=False, shuffle=False)
+    dataset = Dataset('./data', instruments='all', handler=Alpha158(), adjust_price=False)
 
     print(dataset.to_dataframe().shape)
 

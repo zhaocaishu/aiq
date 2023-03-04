@@ -45,6 +45,7 @@ class Processor(abc.ABC):
 
 class CSZScoreNorm(Processor):
     """Cross Sectional ZScore Normalization"""
+
     def __init__(self, fields_group=None, method="zscore"):
         self.fields_group = fields_group
         if method == "zscore":
@@ -66,18 +67,9 @@ class CSZScoreNorm(Processor):
 
 class FeatureGroupMean(Processor):
     """Feature mean group by group id"""
-    def __init__(self, fields_group=None, group_names=['Date', 'Industry_id']):
-        if fields_group is None:
-            self.fields_group = [
-                'CNTN20', 'CNTN30', 'KSFT', 'CNTN5', 'MAX20', 'RSQR5', 'MAX30', 'HIGH0', 'RETURN60', 'RETURN20',
-                'QTLU60', 'RESI30', 'RETURN30', 'KLOW', 'ROC30', 'LOW1', 'CNTP5', 'MAX5', 'HIGH1', 'RESI60', 'RETURN5',
-                'MA20', 'HIGH2', 'IMIN60', 'OPEN1', 'KSFT2', 'ROC20', 'VOLUME1', 'CLOSE3', 'OPEN4', 'CLOSE4', 'OPEN3',
-                'KLEN', 'RESI5', 'VOLAT60', 'VMA30', 'BETA60', 'MA5', 'ROC60', 'VSUMN5', 'QTLU20', 'STD5', 'CLOSE1',
-                'MAX10', 'KUP', 'HIGH3', 'MA60', 'LOW0', 'BETA20', 'SUMP5'
-            ]
-        else:
-            self.fields_group = fields_group
 
+    def __init__(self, fields_group=None, group_names=['Date', 'Industry_id']):
+        self.fields_group = fields_group
         self.group_names = group_names
 
     def __call__(self, df):
@@ -89,3 +81,19 @@ class FeatureGroupMean(Processor):
             df[f'M{col}'] = df.groupby(self.group_names)[col].transform('mean')
             feature_names.append(f'M{col}')
         return df, feature_names
+
+
+class RandomLabelSampling(Processor):
+    """Random sampling on label"""
+
+    def __init__(self, label_name=None, bound_value=None, sample_ratio=0.5):
+        self.label_name = label_name
+        self.bound_value = bound_value
+        self.sample_ratio = sample_ratio
+
+    def __call__(self, df):
+        df1 = df[(df[self.label_name] >= self.bound_value[0]) & (df[self.label_name] <= self.bound_value[1])]
+        df2 = df[~df.index.isin(df1.index)]
+        df1 = df1.sample(frac=self.sample_ratio)
+        df = pd.concat([df1, df2])
+        return df

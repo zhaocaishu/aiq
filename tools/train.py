@@ -34,7 +34,7 @@ def main():
                             start_time=cfg.dataset.segments['train'][0],
                             end_time=cfg.dataset.segments['train'][1],
                             handler=handler,
-                            shuffle=True)
+                            training=True)
     valid_dataset = Dataset(args.data_dir,
                             instruments=args.instruments,
                             start_time=cfg.dataset.segments['valid'][0],

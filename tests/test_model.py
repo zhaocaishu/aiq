@@ -3,8 +3,10 @@ from aiq.models import XGBModel, LGBModel
 
 if __name__ == '__main__':
     handler = Alpha158()
-    train_dataset = Dataset('./data', instruments='all', start_time='2021-08-30', end_time='2022-04-28', handler=handler, shuffle=True)
-    valid_dataset = Dataset('./data', instruments='all', start_time='2022-04-29', end_time='2022-08-26', handler=handler)
+    train_dataset = Dataset('./data', instruments='all', start_time='2021-08-30', end_time='2022-04-28',
+                            handler=handler, adjust_price=False, training=True)
+    valid_dataset = Dataset('./data', instruments='all', start_time='2022-04-29', end_time='2022-08-26',
+                            handler=handler, adjust_price=False)
     model_params = {
         'objective': 'mse',
         'learning_rate': 0.2,

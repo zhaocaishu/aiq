@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from .loader import DataLoader
-from .processor import CSZScoreNorm, FeatureGroupMean
+from .processor import CSZScoreNorm, FeatureGroupMean, RandomLabelSampling
 
 
 class Dataset(abc.ABC):
@@ -23,7 +23,7 @@ class Dataset(abc.ABC):
         handler=None,
         min_periods=60,
         adjust_price=True,
-        shuffle=False
+        training=False
     ):
         # feature and label names
         self._feature_names = None
@@ -65,9 +65,11 @@ class Dataset(abc.ABC):
             self._feature_names = handler.feature_names
             self._label_name = handler.label_name
 
-        # random shuffle
-        if shuffle:
-            self.df = self.df.sample(frac=1)
+        # random sampling and shuffle
+        if training:
+            random_sampling = RandomLabelSampling(label_name=self._label_name, bound_value=[-0.01, 0.01])
+            self.df = random_sampling(self.df)
+            self.df = self.df.sample(frac=1.0)
 
         print('Loaded %d items to build dataset' % len(self))
 
