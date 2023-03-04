@@ -81,7 +81,7 @@ if __name__ == '__main__':
     elif cfg.model.name == 'LGB':
         model = LGBModel()
     model.load(args.save_dir)
-    df_prediction = model.predict(valid_dataset).to_dataframe()
+    df_prediction = model.predict(test_dataset).to_dataframe()
 
     # 初始化策略
     cerebro = bt.Cerebro()
@@ -104,7 +104,7 @@ if __name__ == '__main__':
         days = dict()
         for line in f.readlines():
             exchange, date = line.strip().split()
-            if cfg.dataset.segments['valid'][0] <= date <= cfg.dataset.segments['valid'][1]:
+            if cfg.dataset.segments['test'][0] <= date <= cfg.dataset.segments['test'][1]:
                 if exchange in days:
                     days[exchange].append(date)
                 else:
