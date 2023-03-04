@@ -40,6 +40,7 @@ def main():
                             start_time=cfg.dataset.segments['valid'][0],
                             end_time=cfg.dataset.segments['valid'][1],
                             handler=handler)
+    print('Loaded %d items to train dataset, %d items to validation dataset' % (len(train_dataset), len(valid_dataset)))
 
     # train model
     if cfg.model.name == 'XGB':

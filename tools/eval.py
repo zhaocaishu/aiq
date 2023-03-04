@@ -4,7 +4,7 @@ import os
 import numpy as np
 from sklearn.metrics import mean_squared_error
 
-from aiq.dataset import Dataset, Alpha158
+from aiq.dataset import Dataset, Alpha158, random_split
 from aiq.models import XGBModel, LGBModel
 from aiq.utils.config import config as cfg
 
@@ -38,6 +38,7 @@ def main():
                       end_time=cfg.dataset.segments['valid'][1],
                       handler=handler)
     valid_dataset = random_split(dataset, [cfg.dataset.segments['valid']])[0]
+    print('Loaded %d items to validation dataset' % len(valid_dataset))
 
     # evaluation
     if cfg.model.name == 'XGB':

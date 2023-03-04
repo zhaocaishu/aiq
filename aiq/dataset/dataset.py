@@ -71,8 +71,6 @@ class Dataset(abc.ABC):
             self.df = random_sampling(self.df)
             self.df = self.df.sample(frac=1.0)
 
-        print('Loaded %d items to build dataset' % len(self))
-
     @staticmethod
     def adjust_price(df):
         price_cols = ['Open', 'High', 'Low', 'Close']

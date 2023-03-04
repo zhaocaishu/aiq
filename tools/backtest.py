@@ -73,6 +73,7 @@ if __name__ == '__main__':
                       end_time=cfg.dataset.segments['valid'][1],
                       handler=handler)
     valid_dataset = random_split(dataset, [cfg.dataset.segments['valid']])[0]
+    print('Loaded %d items to validation dataset' % len(valid_dataset))
 
     # evaluation
     if cfg.model.name == 'XGB':
