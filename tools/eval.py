@@ -35,10 +35,10 @@ def main():
     dataset = Dataset(args.data_dir,
                       instruments=args.instruments,
                       start_time=cfg.dataset.segments['train'][0],
-                      end_time=cfg.dataset.segments['valid'][1],
+                      end_time=cfg.dataset.segments['test'][1],
                       handler=handler)
-    valid_dataset = random_split(dataset, [cfg.dataset.segments['valid']])[0]
-    print('Loaded %d items to validation dataset' % len(valid_dataset))
+    test_dataset = random_split(dataset, [cfg.dataset.segments['test']])[0]
+    print('Loaded %d items to test dataset' % len(test_dataset))
 
     # evaluation
     if cfg.model.name == 'XGB':
