@@ -46,7 +46,7 @@ def main():
     elif cfg.model.name == 'LGB':
         model = LGBModel()
     model.load(args.save_dir)
-    df_prediction = model.predict(valid_dataset).to_dataframe()
+    df_prediction = model.predict(test_dataset).to_dataframe()
 
     label_reg = df_prediction[dataset.label_name].values
     prediction = df_prediction['PREDICTION'].values
