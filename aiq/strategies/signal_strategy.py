@@ -142,7 +142,8 @@ class TopkDropoutStrategy(bt.Strategy):
             data = self.getdatabyname(secu)
             order_price = data.open[1]
             order_size = self.downcast(target_value / order_price, 100)
-            self.order[secu] = self.buy(data=data, size=order_size, price=order_price, name=secu)
+            if order_size > 0:
+                self.order[secu] = self.buy(data=data, size=order_size, price=order_price, name=secu)
 
     def notify_order(self, order):
         if order.status in [order.Submitted, order.Accepted]:

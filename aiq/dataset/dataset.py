@@ -65,10 +65,8 @@ class Dataset(abc.ABC):
             self._feature_names = handler.feature_names
             self._label_name = handler.label_name
 
-        # random sampling and shuffle
+        # random shuffle
         if training:
-            random_sampling = RandomLabelSampling(label_name=self._label_name, bound_value=[-0.01, 0.01])
-            self.df = random_sampling(self.df)
             self.df = self.df.sample(frac=1.0)
 
     @staticmethod
