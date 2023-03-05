@@ -1,3 +1,3 @@
-from .signal_strategy import TopkDropoutStrategy
+from .signal_strategy import TopkDropoutStrategy, TopkStrategy
 
-__all__ = ['TopkDropoutStrategy']
+__all__ = ['TopkDropoutStrategy', 'TopkStrategy']
