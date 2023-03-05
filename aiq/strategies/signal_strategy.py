@@ -78,9 +78,7 @@ class TopkDropoutStrategy(bt.Strategy):
         # Get the stock list we really want to buy and sell
         buy = today[:len(sell) + self.p.topk - len(last)]
         for code in buy:
-            score = pred_score['score'][code]
-            if score > self.p.buy_thresh:
-                buy_order_list.append(code)
+            buy_order_list.append(code)
 
         for code in self.current_stock_list:
             if code in sell:
@@ -107,6 +105,7 @@ class TopkDropoutStrategy(bt.Strategy):
                 return
 
         buy_order_list, keep_order_list, sell_order_list = self.generate_trade_decision()
+        assert (len(buy_order_list + keep_order_list) - len(sell_order_list)) == self.p.topk
 
         if self.p.log_writer is not None:
             order_str = json.dumps({'date': str(self.datetime.date(0)),
@@ -129,20 +128,18 @@ class TopkDropoutStrategy(bt.Strategy):
             order_price = data.open[1]
             if current_value < target_value:
                 order_size = self.downcast((target_value - current_value) / order_price, 100)
-                if order_size > 0:
-                    self.order[secu] = self.buy(data=data, size=order_size, price=order_price, name=secu)
+                self.order[secu] = self.buy(data=data, size=order_size, price=order_price, name=secu)
             elif current_value > target_value:
                 order_size = self.downcast((current_value - target_value) / order_price, 100)
-                if order_size > 0:
-                    self.order[secu] = self.sell(data=data, size=order_size, price=order_price, name=secu)
+                self.order[secu] = self.sell(data=data, size=order_size, price=order_price, name=secu)
 
         # issue a target order for the newly top ranked stocks
         # do this last, as this will generate buy orders consuming cash
         for secu in buy_order_list:
             data = self.getdatabyname(secu)
-            order_price = data.open[1]
-            order_size = self.downcast(target_value / order_price, 100)
-            if order_size > 0:
+            if data.score[0] > self.p.buy_thresh:
+                order_price = data.open[1]
+                order_size = self.downcast(target_value / order_price, 100)
                 self.order[secu] = self.buy(data=data, size=order_size, price=order_price, name=secu)
 
     def notify_order(self, order):
