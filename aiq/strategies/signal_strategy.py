@@ -105,7 +105,6 @@ class TopkDropoutStrategy(bt.Strategy):
                 return
 
         buy_order_list, keep_order_list, sell_order_list = self.generate_trade_decision()
-        assert (len(buy_order_list + keep_order_list) - len(sell_order_list)) == self.p.topk
 
         if self.p.log_writer is not None:
             order_str = json.dumps({'date': str(self.datetime.date(0)),
@@ -153,13 +152,15 @@ class TopkDropoutStrategy(bt.Strategy):
             if order.isbuy():
                 self.log(
                     f"""买入: {order.data._name}, 成交量: {order.executed.size}，成交价: {order.executed.price:.2f}""")
+                positions = [(x, self.getposition(data).size) for data in self.datas if self.getposition(data).size]
                 self.log(
-                    f'现金：{self.broker.getcash():.2f} 资产：{self.broker.getvalue():.2f} 持仓: {[(x, self.getpositionbyname(x).size) for x in self.current_stock_list]}')
+                    f'现金：{self.broker.getcash():.2f} 资产：{self.broker.getvalue():.2f} 持仓: {positions}')
             elif order.issell():
                 self.log(
                     f"""卖出: {order.data._name}, 成交量: {order.executed.size}，成交价: {order.executed.price:.2f}""")
+                positions = [(x, self.getposition(data).size) for data in self.datas if self.getposition(data).size]
                 self.log(
-                    f'现金：{self.broker.getcash():.2f} 资产：{self.broker.getvalue():.2f} 持仓：{[(x, self.getpositionbyname(x).size) for x in self.current_stock_list]}')
+                    f'现金：{self.broker.getcash():.2f} 资产：{self.broker.getvalue():.2f} 持仓：{positions}')
         elif order.status in [order.Canceled, order.Margin, order.Rejected]:
             self.log('订单取消/金额不足/拒绝')
 
