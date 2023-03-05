@@ -152,13 +152,13 @@ class TopkDropoutStrategy(bt.Strategy):
             if order.isbuy():
                 self.log(
                     f"""买入: {order.data._name}, 成交量: {order.executed.size}，成交价: {order.executed.price:.2f}""")
-                positions = [(x, self.getposition(data).size) for data in self.datas if self.getposition(data).size]
+                positions = [(data._name, self.getposition(data).size) for data in self.datas if self.getposition(data).size]
                 self.log(
                     f'现金：{self.broker.getcash():.2f} 资产：{self.broker.getvalue():.2f} 持仓: {positions}')
             elif order.issell():
                 self.log(
                     f"""卖出: {order.data._name}, 成交量: {order.executed.size}，成交价: {order.executed.price:.2f}""")
-                positions = [(x, self.getposition(data).size) for data in self.datas if self.getposition(data).size]
+                positions = [(data._name, self.getposition(data).size) for data in self.datas if self.getposition(data).size]
                 self.log(
                     f'现金：{self.broker.getcash():.2f} 资产：{self.broker.getvalue():.2f} 持仓：{positions}')
         elif order.status in [order.Canceled, order.Margin, order.Rejected]:
