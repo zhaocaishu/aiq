@@ -6,7 +6,7 @@ import pandas as pd
 
 from aiq.dataset import Dataset, Alpha158, random_split
 from aiq.models import XGBModel, LGBModel
-from aiq.strategies import TopkDropoutStrategy
+from aiq.strategies import TopkDropoutStrategy, TopkStrategy
 from aiq.utils.config import config as cfg
 
 
