@@ -2,7 +2,7 @@ import argparse
 import os
 
 from aiq.dataset import Dataset, Alpha158
-from aiq.models import XGBModel, LGBModel
+from aiq.models import XGBModel, LGBModel, DEnsembleModel
 from aiq.utils.config import config as cfg
 
 
@@ -51,6 +51,11 @@ def main():
         model = LGBModel(feature_cols=train_dataset.feature_names,
                          label_col=train_dataset.label_name,
                          model_params=dict(cfg.model.params))
+    elif cfg.model.name == 'DoubleEnsemble':
+        model = DEnsembleModel(feature_cols=train_dataset.feature_names,
+                               label_col=[train_dataset.label_name],
+                               **dict(cfg.model.params))
+
     model.fit(train_dataset=train_dataset, val_dataset=valid_dataset)
 
     # save model

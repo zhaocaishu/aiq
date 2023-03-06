@@ -1,0 +1,33 @@
+dataset:
+  segments: {
+    'train': ['2021-08-30', '2022-02-28'],
+    'valid': ['2022-02-29', '2022-05-31'],
+    'test': ['2022-06-01', '2022-08-26']
+  }
+
+model:
+  name: 'DoubleEnsemble'
+  params: {
+    'base_model': 'gbm',
+    'loss': 'mse',
+    'num_models': 6,
+    'enable_sr': True,
+    'enable_fs': True,
+    'alpha1': 1,
+    'alpha2': 1,
+    'bins_sr': 10,
+    'bins_fs': 5,
+    'decay': 0.5,
+    'sample_ratios': [0.8, 0.7, 0.6, 0.5, 0.4],
+    'sub_weights': [1, 0.2, 0.2, 0.2, 0.2, 0.2],
+    'epochs': 28,
+    'colsample_bytree': 0.8879,
+    'learning_rate': 0.2,
+    'subsample': 0.8789,
+    'lambda_l1': 205.6999,
+    'lambda_l2': 580.9768,
+    'max_depth': 8,
+    'num_leaves': 210,
+    'num_threads': 4,
+    'verbosity': -1
+  }
