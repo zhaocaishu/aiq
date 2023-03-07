@@ -29,5 +29,6 @@ model:
     'max_depth': 8,
     'num_leaves': 210,
     'num_threads': 4,
+    'metric': 'rmse',
     'verbosity': -1
   }

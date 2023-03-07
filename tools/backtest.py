@@ -78,6 +78,9 @@ if __name__ == '__main__':
         model = XGBModel()
     elif cfg.model.name == 'LGB':
         model = LGBModel()
+    elif cfg.model.name == 'DoubleEnsemble':
+        model = DEnsembleModel()
+
     model.load(args.save_dir)
     df_prediction = model.predict(test_dataset).to_dataframe()
 
