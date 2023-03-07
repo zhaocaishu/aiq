@@ -91,7 +91,7 @@ class DEnsembleModel(BaseModel):
             loss_curve = self.retrieve_loss_curve(model_k, df_train, features)
             pred_k = self.predict_sub(model_k, df_train, features)
             pred_sub.iloc[:, k] = pred_k
-            pred_ensemble = (pred_sub.iloc[:, : k + 1] * self.sub_weights[0 : k + 1]).sum(axis=1) / np.sum(
+            pred_ensemble = (pred_sub.iloc[:, : k + 1] * self.sub_weights[0: k + 1]).sum(axis=1) / np.sum(
                 self.sub_weights[0: k + 1]
             )
             loss_values = pd.Series(self.get_loss(y_train.values.squeeze(), pred_ensemble.values))
