@@ -32,8 +32,8 @@ class DEnsembleModel(BaseModel):
         decay=None,
         sample_ratios=None,
         sub_weights=None,
-        epochs=100,
-        early_stopping_rounds=None,
+        num_boost_round=200,
+        early_stopping_rounds=50,
         **kwargs
     ):
         self._feature_cols = feature_cols
@@ -58,7 +58,7 @@ class DEnsembleModel(BaseModel):
         if not len(sub_weights) == num_models:
             raise ValueError("The length of sub_weights should be equal to num_models.")
         self.sub_weights = sub_weights
-        self.epochs = epochs
+        self.num_boost_round = num_boost_round
         self.ensemble = []  # the current ensemble model, a list contains all the sub-models
         self.sub_features = []  # the features for each sub model in the form of pandas.Index
         self.params = {"objective": loss}
@@ -116,7 +116,7 @@ class DEnsembleModel(BaseModel):
         model = lgb.train(
             self.params,
             dtrain,
-            num_boost_round=self.epochs,
+            num_boost_round=self.num_boost_round,
             valid_sets=[dtrain, dvalid],
             valid_names=["train", "valid"],
             callbacks=callbacks
