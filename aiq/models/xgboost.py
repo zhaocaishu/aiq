@@ -1,8 +1,11 @@
 import os
 import json
+from typing import Tuple
 
+import numpy as np
 import xgboost as xgb
 import pandas as pd
+from scipy.stats import pearsonr
 
 from aiq.dataset import Dataset
 
@@ -32,11 +35,16 @@ class XGBModel(BaseModel):
             dvalid = xgb.DMatrix(x_valid, label=y_valid)
             evals.append((dvalid, "valid"))
 
+        def feval_pearsonr(y_pred: np.ndarray, dtrain: xgb.DMatrix) -> Tuple[str, float]:
+            y_true = dtrain.get_label()
+            return 'pearsonr', pearsonr(y_true, y_pred)[0]
+
         self.model = xgb.train(
             self.model_params,
             dtrain=dtrain,
             num_boost_round=num_boost_round,
             evals=evals,
+            feval=feval_pearsonr,
             early_stopping_rounds=early_stopping_rounds,
             verbose_eval=verbose_eval,
             evals_result=eval_results
