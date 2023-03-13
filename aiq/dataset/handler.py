@@ -29,6 +29,7 @@ class Alpha158(DataHandler):
         high = df['High']
         low = df['Low']
         volume = df['Volume']
+        turnover = df['Turnover_rate']
 
         # kbar
         features = [(close - open) / open,
@@ -86,6 +87,13 @@ class Alpha158(DataHandler):
             for d in windows:
                 features.append(Std(close, d) / close)
                 names.append('STD%d' % d)
+
+        if use("MTURN"):
+            # https://www.investopedia.com/ask/answers/071414/whats-difference-between-moving-average-and-weighted-moving-average.asp
+            # Simple Moving Average, the simple moving average in the past d days, divided by latest close price to remove unit
+            for d in windows:
+                features.append(Mean(turnover, d) / turnover)
+                names.append('MTURN%d' % d)
 
         if use("BETA"):
             # The rate of close price change in the past d days, divided by latest close price to remove unit
