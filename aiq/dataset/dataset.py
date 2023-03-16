@@ -66,7 +66,7 @@ class Dataset(abc.ABC):
             self._feature_names = handler.feature_names
             self._label_name = handler.label_name
 
-        # processor
+        # normalize features and label
         if processor is not None:
             self._processor = processor
         else:

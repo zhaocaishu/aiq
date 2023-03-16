@@ -4,7 +4,7 @@ import argparse
 import backtrader as bt
 import pandas as pd
 
-from aiq.dataset import Dataset, Alpha158, random_split
+from aiq.dataset import Dataset, Alpha158, random_split, CSZScoreNorm
 from aiq.models import XGBModel, LGBModel, DEnsembleModel
 from aiq.strategies import TopkDropoutStrategy
 from aiq.utils.config import config as cfg
@@ -65,11 +65,14 @@ if __name__ == '__main__':
     # dataset
     print(cfg.dataset.segments)
     handler = Alpha158(test_mode=True)
+    processor = CSZScoreNorm()
+    processor.load(os.path.join(args.save_dir))
     dataset = Dataset(args.data_dir,
                       instruments=args.instruments,
                       start_time=cfg.dataset.segments['train'][0],
                       end_time=cfg.dataset.segments['test'][1],
-                      handler=handler)
+                      handler=handler,
+                      processor=processor)
     test_dataset = random_split(dataset, [cfg.dataset.segments['test']])[0]
     print('Loaded %d items to test dataset' % len(test_dataset))
 

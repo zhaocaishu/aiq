@@ -1,4 +1,6 @@
+import os
 import abc
+import pickle
 from typing import Union, Text
 
 import pandas as pd
@@ -53,3 +55,22 @@ class CSZScoreNorm(Processor):
             X = np.clip(X, -3, 3)
         df[self.cols] = X
         return df
+
+    def save(self, output_dir):
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+
+        processor_params = {
+            'cols': self.cols,
+            'mean_train': self.mean_train,
+            'std_train': self.std_train
+        }
+        with open(os.path.join(output_dir, 'processor.pkl'), 'wb') as f:
+            pickle.dump(processor_params, f)
+
+    def load(self, output_dir):
+        with open(os.path.join(output_dir, 'processor.pkl'), 'rb') as f:
+            processor_params = pickle.load(f)
+            self.cols = processor_params['cols']
+            self.mean_train = processor_params['mean_train']
+            self.std_train = processor_params['std_train']
