@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from .loader import DataLoader
-from .processor import DropOutlierAndNorm
+from .processor import CSZScoreNorm
 
 
 class Dataset(abc.ABC):
@@ -21,6 +21,7 @@ class Dataset(abc.ABC):
         start_time=None,
         end_time=None,
         handler=None,
+        processor=None,
         min_periods=60,
         adjust_price=True,
         training=False
@@ -65,10 +66,16 @@ class Dataset(abc.ABC):
             self._feature_names = handler.feature_names
             self._label_name = handler.label_name
 
-        # transform
-        transforms = [DropOutlierAndNorm(feature_names=self._feature_names, label_name=self._label_name)]
-        for transform in transforms:
-            self.df = transform(self.df)
+        # processor
+        if processor is not None:
+            self._processor = processor
+        else:
+            cols = self._feature_names
+            if self._label_name is not None:
+                cols.append(self._label_name)
+            self._processor = CSZScoreNorm(cols=cols)
+            self._processor.fit(self.df)
+        self.df = self._processor.transform(self.df)
 
         # random shuffle
         if training:
@@ -98,16 +105,9 @@ class Dataset(abc.ABC):
     def label_name(self):
         return self._label_name
 
-    def dump(self, output_dir: str = None):
-        if output_dir is None:
-            return
-
-        if not os.path.exists(path=output_dir):
-            os.makedirs(output_dir)
-
-        for symbol in self.symbols:
-            df_symbol = self.df[self.df['Symbol'] == symbol]
-            df_symbol.to_csv(os.path.join(output_dir, symbol + '.csv'), na_rep='NaN', index=False)
+    @property
+    def processor(self):
+        return self._processor
 
     def __getitem__(self, index):
         return self.df.iloc[[index]]

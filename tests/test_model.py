@@ -6,7 +6,7 @@ if __name__ == '__main__':
     train_dataset = Dataset('./data', instruments='all', start_time='2021-08-30', end_time='2022-04-28',
                             handler=handler, adjust_price=False, training=True)
     valid_dataset = Dataset('./data', instruments='all', start_time='2022-04-29', end_time='2022-08-26',
-                            handler=handler, adjust_price=False)
+                            handler=handler, processor=train_dataset.processor, adjust_price=False)
     model_params = {
         'objective': 'mse',
         'learning_rate': 0.2,
