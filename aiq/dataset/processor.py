@@ -122,10 +122,10 @@ class DropOutlierAndNorm(Processor):
             return x
 
         # Label
-        df[self.label_name] = _label_norm(df[self.label_name])
+        df[self.label_name] = df.groupby("Date", group_keys=False)[self.label_name].apply(_label_norm)
 
         # Feature
-        df[self.feature_names] = _feature_norm(df[self.feature_names])
+        df[self.feature_names] = df.groupby("Date", group_keys=False)[self.feature_names].apply(_feature_norm)
 
         return df
 
