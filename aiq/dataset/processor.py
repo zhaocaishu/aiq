@@ -45,11 +45,11 @@ class CSZScoreNorm(Processor):
         self.std_train += 1e-12
         self.std_train *= 1.4826
 
-        return df
-
     def transform(self, df):
-        def normalize(x, mean_train=self.mean_train, std_train=self.std_train):
-            return (x - mean_train) / std_train
-
-        df.loc(axis=1)[self.cols] = normalize(df[self.cols].values)
+        X = df[self.cols]
+        X -= self.mean_train
+        X /= self.std_train
+        if self.clip_outlier:
+            X = np.clip(X, -3, 3)
+        df[self.cols] = X
         return df
