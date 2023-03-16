@@ -121,11 +121,12 @@ class DropOutlierAndNorm(Processor):
                 x.clip(-0.1, 0.1, inplace=True)
             return x
 
-        # Label
-        df[self.label_name] = df.groupby("Date", group_keys=False)[self.label_name].apply(_label_norm)
-
         # Feature
         df[self.feature_names] = df.groupby("Date", group_keys=False)[self.feature_names].apply(_feature_norm)
+
+        # Label
+        if self.label_name is not None:
+            df[self.label_name] = df.groupby("Date", group_keys=False)[self.label_name].apply(_label_norm)
 
         return df
 
