@@ -33,7 +33,7 @@ def main():
     print(cfg.dataset.segments)
     handler = Alpha158()
     processor = CSZScoreNorm()
-    processor.load(os.path.join(args.save_dir))
+    processor.load(output_dir=args.save_dir)
     dataset = Dataset(args.data_dir,
                       instruments=args.instruments,
                       start_time=cfg.dataset.segments['train'][0],
