@@ -59,7 +59,8 @@ def main():
 
     model.fit(train_dataset=train_dataset, val_dataset=valid_dataset)
 
-    # save model
+    # save processor and model
+    train_dataset.processor.save(output_dir=self.save_dir)
     model.save(model_dir=args.save_dir)
 
     print('Model training has been finished successfully!')
