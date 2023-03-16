@@ -3,7 +3,7 @@ import os
 import backtrader as bt
 import pandas as pd
 
-from aiq.strategies import TopkDropoutStrategy, TopkStrategy
+from aiq.strategies import TopkDropoutStrategy
 
 
 class ZCSPandasData(bt.feeds.PandasData):
@@ -36,7 +36,7 @@ if __name__ == '__main__':
     cerebro.broker.setcash(100000.0)
     comminfo = StampDutyCommissionScheme(stamp_duty=0.001, commission=0.00012)
     cerebro.broker.addcommissioninfo(comminfo)
-    cerebro.addstrategy(TopkStrategy, topk=2)
+    cerebro.addstrategy(TopkDropoutStrategy, topk=2, n_drop=1)
 
     # 添加多个股票回测数据
     codes = ['AAPL', 'BABA', 'GOOG']

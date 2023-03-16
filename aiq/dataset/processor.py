@@ -97,3 +97,37 @@ class RandomLabelSampling(Processor):
         df1 = df1.sample(frac=self.sample_ratio)
         df = pd.concat([df1, df2])
         return df
+
+
+class DropOutlierAndNorm(Processor):
+    def __init__(self, feature_names=None, label_name=None, label_norm=False):
+        self.feature_names = feature_names
+        self.label_name = label_name
+        self.label_norm = label_norm
+
+    def _transform(self, df):
+        def _feature_norm(x):
+            x = x - x.median()  # copy
+            x /= x.abs().median() * 1.4826
+            x.clip(-3, 3, inplace=True)
+            return x
+
+        def _label_norm(x):
+            if self.label_norm:
+                x = x - x.mean()  # copy
+                x /= x.std()
+                x.clip(-3, 3, inplace=True)
+            else:
+                x.clip(-0.1, 0.1, inplace=True)
+            return x
+
+        # Label
+        df[self.label_name] = _label_norm(df[self.label_name])
+
+        # Feature
+        df[self.feature_names] = _feature_norm(df[self.feature_names])
+
+        return df
+
+    def __call__(self, df):
+        return self._transform(df)

@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from .loader import DataLoader
-from .processor import CSZScoreNorm, FeatureGroupMean, RandomLabelSampling
+from .processor import DropOutlierAndNorm
 
 
 class Dataset(abc.ABC):
@@ -64,6 +64,11 @@ class Dataset(abc.ABC):
         if handler is not None:
             self._feature_names = handler.feature_names
             self._label_name = handler.label_name
+
+        # pre-process
+        processors = [DropOutlierAndNorm(feature_names=self._feature_names, label_name=self._label_name)]
+        for processor in processors:
+            self.df = processor(self.df)
 
         # random shuffle
         if training:
