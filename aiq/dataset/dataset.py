@@ -98,10 +98,6 @@ class Dataset(abc.ABC):
     def label_name(self):
         return self._label_name
 
-    @property
-    def processor(self):
-        return self._processor
-
     def __getitem__(self, index):
         return self.df.iloc[[index]]
 
