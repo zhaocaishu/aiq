@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from .loader import DataLoader
-from .processor import CSZScoreNorm
+from .processor import CSLabelNorm
 
 
 class Dataset(abc.ABC):
@@ -21,7 +21,6 @@ class Dataset(abc.ABC):
         start_time=None,
         end_time=None,
         handler=None,
-        processor=None,
         min_periods=60,
         adjust_price=True,
         training=False
@@ -66,16 +65,10 @@ class Dataset(abc.ABC):
             self._feature_names = handler.feature_names
             self._label_name = handler.label_name
 
-        # normalize features and label
-        if processor is not None:
-            self._processor = processor
-        else:
-            cols = self._feature_names
-            if self._label_name is not None:
-                cols.append(self._label_name)
-            self._processor = CSZScoreNorm(cols=cols)
-            self._processor.fit(self.df)
-        self.df = self._processor.transform(self.df)
+        # normalize label
+        if self._label_name is not None:
+            processor = CSLabelNorm(cols=[self._label_name])
+            self.df = processor.transform(self.df)
 
         # random shuffle
         if training:

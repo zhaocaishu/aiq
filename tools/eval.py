@@ -4,7 +4,7 @@ import os
 import numpy as np
 from sklearn.metrics import mean_squared_error
 
-from aiq.dataset import Dataset, Alpha158, random_split, CSZScoreNorm
+from aiq.dataset import Dataset, Alpha158, random_split
 from aiq.models import XGBModel, LGBModel, DEnsembleModel
 from aiq.utils.config import config as cfg
 
@@ -32,14 +32,11 @@ def main():
     # dataset
     print(cfg.dataset.segments)
     handler = Alpha158()
-    processor = CSZScoreNorm()
-    processor.load(output_dir=args.save_dir)
     dataset = Dataset(args.data_dir,
                       instruments=args.instruments,
                       start_time=cfg.dataset.segments['train'][0],
                       end_time=cfg.dataset.segments['test'][1],
-                      handler=handler,
-                      processor=processor)
+                      handler=handler)
     test_dataset = random_split(dataset, [cfg.dataset.segments['test']])[0]
     print('Loaded %d items to test dataset' % len(test_dataset))
 
