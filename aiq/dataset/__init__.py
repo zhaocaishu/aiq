@@ -1,6 +1,6 @@
 from .dataset import Dataset, random_split
 from .handler import Alpha158
-from .processor import CSLabelNorm
+from .processor import CSLabelClip
 
 
-__all__ = ['Dataset', 'Alpha158', 'CSLabelNorm', 'random_split']
+__all__ = ['Dataset', 'Alpha158', 'CSLabelClip', 'random_split']

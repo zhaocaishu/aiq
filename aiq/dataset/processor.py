@@ -29,15 +29,16 @@ class Processor(abc.ABC):
         """
 
 
-class CSLabelNorm(Processor):
+class CSLabelClip(Processor):
     """Cross Sectional Label Normalization"""
-    def __init__(self, cols=None, clip_outlier=True):
+
+    def __init__(self, cols=None, clip_outlier=True, high_limit=0.098, low_limit=-0.098):
         self.cols = cols
         self.clip_outlier = clip_outlier
+        self.high_limit = high_limit
+        self.low_limit = low_limit
 
     def transform(self, df):
-        X = df[self.cols]
         if self.clip_outlier:
-            X = np.clip(X, -0.1, 0.1)
-        df[self.cols] = X
+            df = df[(df[self.cols] <= self.high_limit) & (df[self.cols] >= self.low_limit)]
         return df

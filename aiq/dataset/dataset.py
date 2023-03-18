@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from .loader import DataLoader
-from .processor import CSLabelNorm
+from .processor import CSLabelClip
 
 
 class Dataset(abc.ABC):
@@ -62,12 +62,12 @@ class Dataset(abc.ABC):
 
         # assign features and label name
         if handler is not None:
-            self._feature_names = handler.feature_names
-            self._label_name = handler.label_name
+            self.feature_names_ = handler.feature_names
+            self.label_name_ = handler.label_name
 
         # normalize label
-        if self._label_name is not None:
-            processor = CSLabelNorm(cols=[self._label_name])
+        if self.label_name_ is not None:
+            processor = CSLabelClip(cols=[self.label_name_])
             self.df = processor.transform(self.df)
 
         # random shuffle
@@ -92,11 +92,11 @@ class Dataset(abc.ABC):
 
     @property
     def feature_names(self):
-        return self._feature_names
+        return self.feature_names_
 
     @property
     def label_name(self):
-        return self._label_name
+        return self.label_name_
 
     def __getitem__(self, index):
         return self.df.iloc[[index]]
