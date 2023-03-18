@@ -20,8 +20,8 @@ class Alpha158(DataHandler):
     def __init__(self, test_mode=False):
         self.test_mode = test_mode
 
-        self._feature_names = None
-        self._label_name = None
+        self.feature_names_ = None
+        self.label_name_ = None
 
     def fetch(self, df: pd.DataFrame = None) -> pd.DataFrame:
         open = df['Open']
@@ -278,14 +278,14 @@ class Alpha158(DataHandler):
                 names.append('VOLAT%d' % d)
 
         # features
-        self._feature_names = names.copy()
+        self.feature_names_ = names.copy()
 
         # labels
         if not self.test_mode:
             # regression target
-            self._label_name = 'LABEL'
+            self.label_name_ = 'LABEL'
             features.append(Ref(close, -2) / Ref(close, -1) - 1)
-            names.append(self._label_name)
+            names.append(self.label_name_)
 
         # concat all features and labels
         df = pd.concat(
@@ -294,14 +294,14 @@ class Alpha158(DataHandler):
 
         # remove nan labels
         if not self.test_mode:
-            df = df.dropna(subset=[self._label_name])
+            df = df.dropna(subset=[self.label_name_])
 
         return df
 
     @property
     def feature_names(self):
-        return self._feature_names
+        return self.feature_names_
 
     @property
     def label_name(self):
-        return self._label_name
+        return self.label_name_

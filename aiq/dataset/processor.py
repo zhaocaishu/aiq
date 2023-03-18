@@ -32,13 +32,13 @@ class Processor(abc.ABC):
 class CSLabelClip(Processor):
     """Cross Sectional Label Outlier Clip"""
 
-    def __init__(self, cols=None, clip_outlier=True, high_limit=0.098, low_limit=-0.098):
-        self.cols = cols
+    def __init__(self, label_col=None, clip_outlier=True, high_limit=0.098, low_limit=-0.098):
+        self.label_col = label_col
         self.clip_outlier = clip_outlier
         self.high_limit = high_limit
         self.low_limit = low_limit
 
     def transform(self, df):
         if self.clip_outlier:
-            df = df[(df[self.cols] <= self.high_limit) & (df[self.cols] >= self.low_limit)]
+            df = df[(df[self.label_col] <= self.high_limit) & (df[self.label_col] >= self.low_limit)]
         return df

@@ -67,7 +67,7 @@ class Dataset(abc.ABC):
 
         # normalize label
         if self.label_name_ is not None:
-            processor = CSLabelClip(cols=[self.label_name_])
+            processor = CSLabelClip(label_col=self.label_name_)
             self.df = processor.transform(self.df)
 
         # random shuffle
