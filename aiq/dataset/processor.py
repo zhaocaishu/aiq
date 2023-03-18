@@ -30,7 +30,7 @@ class Processor(abc.ABC):
 
 
 class CSLabelClip(Processor):
-    """Cross Sectional Label Normalization"""
+    """Cross Sectional Label Outlier Clip"""
 
     def __init__(self, cols=None, clip_outlier=True, high_limit=0.098, low_limit=-0.098):
         self.cols = cols
