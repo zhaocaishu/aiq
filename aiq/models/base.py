@@ -7,8 +7,8 @@ class BaseModel(abc.ABC):
     """Learnable Models"""
 
     def __init__(self, feature_cols=None, label_col=None, model_params=None):
-        self._feature_cols = feature_cols
-        self._label_col = label_col
+        self.feature_cols_ = feature_cols
+        self.label_col_ = label_col
 
         self.model_params = model_params
 
@@ -42,8 +42,8 @@ class BaseModel(abc.ABC):
 
     @property
     def feature_cols(self):
-        return self._feature_cols
+        return self.feature_cols_
 
     @property
     def label_col(self):
-        return self._label_col
+        return self.label_col_
