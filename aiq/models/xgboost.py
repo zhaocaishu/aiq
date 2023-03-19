@@ -15,15 +15,6 @@ from .base import BaseModel
 class XGBModel(BaseModel):
     """XGBModel Model"""
 
-    def prepare_weights(self, df):
-        bins = 20
-        label = df[self.label_col_].values
-        hist, hist_edges = np.histogram(label, bins=bins)
-        bin_indices = np.digitize(label, bins=hist_edges)
-        bin_indices = np.clip(bin_indices, 1, bins) - 1
-        weights = 1.0 / np.log(1.0 + (hist[bin_indices] / np.sum(hist)))
-        return weights
-
     def fit(
         self,
         train_dataset: Dataset,
@@ -34,9 +25,8 @@ class XGBModel(BaseModel):
         eval_results=dict()
     ):
         train_df = train_dataset.to_dataframe()
-        weights = self.prepare_weights(train_df)
         x_train, y_train = train_df[self.feature_cols_].values, train_df[self.label_col_].values
-        dtrain = xgb.DMatrix(x_train, label=y_train, weight=weights)
+        dtrain = xgb.DMatrix(x_train, label=y_train)
         evals = [(dtrain, "train")]
 
         if val_dataset is not None:
