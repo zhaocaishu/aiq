@@ -285,12 +285,10 @@ class DEnsembleModel(BaseModel):
             model_file = os.path.join(model_dir, 'model%d.json' % i_sub)
             sub_model.save_model(model_file)
 
-        sub_feature_li = []
-        for sub_feature in self.sub_features:
-            sub_feature_li.append(sub_feature.tolist())
+        sub_features = [sub_feature.tolist() for sub_feature in self.sub_features]
 
         model_params = {
-            'sub_features': sub_feature_li,
+            'sub_features': sub_features,
             'sub_weights': self.sub_weights
         }
         with open(os.path.join(model_dir, 'model.params'), 'w') as f:
@@ -299,9 +297,7 @@ class DEnsembleModel(BaseModel):
     def load(self, model_dir):
         with open(os.path.join(model_dir, 'model.params'), 'r') as f:
             model_params = json.load(f)
-            sub_feature_li = model_params['sub_features']
-            for sub_feature in sub_feature_li:
-                self.sub_features.append(pd.Index(sub_feature))
+            self.sub_features = [pd.Index(sub_feature) for sub_feature in model_params['sub_features']]
             self.sub_weights = model_params['sub_weights']
 
         self.ensemble = []
