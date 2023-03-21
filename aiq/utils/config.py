@@ -56,6 +56,8 @@ class Config(edict):
 config = Config(
     edict(
         dataset=edict(
+            start_time=None,
+            end_time=None,
             segments=None
         ),
         model=edict(

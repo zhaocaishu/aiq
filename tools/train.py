@@ -1,7 +1,7 @@
 import argparse
 import os
 
-from aiq.dataset import Dataset, Alpha158
+from aiq.dataset import Dataset, Alpha158, ts_split
 from aiq.models import XGBModel, LGBModel, DEnsembleModel
 from aiq.utils.config import config as cfg
 
@@ -29,18 +29,15 @@ def main():
     # dataset
     print(cfg.dataset.segments)
     handler = Alpha158()
-    train_dataset = Dataset(args.data_dir,
-                            instruments=args.instruments,
-                            start_time=cfg.dataset.segments['train'][0],
-                            end_time=cfg.dataset.segments['train'][1],
-                            handler=handler,
-                            training=True)
-    valid_dataset = Dataset(args.data_dir,
-                            instruments=args.instruments,
-                            start_time=cfg.dataset.segments['valid'][0],
-                            end_time=cfg.dataset.segments['valid'][1],
-                            handler=handler)
-    print('Loaded %d items to train dataset, %d items to validation dataset' % (len(train_dataset), len(valid_dataset)))
+    dataset = Dataset(args.data_dir,
+                      instruments=args.instruments,
+                      start_time=cfg.dataset.start_time,
+                      end_time=cfg.dataset.end_time,
+                      handler=handler,
+                      training=True)
+    train_dataset, val_dataset = ts_split(dataset=dataset,
+                                          segments=[cfg.dataset.segments['train'], cfg.dataset.segments['valid']])
+    print('Loaded %d items to train dataset, %d items to validation dataset' % (len(train_dataset), len(val_dataset)))
 
     # train model
     if cfg.model.name == 'XGB':
@@ -56,7 +53,7 @@ def main():
                                label_col=[train_dataset.label_name],
                                **dict(cfg.model.params))
 
-    model.fit(train_dataset=train_dataset, val_dataset=valid_dataset)
+    model.fit(train_dataset=train_dataset, val_dataset=val_dataset)
 
     # save processor and model
     model.save(model_dir=args.save_dir)

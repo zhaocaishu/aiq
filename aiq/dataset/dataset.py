@@ -21,13 +21,12 @@ class Dataset(abc.ABC):
         start_time=None,
         end_time=None,
         handler=None,
-        min_periods=60,
         adjust_price=True,
         training=False
     ):
         # feature and label names
-        self._feature_names = None
-        self._label_name = None
+        self.feature_names_ = None
+        self.label_name_ = None
 
         # symbol of instruments
         with open(os.path.join(data_dir, 'instruments/%s.txt' % instruments), 'r') as f:
@@ -40,7 +39,7 @@ class Dataset(abc.ABC):
                                  end_time=end_time)
 
             # skip ticker of non-existed or small periods
-            if df is None or df.shape[0] < min_periods:
+            if df is None:
                 continue
 
             # append ticker symbol
@@ -107,8 +106,10 @@ class Dataset(abc.ABC):
 
 class Subset(Dataset):
     def __init__(self, dataset, start_time, end_time):
+        self.feature_names_ = dataset.feature_names_
+        self.label_name_ = dataset.label_name_
         self.df = dataset.slice(start_time, end_time)
 
 
-def random_split(dataset: Dataset, segments: List[List[str]]):
+def ts_split(dataset: Dataset, segments: List[List[str]]):
     return [Subset(dataset, segment[0], segment[1]) for segment in segments]
