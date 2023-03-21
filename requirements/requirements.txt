@@ -1,6 +1,5 @@
 pandas
 backtrader
-Ta-Lib
 easydict
 PyYAML
 scikit-learn

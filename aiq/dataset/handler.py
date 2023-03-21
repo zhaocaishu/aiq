@@ -2,10 +2,9 @@ import abc
 
 import numpy as np
 import pandas as pd
-import talib as ta
 
-from aiq.ops import Greater, Less, Ref, Mean, Std, Rsquare, Resi, Slope, Skew, Max, Min, Quantile, Rank, IdxMax, IdxMin, \
-    Corr, Log, Sum, Abs
+from aiq.ops import Greater, Less, Ref, Mean, Std, Rsquare, Resi, Slope, Skew, Max, Min, Quantile, Rank, IdxMax, \
+    IdxMin, Corr, Log, Sum, Abs
 
 
 class DataHandler(abc.ABC):
@@ -264,18 +263,8 @@ class Alpha158(DataHandler):
             for d in windows:
                 features.append(
                     (Sum(Greater(volume - Ref(volume, 1), 0), d) - Sum(Greater(Ref(volume, 1) - volume, 0), d)) / (
-                                Sum(Abs(volume - Ref(volume, 1)), d) + 1e-12))
+                            Sum(Abs(volume - Ref(volume, 1)), d) + 1e-12))
                 names.append('VSUMD%d' % d)
-
-        if use("RETURN"):
-            for d in windows:
-                features.append(close.pct_change(d))
-                names.append('RETURN%d' % d)
-
-        if use("VOLAT"):
-            for d in windows:
-                features.append(Log(close).diff().rolling(d).std())
-                names.append('VOLAT%d' % d)
 
         # features
         self.feature_names_ = names.copy()
