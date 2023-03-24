@@ -60,8 +60,9 @@ class XGBModel(BaseModel):
     def predict(self, dataset: Dataset):
         if self.model is None:
             raise ValueError("model is not fitted yet!")
-        x_test = dataset.to_dataframe()[self.feature_cols_].values
-        predict_result = self.model.predict(xgb.DMatrix(x_test))
+        test_df = dataset.to_dataframe()[self.feature_cols_]
+        dtest = xgb.DMatrix(test_df.values)
+        predict_result = self.model.predict(dtest)
         dataset.add_column('PREDICTION', predict_result)
         return dataset
 
