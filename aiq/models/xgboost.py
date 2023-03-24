@@ -15,13 +15,11 @@ from .base import BaseModel
 class XGBModel(BaseModel):
     """XGBModel Model"""
 
-    @staticmethod
-    def weight_func(x: pd.DataFrame, qscore=0.7):
+    def weight_func(self, x: pd.DataFrame, qscore=0.7):
         label = x['LABEL']
         divided_score = np.quantile(label, qscore)
         weight = np.ones(label.shape[0]) * 0.5
         weight[label > divided_score] = 1.0
-        print(label.shape, np.sum(label > divided_score), np.sum(label <= divided_score))
         x['Weight'] = weight
         return x
 
@@ -35,7 +33,7 @@ class XGBModel(BaseModel):
         eval_results=dict()
     ):
         train_df = train_dataset.to_dataframe()
-        train_df = train_df.groupby("Date", group_keys=False).apply(weight_func)
+        train_df = train_df.groupby("Date", group_keys=False).apply(self.weight_func)
         x_train, y_train = train_df[self.feature_cols_].values, train_df[self.label_col_].values
         dtrain = xgb.DMatrix(x_train, label=y_train, weight=train_df['Weight'].values)
         evals = [(dtrain, "train")]
