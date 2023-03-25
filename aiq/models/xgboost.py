@@ -15,14 +15,6 @@ from .base import BaseModel
 class XGBModel(BaseModel):
     """XGBModel Model"""
 
-    def weight_func(self, x: pd.DataFrame, qscore=0.7):
-        label = x['LABEL']
-        divided_score = np.quantile(label, qscore)
-        weight = np.ones(label.shape[0]) * 0.5
-        weight[label > divided_score] = 1.0
-        x['Weight'] = weight
-        return x
-
     def fit(
         self,
         train_dataset: Dataset,
@@ -33,9 +25,8 @@ class XGBModel(BaseModel):
         eval_results=dict()
     ):
         train_df = train_dataset.to_dataframe()
-        train_df = train_df.groupby("Date", group_keys=False).apply(self.weight_func)
         x_train, y_train = train_df[self.feature_cols_].values, train_df[self.label_col_].values
-        dtrain = xgb.DMatrix(x_train, label=y_train, weight=train_df['Weight'].values)
+        dtrain = xgb.DMatrix(x_train, label=y_train)
         evals = [(dtrain, "train")]
 
         if val_dataset is not None:
