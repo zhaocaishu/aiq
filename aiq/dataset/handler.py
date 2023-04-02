@@ -290,7 +290,7 @@ class Alpha158(DataHandler):
     def get_cls_label(self, close, volume):
         window_size = 5
         volume_ratio = volume / Mean(Ref(volume, 1), 30)
-        prices_ratio = (close - Ref(close, 1)) / Ref(close, 1)
+        prices_ratio = (close / Ref(close, 1) - 1)
         labels = np.ones(close.shape[0], dtype=np.int32) * np.nan
         for i in range(close.shape[0] - window_size):
             if volume_ratio.values[i] > 1.6 and prices_ratio.values[i] > 0.04:
