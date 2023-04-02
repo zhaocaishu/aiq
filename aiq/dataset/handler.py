@@ -293,9 +293,9 @@ class Alpha158(DataHandler):
         prices_ratio = (close - Ref(close, 1)) / Ref(close, 1)
         labels = np.ones(close.shape[0], dtype=np.int32) * np.nan
         for i in range(close.shape[0] - window_size):
-            window_prices = close.iloc[i:i + window_size].values
-            slope = np.polyfit(np.arange(window_size), window_prices / window_prices[0], deg=1)[0]
             if volume_ratio.values[i] > 1.6 and prices_ratio.values[i] > 0.04:
+                window_prices = close.iloc[i:i + window_size].values
+                slope = np.polyfit(np.arange(window_size), window_prices / window_prices[0], deg=1)[0]
                 if slope > 0.04:
                     labels[i] = 1
                 elif slope < 0.01:
