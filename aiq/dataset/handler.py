@@ -273,7 +273,7 @@ class Alpha158(DataHandler):
         if not self.test_mode:
             # regression target
             self.label_name_ = 'LABEL'
-            features.append(Ref(close, -2) / Ref(close, -1) - 1)
+            features.append(self.get_cls_label(close, volume))
             names.append(self.label_name_)
 
         # concat all features and labels
@@ -294,3 +294,22 @@ class Alpha158(DataHandler):
     @property
     def label_name(self):
         return self.label_name_
+
+    def get_reg_label(self, close):
+        return Ref(close, -2) / Ref(close, -1) - 1
+
+    def get_cls_label(self, close, volume):
+        window_size = 5
+        volume_ratio = volume / Mean(Ref(volume, 1), 30)
+        prices_ratio = (close - Ref(close, 1)) / Ref(close, 1)
+        labels = np.ones(close.shape[0]) * np.nan
+        for i in range(close.shape[0] - window_size):
+            window_prices = close.iloc[i:i + window_size].values
+            slope = np.polyfit(np.arange(window_size), window_prices / window_prices[0], deg=1)[0]
+            if volume_ratio.values[i] > 1.6 and prices_ratio.values[i] > 0.04:
+                if slope > 0.04:
+                    labels[i] = 1
+                elif slope < 0.01:
+                    labels[i] = 0
+        labels = pd.Series(labels)
+        return labels
