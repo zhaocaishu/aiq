@@ -291,13 +291,6 @@ class Alpha158(DataHandler):
     def feature_names(self):
         return self.feature_names_
 
-    @property
-    def label_name(self):
-        return self.label_name_
-
-    def get_reg_label(self, close):
-        return Ref(close, -2) / Ref(close, -1) - 1
-
     def get_cls_label(self, close, volume):
         window_size = 5
         volume_ratio = volume / Mean(Ref(volume, 1), 30)
@@ -313,3 +306,10 @@ class Alpha158(DataHandler):
                     labels[i] = 0
         labels = pd.Series(labels)
         return labels
+
+    @property
+    def label_name(self):
+        return self.label_name_
+
+    def get_reg_label(self, close):
+        return Ref(close, -2) / Ref(close, -1) - 1
