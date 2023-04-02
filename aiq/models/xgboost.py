@@ -8,12 +8,21 @@ import pandas as pd
 from scipy.stats import pearsonr
 
 from aiq.dataset import Dataset
+from aiq.utils.ordinal_regression_util import reg2multilabel, multilabel2reg
 
 from .base import BaseModel
 
 
 class XGBModel(BaseModel):
     """XGBModel Model"""
+
+    def __init__(self, feature_cols=None, label_col=None, model_params=None, use_ordinal_reg=False):
+        self.feature_cols_ = feature_cols
+        self.label_col_ = label_col
+
+        self.model = None
+        self.model_params = model_params
+        self.use_ordinal_reg = use_ordinal_reg
 
     def fit(
         self,
@@ -26,24 +35,47 @@ class XGBModel(BaseModel):
     ):
         train_df = train_dataset.to_dataframe()
         x_train, y_train = train_df[self.feature_cols_].values, train_df[self.label_col_].values
+        if self.use_ordinal_reg:
+            y_train = reg2multilabel(y_train)
         dtrain = xgb.DMatrix(x_train, label=y_train)
         evals = [(dtrain, "train")]
 
         if val_dataset is not None:
             valid_df = val_dataset.to_dataframe()
             x_valid, y_valid = valid_df[self.feature_cols_].values, valid_df[self.label_col_].values
+            if self.use_ordinal_reg:
+                y_valid = reg2multilabel(y_train)
             dvalid = xgb.DMatrix(x_valid, label=y_valid)
             evals.append((dvalid, "valid"))
 
-        self.model = xgb.train(
-            self.model_params,
-            dtrain=dtrain,
-            num_boost_round=num_boost_round,
-            evals=evals,
-            early_stopping_rounds=early_stopping_rounds,
-            verbose_eval=verbose_eval,
-            evals_result=eval_results
-        )
+        def custom_f_score(predt: np.ndarray, dtrain: xgb.DMatrix):
+            """Custom objective for multilabel classification"""
+            y_true = dtrain.get_label().reshape(predt.shape)
+            y_pred = (predt > 0.5)
+            f1_score = f1_score(y_true, y_pred, average='samples', zero_division=0)
+            return 'F1-score', f1_score
+
+        if self.use_ordinal_reg:
+            self.model = xgb.train(
+                self.model_params,
+                dtrain=dtrain,
+                num_boost_round=num_boost_round,
+                evals=evals,
+                early_stopping_rounds=early_stopping_rounds,
+                verbose_eval=verbose_eval,
+                custom_metric=custom_f_score,
+                evals_result=eval_results
+            )
+        else:
+            self.model = xgb.train(
+                self.model_params,
+                dtrain=dtrain,
+                num_boost_round=num_boost_round,
+                evals=evals,
+                early_stopping_rounds=early_stopping_rounds,
+                verbose_eval=verbose_eval,
+                evals_result=eval_results
+            )
         eval_results["train"] = list(eval_results["train"].values())[0]
         if val_dataset is not None:
             eval_results["valid"] = list(eval_results["valid"].values())[0]
@@ -54,6 +86,8 @@ class XGBModel(BaseModel):
         test_df = dataset.to_dataframe()[self.feature_cols_]
         dtest = xgb.DMatrix(test_df.values)
         predict_result = self.model.predict(dtest)
+        if self.use_ordinal_reg:
+            predict_result = multilabel2reg(predict_result)
         dataset.add_column('PREDICTION', predict_result)
         return dataset
 

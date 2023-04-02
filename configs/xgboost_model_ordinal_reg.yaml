@@ -1,0 +1,23 @@
+dataset:
+  start_time: '2021-08-30'
+  end_time: '2022-08-26'
+  segments: {
+    'train': ['2021-08-30', '2022-02-28'],
+    'valid': ['2022-02-29', '2022-05-31'],
+    'test': ['2022-06-01', '2022-08-26']
+  }
+
+model:
+  name: 'XGB'
+  params: {
+    'objective': 'binary:logistic',
+    'eta': 0.0421,
+    'tree_method': 'hist',
+    'colsample_bytree': 0.8879,
+    'max_depth': 8,
+    'subsample': 0.8789,
+    'reg_alpha': 10,
+    'reg_lambda': 10,
+    'disable_default_eval_metric': True,
+    'nthread': 4
+  }
