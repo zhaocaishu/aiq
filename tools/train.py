@@ -43,7 +43,8 @@ def main():
     if cfg.model.name == 'XGB':
         model = XGBModel(feature_cols=train_dataset.feature_names,
                          label_col=train_dataset.label_name,
-                         model_params=cfg.model.params)
+                         model_params=cfg.model.params,
+                         use_ordinal_reg=cfg.model.use_ordinal_reg)
     elif cfg.model.name == 'LGB':
         model = LGBModel(feature_cols=train_dataset.feature_names,
                          label_col=train_dataset.label_name,

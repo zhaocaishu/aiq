@@ -32,4 +32,4 @@ if __name__ == '__main__':
     # predict stage
     model_eval = XGBModel(use_ordinal_reg=True)
     model_eval.load(model_dir='./temp')
-    model_eval.predict(dataset=val_dataset)
+    model_eval.predict(dataset=val_dataset).to_dataframe()

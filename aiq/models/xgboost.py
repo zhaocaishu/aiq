@@ -6,6 +6,7 @@ import numpy as np
 import xgboost as xgb
 import pandas as pd
 from scipy.stats import pearsonr
+from sklearn.metrics import f1_score
 
 from aiq.dataset import Dataset
 from aiq.utils.ordinal_regression_util import reg2multilabel, multilabel2reg
@@ -44,7 +45,7 @@ class XGBModel(BaseModel):
             valid_df = val_dataset.to_dataframe()
             x_valid, y_valid = valid_df[self.feature_cols_].values, valid_df[self.label_col_].values
             if self.use_ordinal_reg:
-                y_valid = reg2multilabel(y_train)
+                y_valid = reg2multilabel(y_valid)
             dvalid = xgb.DMatrix(x_valid, label=y_valid)
             evals.append((dvalid, "valid"))
 
@@ -52,8 +53,8 @@ class XGBModel(BaseModel):
             """Custom objective for multilabel classification"""
             y_true = dtrain.get_label().reshape(predt.shape)
             y_pred = (predt > 0.5)
-            f1_score = f1_score(y_true, y_pred, average='samples', zero_division=0)
-            return 'F1-score', f1_score
+            score = f1_score(y_true, y_pred, average='samples', zero_division=0)
+            return 'F1-score', score
 
         if self.use_ordinal_reg:
             self.model = xgb.train(

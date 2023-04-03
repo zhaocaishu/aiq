@@ -21,3 +21,4 @@ model:
     'disable_default_eval_metric': True,
     'nthread': 4
   }
+  use_ordinal_reg: True

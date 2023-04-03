@@ -62,7 +62,8 @@ config = Config(
         ),
         model=edict(
             name=None,
-            params=None
+            params=None,
+            use_ordinal_reg=False
         )
     )
 )

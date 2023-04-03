@@ -8,6 +8,6 @@ def reg2multilabel(logits, min=-0.1, step=0.01, num_classes=20):
     return labels
 
 
-def multilabel2reg(labels, min=-0.1, step=0.01):
-    logits = (labels.cumprod(axis=1).sum(axis=1) - 1) * step + min
+def multilabel2reg(probs, min=-0.1, step=0.01):
+    logits = ((probs > 0.5).cumprod(axis=1).sum(axis=1) - 1) * step + min
     return logits
