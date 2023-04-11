@@ -77,8 +77,6 @@ class Rolling(abc.ABC):
             series = series.ewm(alpha=N, min_periods=1).mean()
         else:
             series = getattr(series.rolling(N, min_periods=1), self.func)()
-            # series.iloc[:N-1] = np.nan
-        # series[isnull] = np.nan
         return series
 
 
