@@ -1,14 +1,16 @@
 import pandas as pd
 
-from aiq.dataset.processor import FeatureGroupMean, RandomLabelSampling
+from aiq.dataset.processor import CSFilter, CSNeutralize
 
 
 if __name__ == '__main__':
-    df = pd.DataFrame({'Date': ['2022-01-01', '2022-01-01', '2022-01-01'], 'Industry_id': [1, 2, 1], 'Value': [3, 2, 4]})
+    df = pd.DataFrame({'Date': ['2022-01-01', '2022-01-01', '2022-01-01', '2022-01-01'], 'Industry_id': [1, 2, 1, 1],
+                       'Market_cap': [3, 5, 4, 100], 'Factor_0': [0.1, 2.4, 1.2, 1.8],
+                       'Factor_1': [2.0, 1.0, 3.0, 4.0]})
 
-    # group_mean = FeatureGroupMean(fields_group=['Value'])
-    # print(group_mean(df))
+    outlier_filter = CSFilter(target_cols=['Factor_0', 'Factor_1'])
+    print(outlier_filter(df))
 
-    random_sample = RandomLabelSampling(label_name='Value', bound_value=[2, 3])
-    print(random_sample(df))
-
+    neutralize = CSNeutralize(industry_num=3, industry_col='Industry_id', market_cap_col='Market_cap',
+                              target_cols=['Factor_0', 'Factor_1'])
+    print(neutralize(df))

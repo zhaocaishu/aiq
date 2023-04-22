@@ -1,5 +1,5 @@
 from .ops import Rolling, Ref, Mean, Std, Var, Skew, Kurt, Max, IdxMax, Min, IdxMin, Quantile, Med, Mad, Rank, Count, \
-    Delta, Slope, Rsquare, Resi, WMA, EMA, Greater, Less, Corr, Log, Abs, Sum
+    Delta, Slope, Rsquare, Resi, WMA, EMA, Greater, Less, Corr, Log, Abs, Sum, Cov, CSRank
 
 Greater: Greater = Greater()
 Less: Less = Less()
@@ -28,7 +28,10 @@ Resi: Resi = Resi()
 WMA: WMA = WMA()
 EMA: EMA = EMA()
 Corr: Corr = Corr()
+Cov: Cov = Cov()
+CSRank: CSRank = CSRank()
 
 __all = ['Rolling', 'Ref', 'Mean', 'Std', 'Var', 'Skew', 'Kurt', 'Max', 'IdxMax', 'Min', 'IdxMin', 'Quantile', 'Med',
          'Mad', 'Rank', 'Count', 'Delta', 'Slope', 'Rsquare', 'Resi', 'WMA', 'EMA', 'Greater', 'Less', 'Corr', 'Log',
-         'Abs', 'Sum']
+         'Abs', 'Sum', 'Cov', 'CSRank']
+

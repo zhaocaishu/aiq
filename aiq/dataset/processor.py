@@ -6,39 +6,85 @@ from typing import Union, Text
 import pandas as pd
 import numpy as np
 
+from aiq.utils.data import mad_filter, neutralize, zscore
+
 
 class Processor(abc.ABC):
     def fit(self, df: pd.DataFrame = None):
         """
-        Learn data processing parameters
-
-        Args:
-            df (pd.DataFrame): When we fit and process data with processor one by one. The fit function reiles on the output of previous
+        learn data processing parameters
+        Parameters
+        ----------
+        df : pd.DataFrame
+            When we fit and process data with processor one by one. The fit function reiles on the output of previous
             processor, i.e. `df`.
-
         """
 
-    def transform(self, df: pd.DataFrame):
+    @abc.abstractmethod
+    def __call__(self, df: pd.DataFrame):
         """
-        Process the data
+        process the data
         NOTE: **The processor could change the content of `df` inplace !!!!! **
         User should keep a copy of data outside
-
-        Args:
-            df (pd.DataFrame): The raw_df of handler or result from previous processor.
+        Parameters
+        ----------
+        df : pd.DataFrame
+            The raw_df of handler or result from previous processor.
         """
 
 
-class CSLabelClip(Processor):
-    """Cross Sectional Label Outlier Clip"""
+class CSFilter(Processor):
+    """Outlier filter"""
 
-    def __init__(self, label_col=None, clip_outlier=True, low_limit=-0.1, high_limit=0.1):
-        self.label_col = label_col
-        self.clip_outlier = clip_outlier
-        self.low_limit = low_limit
-        self.high_limit = high_limit
+    def __init__(self, target_cols=None, method="mad"):
+        self.target_cols = target_cols
+        if method == "mad":
+            self.filter_func = mad_filter
+        else:
+            raise NotImplementedError(f"This type of method is not supported")
 
-    def transform(self, df):
-        if self.clip_outlier:
-            df = df[(df[self.label_col] < self.high_limit) & (df[self.label_col] > self.low_limit)]
+    def __call__(self, df):
+        df[self.target_cols] = df[self.target_cols].groupby('Date', group_keys=False).apply(self.filter_func)
+        return df
+
+
+class CSNeutralize(Processor):
+    """Factor neutralize by industry and market value"""
+
+    def __init__(self, industry_num, industry_col=None, market_cap_col=None, target_cols=None):
+        self.industry_num = industry_num
+        self.industry_col = industry_col
+        self.market_cap_col = market_cap_col
+        self.target_cols = target_cols
+        self.neutralize_func = neutralize
+
+    def __call__(self, df):
+        df = df.groupby('Date', group_keys=False).apply(self.neutralize_func,
+                                                        industry_num=self.industry_num,
+                                                        industry_col=self.industry_col,
+                                                        market_cap_col=self.market_cap_col,
+                                                        target_cols=self.target_cols)
+        return df
+
+
+class CSFillna(Processor):
+    """Cross Sectional Fill Nan"""
+
+    def __init__(self, target_cols=None):
+        self.target_cols = target_cols
+
+    def __call__(self, df):
+        df[self.target_cols] = df[self.target_cols].groupby('Date', group_keys=False).apply(lambda x: x.fillna(x.mean()))
+        return df
+
+
+class CSZScore(Processor):
+    """ZScore Normalization"""
+
+    def __init__(self, target_cols=None):
+        self.target_cols = target_cols
+        self.norm_func = zscore
+
+    def __call__(self, df):
+        df[self.target_cols] = df[self.target_cols].groupby('Date', group_keys=False).apply(self.norm_func)
         return df

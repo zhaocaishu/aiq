@@ -5,8 +5,10 @@ from typing import List
 import numpy as np
 import pandas as pd
 
+from aiq.ops import Rank, Cov
+
 from .loader import DataLoader
-from .processor import CSLabelClip
+from .processor import CSFillna, CSNeutralize, CSFilter, CSZScore
 
 
 class Dataset(abc.ABC):
@@ -34,6 +36,7 @@ class Dataset(abc.ABC):
 
         # process per symbol
         dfs = []
+        symbols = []
         for symbol in self.symbols:
             df = DataLoader.load(os.path.join(data_dir, 'features'), symbol=symbol, start_time=start_time,
                                  end_time=end_time)
@@ -44,6 +47,7 @@ class Dataset(abc.ABC):
 
             # append ticker symbol
             df['Symbol'] = symbol
+            symbols.append(symbol)
 
             # adjust price with factor
             if adjust_price:
@@ -56,18 +60,37 @@ class Dataset(abc.ABC):
             dfs.append(df)
 
         # concat and reset index
-        self.df = pd.concat(dfs)
-        self.df.reset_index(inplace=True)
+        self.df = pd.concat(dfs, ignore_index=True)
 
         # assign features and label name
         if handler is not None:
             self.feature_names_ = handler.feature_names
             self.label_name_ = handler.label_name
 
-        # normalize label
-        if self.label_name_ is not None:
-            processor = CSLabelClip(label_col=self.label_name_)
-            self.df = processor.transform(self.df)
+        # preprocessors
+        if self.feature_names_ is not None:
+            # set index
+            self.df = self.df.set_index(['Date', 'Symbol'])
+
+            # fill nan
+            fillna = CSFillna(target_cols=self.feature_names_)
+            self.df = fillna(self.df)
+
+            # remove outlier
+            outlier_filter = CSFilter(target_cols=self.feature_names_)
+            self.df = outlier_filter(self.df)
+
+            # factor neutralize
+            cs_neut = CSNeutralize(industry_num=110, industry_col='Industry_id', market_cap_col='Total_mv',
+                                   target_cols=self.feature_names_)
+            self.df = cs_neut(self.df)
+
+            # factor standardization
+            cs_score = CSZScore(target_cols=self.feature_names_)
+            self.df = cs_score(self.df)
+
+            # reset index
+            self.df.reset_index(inplace=True)
 
         # random shuffle
         if training:

@@ -231,18 +231,7 @@ class Rank(Rolling):
     # for compatiblity of python 3.7, which doesn't support pandas 1.4.0+ which implements Rolling.rank
     def __call__(self, series: pd.Series, N):
         rolling_or_expending = series.expanding(min_periods=1) if N == 0 else series.rolling(N, min_periods=1)
-        if hasattr(rolling_or_expending, "rank"):
-            return rolling_or_expending.rank(pct=True)
-
-        def rank(x):
-            if np.isnan(x[-1]):
-                return np.nan
-            x1 = x[~np.isnan(x)]
-            if x1.shape[0] == 0:
-                return np.nan
-            return percentileofscore(x1, x1[-1]) / 100
-
-        return rolling_or_expending.apply(rank, raw=True)
+        return rolling_or_expending.rank(pct=True)
 
 
 class Count(Rolling):
@@ -379,3 +368,16 @@ class Corr(PairRolling):
             | np.isclose(series_right.rolling(N, min_periods=1).std(), 0, atol=2e-05)
             ] = np.nan
         return res
+
+
+class Cov(PairRolling):
+    """Rolling Covariance"""
+
+    def __init__(self):
+        super(Cov, self).__init__("cov")
+
+
+# Cross Sectional Operators
+class CSRank(abc.ABC):
+    def __call__(self, series):
+        return series.groupby(level=0).rank(pct=True)
