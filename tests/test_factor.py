@@ -44,5 +44,5 @@ if __name__ == '__main__':
     cs_score = CSZScore(target_cols=['CVRANKCOV5'])
     df = cs_score(df)
 
-    ic_analysis = IC(factor_col='CVRANKCOV5', price_col='Close')
-    print('=====:', ic_analysis.eval(df))
+    ic_analysis = IC( price_col='Close')
+    print('=====:', ic_analysis.eval(df, factor_col='CVRANKCOV5'))

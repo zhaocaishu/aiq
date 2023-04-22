@@ -8,14 +8,13 @@ import alphalens.performance as perf
 
 
 class IC(abc.ABC):
-    def __init__(self, factor_col, price_col, timestamp_col='Date', symbol_col='Symbol'):
-        self.factor_col = factor_col
+    def __init__(self, timestamp_col='Date', symbol_col='Symbol', price_col='Close'):
         self.price_col = price_col
         self.timestamp_col = timestamp_col
         self.symbol_col = symbol_col
 
-    def eval(self, df):
-        factors = df[self.factor_col]
+    def eval(self, df, factor_col):
+        factors = df[factor_col]
 
         df = df.reset_index()
         prices = df[[self.timestamp_col, self.symbol_col, self.price_col]]
