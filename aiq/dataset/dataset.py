@@ -63,6 +63,12 @@ class Dataset(abc.ABC):
         self.df = pd.concat(dfs, ignore_index=True)
         self.df = self.df.set_index(['Date', 'Symbol'])
 
+        # assign features and label name
+        if handler is not None:
+            self.feature_names_ = handler.feature_names
+            self.label_name_ = handler.label_name
+
+        # add factors
         self.df['VWAP_CSRANK'] = CSRank((self.df['High'] + self.df['Low']) / 2.0)
         self.df['CLOSE_CSRANK'] = CSRank(self.df['Close'])
         self.df['VOLUME_CSRANK'] = CSRank(self.df['Volume'])
@@ -86,7 +92,7 @@ class Dataset(abc.ABC):
         def ts_func_lv2(x):
             x['HVRANKCORR3'] = -1.0 * Sum(x['HVRANKCORR3'], 3)
             x['WVRANKCORR5'] = -1.0 * Max(x['WVRANKCORR5'], 5)
-            x['CHLRANKCORR12'] = (x['Close'] - Min(x['Low'], 12)) / (Max(x['High'], 12) - Min(x['Low'], 12))
+            x['CHLRANKCORR12'] = (x['Close'] - Min(x['Low'], 12)) / (Max(x['High'], 12) - Min(x['Low'], 12) + 1e-12)
             return x
         self.df = self.df.groupby('Symbol', group_keys=False).apply(ts_func_lv2)
         self.df['CHLRANKCORR12'] = CSRank(self.df['CHLRANKCORR12'])
@@ -96,15 +102,10 @@ class Dataset(abc.ABC):
             return x
         self.df = self.df.groupby('Symbol', group_keys=False).apply(ts_func_lv3)
 
-        self.feature_names_ = ['OVRANKCORR10', 'CVRANKCOV5', 'HVRANKCORR3', 'HVRANKCORR5', 'HVRANKCOV5',
-                               'WVRANKCORR5', 'CHLRANKCORR12']
+        self.feature_names_ += ['OVRANKCORR10', 'CVRANKCOV5', 'HVRANKCORR3', 'HVRANKCORR5', 'HVRANKCOV5',
+                                'WVRANKCORR5', 'CHLRANKCORR12']
 
-        # assign features and label name
-        if handler is not None:
-            self.feature_names_ += handler.feature_names
-            self.label_name_ = handler.label_name
-
-        # preprocessors
+        # pre-processors
         if self.feature_names_ is not None and False:
             # fill nan
             fillna = CSFillna(target_cols=self.feature_names_)
