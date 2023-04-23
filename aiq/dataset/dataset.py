@@ -5,7 +5,7 @@ from typing import List
 import numpy as np
 import pandas as pd
 
-from aiq.ops import Rank, Cov
+from aiq.ops import Rank, Cov, Mean, Std, Corr, CSRank, Sum, Max, Min
 
 from .loader import DataLoader
 from .processor import CSFillna, CSNeutralize, CSFilter, CSZScore
@@ -59,19 +59,53 @@ class Dataset(abc.ABC):
 
             dfs.append(df)
 
-        # concat and reset index
+        # concat dataframes and set index
         self.df = pd.concat(dfs, ignore_index=True)
+        self.df = self.df.set_index(['Date', 'Symbol'])
+
+        self.df['VWAP_CSRANK'] = CSRank((self.df['High'] + self.df['Low']) / 2.0)
+        self.df['CLOSE_CSRANK'] = CSRank(self.df['Close'])
+        self.df['VOLUME_CSRANK'] = CSRank(self.df['Volume'])
+        self.df['OPEN_CSRANK'] = CSRank(self.df['Open'])
+        self.df['HIGH_CSRANK'] = CSRank(self.df['High'])
+
+        def ts_func_lv1(x):
+            x['OVRANKCORR10'] = -1.0 * Corr(x['OPEN_CSRANK'], x['VOLUME_CSRANK'], 10)
+            x['CVRANKCOV5'] = Cov(x['CLOSE_CSRANK'], x['VOLUME_CSRANK'], 5)
+            x['HVRANKCORR3'] = Corr(x['HIGH_CSRANK'], x['VOLUME_CSRANK'], 5)
+            x['HVRANKCORR5'] = -1.0 * Corr(x['High'], x['VOLUME_CSRANK'], 3)
+            x['HVRANKCOV5'] = Cov(x['HIGH_CSRANK'], x['VOLUME_CSRANK'], 5)
+            x['WVRANKCORR5'] = Corr(x['HIGH_CSRANK'], x['VOLUME_CSRANK'], 5)
+            return x
+        self.df = self.df.groupby('Symbol', group_keys=False).apply(ts_func_lv1)
+        self.df['CVRANKCOV5'] = -1.0 * CSRank(self.df['CVRANKCOV5'])
+        self.df['HVRANKCORR3'] = CSRank(self.df['HVRANKCORR3'])
+        self.df['HVRANKCOV5'] = -1.0 * CSRank(self.df['HVRANKCOV5'])
+        self.df['WVRANKCORR5'] = CSRank(self.df['WVRANKCORR5'])
+
+        def ts_func_lv2(x):
+            x['HVRANKCORR3'] = -1.0 * Sum(x['HVRANKCORR3'], 3)
+            x['WVRANKCORR5'] = -1.0 * Max(x['WVRANKCORR5'], 5)
+            x['CHLRANKCORR12'] = (x['Close'] - Min(x['Low'], 12)) / (Max(x['High'], 12) - Min(x['Low'], 12))
+            return x
+        self.df = self.df.groupby('Symbol', group_keys=False).apply(ts_func_lv2)
+        self.df['CHLRANKCORR12'] = CSRank(self.df['CHLRANKCORR12'])
+
+        def ts_func_lv3(x):
+            x['CHLRANKCORR12'] = -1.0 * Corr(x['CHLRANKCORR12'], x['VOLUME_CSRANK'], 6)
+            return x
+        self.df = self.df.groupby('Symbol', group_keys=False).apply(ts_func_lv3)
+
+        self.feature_names_ = ['OVRANKCORR10', 'CVRANKCOV5', 'HVRANKCORR3', 'HVRANKCORR5', 'HVRANKCOV5',
+                               'WVRANKCORR5', 'CHLRANKCORR12']
 
         # assign features and label name
         if handler is not None:
-            self.feature_names_ = handler.feature_names
+            self.feature_names_ += handler.feature_names
             self.label_name_ = handler.label_name
 
         # preprocessors
-        if self.feature_names_ is not None:
-            # set index
-            self.df = self.df.set_index(['Date', 'Symbol'])
-
+        if self.feature_names_ is not None and False:
             # fill nan
             fillna = CSFillna(target_cols=self.feature_names_)
             self.df = fillna(self.df)
@@ -89,8 +123,8 @@ class Dataset(abc.ABC):
             cs_score = CSZScore(target_cols=self.feature_names_)
             self.df = cs_score(self.df)
 
-            # reset index
-            self.df.reset_index(inplace=True)
+        # reset index
+        self.df.reset_index(inplace=True)
 
         # random shuffle
         if training:

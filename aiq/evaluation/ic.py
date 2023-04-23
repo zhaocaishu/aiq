@@ -14,6 +14,8 @@ class IC(abc.ABC):
         self.symbol_col = symbol_col
 
     def eval(self, df, factor_col):
+        df = df.reset_index()
+        df = df.set_index([self.timestamp_col, self.symbol_col])
         factors = df[factor_col]
 
         df = df.reset_index()
@@ -24,7 +26,7 @@ class IC(abc.ABC):
         ic_data = perf.factor_information_coefficient(factor_data)
         ic_summary_table = pd.DataFrame()
         ic_summary_table["IC Mean"] = ic_data.mean()
-        ic_summary_table["IC Std."] = ic_data.std()
+        ic_summary_table["IC Std"] = ic_data.std()
         ic_summary_table["Risk-Adjusted IC"] = \
             ic_data.mean() / ic_data.std()
         t_stat, p_value = stats.ttest_1samp(ic_data, 0)
