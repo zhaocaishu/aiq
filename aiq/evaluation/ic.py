@@ -15,9 +15,11 @@ class IC(abc.ABC):
 
     def eval(self, df, factor_col):
         factors = df[[self.timestamp_col, self.symbol_col, factor_col]].copy()
+        factors[self.timestamp_col] = pd.to_datetime(factors[self.timestamp_col])
         factors = factors.set_index([self.timestamp_col, self.symbol_col])
 
         prices = df[[self.timestamp_col, self.symbol_col, self.price_col]].copy()
+        prices[self.timestamp_col] = pd.to_datetime(prices[self.timestamp_col])
         prices = prices.pivot(self.timestamp_col, self.symbol_col, values=self.price_col)
 
         factor_data = alphalens.utils.get_clean_factor_and_forward_returns(factors, prices, quantiles=5)
