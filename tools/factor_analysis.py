@@ -44,11 +44,14 @@ def main():
 
     eval_results = dict()
     ic_analysis = IC()
-    for feature_name in handler.feature_names_:
-        eval_result = ic_analysis.eval(test_df, feature_name)
-        eval_results[feature_name] = eval_result
+    for feature_name in test_dataset.feature_names:
+        try:
+            eval_result = ic_analysis.eval(test_df, feature_name)
+            eval_results[feature_name] = eval_result
+        except:
+            print('Pass')
 
-    with open('eval_results.pkl', 'wb') as f:
+    with open('./eval_results.pkl', 'wb') as f:
         pickle.dump(eval_results, f)
 
 
