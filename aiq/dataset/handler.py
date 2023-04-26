@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 from aiq.ops import Greater, Less, Ref, Mean, Std, Rsquare, Resi, Slope, Skew, Max, Min, Quantile, Rank, IdxMax, \
-    IdxMin, Corr, Log, Sum, Abs
+    IdxMin, Corr, Log, Sum, Abs, Cov, CSRank
 
 
 class DataHandler(abc.ABC):
@@ -294,3 +294,54 @@ class Alpha158(DataHandler):
     @property
     def label_name(self):
         return self.label_name_
+
+
+class Alpha101(DataHandler):
+    def fetch(self, df: pd.DataFrame = None) -> pd.DataFrame:
+        open = df['Open']
+        close = df['Close']
+        high = df['High']
+        low = df['Low']
+        volume = df['Volume']
+
+        df['VWAP_CSRANK'] = CSRank((high + low) / 2.0)
+        df['CLOSE_CSRANK'] = CSRank(close)
+        df['VOLUME_CSRANK'] = CSRank(volume)
+        df['OPEN_CSRANK'] = CSRank(open)
+        df['HIGH_CSRANK'] = CSRank(high)
+
+        def ts_func_lv1(x):
+            x['OVRANKCORR10'] = -1.0 * Corr(x['OPEN_CSRANK'], x['VOLUME_CSRANK'], 10)
+            x['CVRANKCOV5'] = Cov(x['CLOSE_CSRANK'], x['VOLUME_CSRANK'], 5)
+            x['HVRANKCORR3'] = Corr(x['HIGH_CSRANK'], x['VOLUME_CSRANK'], 5)
+            x['HVRANKCORR5'] = -1.0 * Corr(x['High'], x['VOLUME_CSRANK'], 3)
+            x['HVRANKCOV5'] = Cov(x['HIGH_CSRANK'], x['VOLUME_CSRANK'], 5)
+            x['WVRANKCORR5'] = Corr(x['HIGH_CSRANK'], x['VOLUME_CSRANK'], 5)
+            return x
+
+        df = df.groupby('Symbol', group_keys=False).apply(ts_func_lv1)
+        df['CVRANKCOV5'] = -1.0 * CSRank(df['CVRANKCOV5'])
+        df['HVRANKCORR3'] = CSRank(df['HVRANKCORR3'])
+        df['HVRANKCOV5'] = -1.0 * CSRank(df['HVRANKCOV5'])
+        df['WVRANKCORR5'] = CSRank(df['WVRANKCORR5'])
+
+        def ts_func_lv2(x):
+            x['HVRANKCORR3'] = -1.0 * Sum(x['HVRANKCORR3'], 3)
+            x['WVRANKCORR5'] = -1.0 * Max(x['WVRANKCORR5'], 5)
+            x['CHLRANKCORR12'] = (x['Close'] - Min(x['Low'], 12)) / (Max(x['High'], 12) - Min(x['Low'], 12) + 1e-12)
+            return x
+
+        df = df.groupby('Symbol', group_keys=False).apply(ts_func_lv2)
+        df['CHLRANKCORR12'] = CSRank(df['CHLRANKCORR12'])
+
+        def ts_func_lv3(x):
+            x['CHLRANKCORR12'] = -1.0 * Corr(x['CHLRANKCORR12'], x['VOLUME_CSRANK'], 6)
+            return x
+
+        df = df.groupby('Symbol', group_keys=False).apply(ts_func_lv3)
+        return df
+
+    @property
+    def feature_names(self):
+        return ['OVRANKCORR10', 'CVRANKCOV5', 'HVRANKCORR3', 'HVRANKCORR5', 'HVRANKCOV5',
+                'WVRANKCORR5', 'CHLRANKCORR12']

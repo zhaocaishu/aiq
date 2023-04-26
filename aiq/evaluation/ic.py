@@ -14,12 +14,10 @@ class IC(abc.ABC):
         self.symbol_col = symbol_col
 
     def eval(self, df, factor_col):
-        df = df.reset_index()
-        df = df.set_index([self.timestamp_col, self.symbol_col])
-        factors = df[factor_col]
+        factors = df[[self.timestamp_col, self.symbol_col, factor_col]].copy()
+        factors = factors.set_index([self.timestamp_col, self.symbol_col])
 
-        df = df.reset_index()
-        prices = df[[self.timestamp_col, self.symbol_col, self.price_col]]
+        prices = df[[self.timestamp_col, self.symbol_col, self.price_col]].copy()
         prices = prices.pivot(self.timestamp_col, self.symbol_col, values=self.price_col)
 
         factor_data = alphalens.utils.get_clean_factor_and_forward_returns(factors, prices, quantiles=5)

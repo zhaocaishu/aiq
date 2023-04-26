@@ -42,14 +42,14 @@ def main():
     test_df = test_dataset.to_dataframe()
     print('Loaded %d items to test dataset' % len(test_dataset))
 
-    ic_results = dict()
+    eval_results = dict()
     ic_analysis = IC()
     for feature_name in handler.feature_names_:
-        ic_result = ic_analysis.eval(test_df, feature_name)
-        ic_results[feature_name] = ic_result
+        eval_result = ic_analysis.eval(test_df, feature_name)
+        eval_results[feature_name] = eval_result
 
-    with open('ic_analysis.pkl', 'wb') as f:
-        pickle.dump(ic_results, f)
+    with open('eval_results.pkl', 'wb') as f:
+        pickle.dump(eval_results, f)
 
 
 if __name__ == '__main__':
