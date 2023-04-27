@@ -30,7 +30,6 @@ if __name__ == '__main__':
         x['WVRANKCORR5'] = Corr(x['HIGH_CSRANK'], x['VOLUME_CSRANK'], 5)
         return x
     df = df.groupby('Symbol', group_keys=False).apply(ts_func_lv1)
-
     df['CVRANKCOV5'] = -1.0 * CSRank(df['CVRANKCOV5'])
     df['HVRANKCORR3'] = CSRank(df['HVRANKCORR3'])
     df['HVRANKCOV5'] = -1.0 * CSRank(df['HVRANKCOV5'])
@@ -42,7 +41,6 @@ if __name__ == '__main__':
         x['CHLRANKCORR12'] = (x['Close'] - Min(x['Low'], 12)) / (Max(x['High'], 12) - Min(x['Low'], 12))
         return x
     df = df.groupby('Symbol', group_keys=False).apply(ts_func_lv2)
-
     df['CHLRANKCORR12'] = CSRank(df['CHLRANKCORR12'])
 
     def ts_func_lv3(x):
@@ -50,24 +48,20 @@ if __name__ == '__main__':
         return x
     df = df.groupby('Symbol', group_keys=False).apply(ts_func_lv3)
 
+    # feature names
     factor_cols = ['OVRANKCORR10', 'CVRANKCOV5', 'HVRANKCORR3', 'HVRANKCORR5', 'HVRANKCOV5', 'WVRANKCORR5', 'CHLRANKCORR12']
 
-    # fill nan
-    fillna = CSFillna(target_cols=factor_cols)
-    df = fillna(df)
+    # post-process
+    processors = [
+        CSFillna(target_cols=factor_cols),
+        CSFilter(target_cols=factor_cols),
+        CSNeutralize(industry_num=110, industry_col='Industry_id', market_cap_col='Total_mv',
+                     target_cols=factor_cols),
+        CSZScore(target_cols=factor_cols)
+    ]
 
-    # remove outlier
-    outlier_filter = CSFilter(target_cols=factor_cols)
-    df = outlier_filter(df)
-
-    # factor neutralize
-    cs_neut = CSNeutralize(industry_num=110, industry_col='Industry_id', market_cap_col='Total_mv',
-                           target_cols=factor_cols)
-    df = cs_neut(df)
-
-    # factor standardization
-    cs_score = CSZScore(target_cols=factor_cols)
-    df = cs_score(df)
+    for processor in processors:
+        df = processor(df)
 
     ic_analysis = IC()
     for factor in factor_cols:

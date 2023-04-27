@@ -25,6 +25,9 @@ class Dataset(abc.ABC):
         adjust_price=True,
         training=False
     ):
+        # turn off warnings
+        pd.options.mode.copy_on_write = True
+
         # feature and label names
         self.feature_names_ = None
         self.label_name_ = None
@@ -35,18 +38,15 @@ class Dataset(abc.ABC):
 
         # process per symbol
         dfs = []
-        symbols = []
         for symbol in self.symbols:
             df = DataLoader.load(os.path.join(data_dir, 'features'), symbol=symbol, start_time=start_time,
                                  end_time=end_time)
 
             # skip ticker of non-existed or small periods
-            if df is None:
-                continue
+            if df is None: continue
 
             # append ticker symbol
             df['Symbol'] = symbol
-            symbols.append(symbol)
 
             # adjust price with factor
             if adjust_price:
@@ -72,24 +72,18 @@ class Dataset(abc.ABC):
         self.df = handler101.fetch(self.df)
         self.feature_names_ += handler101.feature_names
 
-        # pre-processors
+        # processors
         if self.feature_names_ is not None and False:
-            # fill nan
-            fillna = CSFillna(target_cols=self.feature_names_)
-            self.df = fillna(self.df)
+            processors = [
+                CSFillna(target_cols=self.feature_names_),
+                CSFilter(target_cols=self.feature_names_),
+                CSNeutralize(industry_num=110, industry_col='Industry_id', market_cap_col='Total_mv',
+                             target_cols=self.feature_names_),
+                CSZScore(target_cols=self.feature_names_)
+            ]
 
-            # remove outlier
-            outlier_filter = CSFilter(target_cols=self.feature_names_)
-            self.df = outlier_filter(self.df)
-
-            # factor neutralize
-            cs_neut = CSNeutralize(industry_num=110, industry_col='Industry_id', market_cap_col='Total_mv',
-                                   target_cols=self.feature_names_)
-            self.df = cs_neut(self.df)
-
-            # factor standardization
-            cs_score = CSZScore(target_cols=self.feature_names_)
-            self.df = cs_score(self.df)
+            for processor in processors:
+                self.df = processor(self.df)
 
         # reset index
         self.df.reset_index(inplace=True)
@@ -97,9 +91,6 @@ class Dataset(abc.ABC):
         # random shuffle
         if training:
             self.df = self.df.sample(frac=1.0)
-
-        # close warnings
-        pd.options.mode.copy_on_write = True
 
     @staticmethod
     def adjust_price(df):
