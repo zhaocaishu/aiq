@@ -22,7 +22,8 @@ class StampDutyCommissionScheme(bt.CommInfoBase):
     params = {
         'stamp_duty': 0.001,
         'commission': 0.00012,
-        'percabs': True
+        'stocklike': True,
+        'commtype': bt.CommInfoBase.COMM_PERC
     }
 
     def _getcommission(self, size, price, pseudoexec):

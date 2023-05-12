@@ -96,13 +96,14 @@ class TopkDropoutStrategy(bt.Strategy):
         return abs(amount // lot * lot)
 
     def next(self):
-        # 如果是指数的最后一个bar，则退出，防止取下一日开盘价越界错
-        if len(self.datas[0]) == self.data0.buflen():
-            return
-
+        # 检查是否有指令等待执行，如果有就不执行这根bar
         for i, data in enumerate(self.datas):
             if self.order[data._name]:
                 return
+
+        # 如果是指数的最后一根bar，则退出，防止取下一日开盘价越界错
+        if len(self.datas[0]) == self.data0.buflen():
+            return
 
         if self.trade_day_index % self.trade_day_interval == 0:
             buy_order_list, sell_order_list = self.generate_trade_decision()
