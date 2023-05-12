@@ -11,7 +11,7 @@ logger = get_logger('Signal Strategy')
 class TopkDropoutStrategy(bt.Strategy):
     params = {
         'topk': 30,  # number of stocks in the portfolio
-        'n_drop': 3,  # number of stocks to be replaced in each trading date
+        'n_drop': 10,  # number of stocks to be replaced in each trading date
         'hold_thresh': 1,  # minimum holding days
         'log_writer': None  # write handler
     }
@@ -22,7 +22,7 @@ class TopkDropoutStrategy(bt.Strategy):
         """
         self.method_sell = 'bottom'
         self.method_buy = 'top'
-        self.reserve = 0.05  # 5% reserve capital
+        self.risk_degree = 0.95  # 5% reserve capital
 
         # 当前持仓股票列表
         self.current_stock_list = []
@@ -31,6 +31,10 @@ class TopkDropoutStrategy(bt.Strategy):
         self.order = {}
         for i, data in enumerate(self.datas):
             self.order[data._name] = None
+
+        # trade day index
+        self.trade_day_index = 0
+        self.trade_day_interval = 5
 
     def generate_trade_decision(self):
         def get_first_n(li, n):
@@ -41,7 +45,6 @@ class TopkDropoutStrategy(bt.Strategy):
 
         # generate order list for this adjust date
         sell_order_list = []
-        keep_order_list = []
         buy_order_list = []
 
         # load score
@@ -82,13 +85,11 @@ class TopkDropoutStrategy(bt.Strategy):
         for code in self.current_stock_list:
             if code in sell:
                 sell_order_list.append(code)
-            else:
-                keep_order_list.append(code)
 
         # Get current stock list
-        self.current_stock_list = buy_order_list + keep_order_list
+        self.current_stock_list = list(set(self.current_stock_list) - set(sell_order_list)) + buy_order_list
 
-        return buy_order_list, keep_order_list, sell_order_list
+        return buy_order_list, sell_order_list
 
     @staticmethod
     def downcast(amount, lot):
@@ -103,39 +104,37 @@ class TopkDropoutStrategy(bt.Strategy):
             if self.order[data._name]:
                 return
 
-        buy_order_list, keep_order_list, sell_order_list = self.generate_trade_decision()
+        if self.trade_day_index % self.trade_day_interval == 0:
+            buy_order_list, sell_order_list = self.generate_trade_decision()
 
-        if self.p.log_writer is not None:
-            order_str = json.dumps({'date': str(self.datetime.date(0)), 'buy': buy_order_list, 'sell': sell_order_list})
-            self.p.log_writer.write(order_str + '\n')
+            if self.p.log_writer is not None:
+                order_str = json.dumps({'date': str(self.datetime.date(0)), 'buy': buy_order_list, 'sell': sell_order_list})
+                self.p.log_writer.write(order_str + '\n')
 
-        # remove those no longer top ranked
-        # do this first to issue sell orders and free cash
-        for secu in sell_order_list:
-            data = self.getdatabyname(secu)
-            order_price = data.open[1]
-            self.order[secu] = self.order_target_percent(data=data, target=0.0, price=order_price, name=secu)
+            # cash for buy
+            cash = self.broker.getcash()
 
-        # re-balance those already top ranked and still there
-        target_value = self.broker.getvalue() * (1 - self.reserve) / self.p.topk
-        for secu in keep_order_list:
-            data = self.getdatabyname(secu)
-            current_value = self.broker.getvalue(datas=[data])
-            order_price = data.open[1]
-            if current_value < target_value:
-                order_size = self.downcast((target_value - current_value) / order_price, 100)
+            # remove those no longer top ranked
+            # do this first to issue sell orders and free cash
+            for secu in sell_order_list:
+                data = self.getdatabyname(secu)
+                order_price = data.open[1]
+                self.order[secu] = self.order_target_percent(data=data, target=0.0, price=order_price, name=secu)
+
+                # 因为设置的是先卖出后买入, 需要根据卖出的股票更新可用现金。如果设置先买入再卖出，则不需更新可用现金
+                order_size = self.getposition(data).size
+                cash += order_price * order_size
+
+            # issue a target order for the newly top ranked stocks
+            # do this last, as this will generate buy orders consuming cash
+            target_value = cash * self.risk_degree / len(buy_order_list) if len(buy_order_list) > 0 else 0
+            for secu in buy_order_list:
+                data = self.getdatabyname(secu)
+                order_price = data.close[1]
+                order_size = self.downcast(target_value / order_price, 100)
                 self.order[secu] = self.buy(data=data, size=order_size, price=order_price, name=secu)
-            elif current_value > target_value:
-                order_size = self.downcast((current_value - target_value) / order_price, 100)
-                self.order[secu] = self.sell(data=data, size=order_size, price=order_price, name=secu)
 
-        # issue a target order for the newly top ranked stocks
-        # do this last, as this will generate buy orders consuming cash
-        for secu in buy_order_list:
-            data = self.getdatabyname(secu)
-            order_price = data.open[1]
-            order_size = self.downcast(target_value / order_price, 100)
-            self.order[secu] = self.buy(data=data, size=order_size, price=order_price, name=secu)
+        self.trade_day_index += 1
 
     def notify_order(self, order):
         if order.status in [order.Submitted, order.Accepted]:
