@@ -38,8 +38,8 @@ if __name__ == '__main__':
     comminfo = StampDutyCommissionScheme(stamp_duty=0.001, commission=0.00012)
     cerebro.broker.addcommissioninfo(comminfo)
     cerebro.addstrategy(TopkDropoutStrategy, topk=2, n_drop=1)
-    # Analyzer
-    cerebro.addanalyzer(btanalyzers.SharpeRatio, _name='sharpe')
+
+    # 回测分析器
     cerebro.addanalyzer(btanalyzers.AnnualReturn, _name='annual_return')
     cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
 
@@ -63,8 +63,7 @@ if __name__ == '__main__':
     end_portfolio = cerebro.broker.getvalue()
 
     # 打印回测结果
-    print(f'Start Portfolio: %f, End Portfolio: %f' % (round(start_portfolio, 2), round(end_portfolio, 2)))
-    print(f'Sharpe Ratio:', thestrat.analyzers.sharpe.get_analysis())
+    print(f'Start portfolio: %f, end portfolio: %f' % (round(start_portfolio, 2), round(end_portfolio, 2)))
     print(f'Annual Return:', thestrat.analyzers.annual_return.get_analysis())
     print(f'Max DrawDown:', thestrat.analyzers.drawdown.get_analysis()['max']['drawdown'] / 100)
 

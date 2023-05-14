@@ -92,11 +92,22 @@ class Dataset(abc.ABC):
         if training:
             self.df = self.df.sample(frac=1.0)
 
+        # recovery to original price
+        if adjust_price:
+            self.df = self.de_adjust_price(self.df)
+
     @staticmethod
     def adjust_price(df):
         price_cols = ['Open', 'High', 'Low', 'Close']
         for col in price_cols:
             df[col] = df[col] * df['Adj_factor']
+        return df
+
+    @staticmethod
+    def de_adjust_price(df):
+        price_cols = ['Open', 'High', 'Low', 'Close']
+        for col in price_cols:
+            df[col] = df[col] / df['Adj_factor']
         return df
 
     def to_dataframe(self):
