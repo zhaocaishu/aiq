@@ -64,7 +64,7 @@ if __name__ == '__main__':
 
     # 打印回测结果
     print(f'Start Portfolio: %f, End Portfolio: %f' % (round(start_portfolio, 2), round(end_portfolio, 2)))
-    print(f'Sharpe Ratio:', thestrat.analyzers.sharpe.get_analysis()['sharperatio'])
+    print(f'Sharpe Ratio:', thestrat.analyzers.sharpe.get_analysis())
     print(f'Annual Return:', thestrat.analyzers.annual_return.get_analysis())
     print(f'Max DrawDown:', thestrat.analyzers.drawdown.get_analysis()['max']['drawdown'] / 100)
 
