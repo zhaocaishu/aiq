@@ -2,6 +2,7 @@ import os
 import argparse
 
 import backtrader as bt
+import backtrader.analyzers as btanalyzers
 import pandas as pd
 
 from aiq.dataset import Dataset, Alpha158, ts_split
@@ -97,6 +98,11 @@ if __name__ == '__main__':
         log_writer = None
     cerebro.addstrategy(TopkDropoutStrategy, log_writer=log_writer)
 
+    # Analyzer
+    cerebro.addanalyzer(btanalyzers.SharpeRatio, _name='sharpe')
+    cerebro.addanalyzer(btanalyzers.AnnualReturn, _name='annual_return')
+    cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
+
     # 添加多个股票回测数据
     with open(os.path.join(args.data_dir, 'instruments/%s.txt' % args.instruments), 'r') as f:
         codes = {line.strip().split()[0] for line in f.readlines()}
@@ -130,14 +136,19 @@ if __name__ == '__main__':
     print('共计%d个股票，添加%d个股票进入回测数据' % (len(codes), code_cnt))
 
     # 开始资金
-    portvalue = cerebro.broker.getvalue()
-    print(f'开始资金: {round(portvalue, 2)}')
+    start_portfolio = cerebro.broker.getvalue()
 
-    cerebro.run()
+    thestrats = cerebro.run()
+    thestrat = thestrats[0]
 
-    # 结果资金
-    portvalue = cerebro.broker.getvalue()
-    print(f'结束资金: {round(portvalue, 2)}')
+    # 结束资金
+    end_portfolio = cerebro.broker.getvalue()
+
+    # 打印回测结果
+    print(f'Start Portfolio: %f, End Portfolio: %f' % (round(start_portfolio, 2), round(end_portfolio, 2)))
+    print(f'Sharpe Ratio:', thestrat.analyzers.sharpe.get_analysis()['sharperatio'])
+    print(f'Annual Return:', thestrat.analyzers.annual_return.get_analysis())
+    print(f'Max DrawDown:', thestrat.analyzers.drawdown.get_analysis()['max']['drawdown'] / 100)
 
     # 关闭文件句柄
     if log_writer is not None:

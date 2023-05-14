@@ -1,6 +1,7 @@
 import os
 
 import backtrader as bt
+import backtrader.analyzers as btanalyzers
 import pandas as pd
 
 from aiq.strategies import TopkDropoutStrategy
@@ -37,6 +38,10 @@ if __name__ == '__main__':
     comminfo = StampDutyCommissionScheme(stamp_duty=0.001, commission=0.00012)
     cerebro.broker.addcommissioninfo(comminfo)
     cerebro.addstrategy(TopkDropoutStrategy, topk=2, n_drop=1)
+    # Analyzer
+    cerebro.addanalyzer(btanalyzers.SharpeRatio, _name='sharpe')
+    cerebro.addanalyzer(btanalyzers.AnnualReturn, _name='annual_return')
+    cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
 
     # 添加多个股票回测数据
     codes = ['AAPL', 'BABA', 'GOOG']
@@ -48,11 +53,20 @@ if __name__ == '__main__':
         cerebro.adddata(data_feed, name=code)
     print('合计添加%d个股票数据' % len(codes))
 
-    cerebro.run()
+    # 开始资金
+    start_portfolio = cerebro.broker.getvalue()
 
-    # 打印回测结束后的总资金
-    portvalue = cerebro.broker.getvalue()
-    print(f'结束资金: {round(portvalue, 2)}')
+    thestrats = cerebro.run()
+    thestrat = thestrats[0]
+
+    # 结束资金
+    end_portfolio = cerebro.broker.getvalue()
+
+    # 打印回测结果
+    print(f'Start Portfolio: %f, End Portfolio: %f' % (round(start_portfolio, 2), round(end_portfolio, 2)))
+    print(f'Sharpe Ratio:', thestrat.analyzers.sharpe.get_analysis()['sharperatio'])
+    print(f'Annual Return:', thestrat.analyzers.annual_return.get_analysis())
+    print(f'Max DrawDown:', thestrat.analyzers.drawdown.get_analysis()['max']['drawdown'] / 100)
 
     # 可视化
     cerebro.plot()
