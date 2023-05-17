@@ -67,19 +67,22 @@ class Dataset(abc.ABC):
             self.feature_names_ = handler.feature_names
             self.label_name_ = handler.label_name
 
-        # add factor 101
-        handler101 = Alpha101()
-        self.df = handler101.fetch(self.df)
-        self.feature_names_ += handler101.feature_names
+        # handler for cross-sectional factor
+        cs_handler = Alpha101()
+        self.df = cs_handler.fetch(self.df)
+        if self.feature_names_ is not None:
+            self.feature_names_ += cs_handler.feature_names
+        else:
+            self.feature_names_ = cs_handler.feature_names
 
         # processors
-        if self.feature_names_ is not None and False:
+        if self.feature_names_ is not None:
             processors = [
                 CSFillna(target_cols=self.feature_names_),
                 CSFilter(target_cols=self.feature_names_),
-                CSNeutralize(industry_num=110, industry_col='Industry_id', market_cap_col='Total_mv',
-                             target_cols=self.feature_names_),
-                CSZScore(target_cols=self.feature_names_)
+                # CSNeutralize(industry_num=110, industry_col='Industry_id', market_cap_col='Total_mv',
+                #              target_cols=self.feature_names_),
+                # CSZScore(target_cols=self.feature_names_)
             ]
 
             for processor in processors:
