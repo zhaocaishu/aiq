@@ -1,10 +1,10 @@
-from aiq.dataset import Dataset, Alpha158, ts_split
+from aiq.dataset import Dataset, Alpha158, Alpha101, ts_split
 from aiq.models import XGBModel, LGBModel
 
 if __name__ == '__main__':
-    handler = Alpha158()
+    handlers = (Alpha158(), Alpha101())
     dataset = Dataset('./data', instruments='all', start_time='2021-08-30', end_time='2022-08-26',
-                      handler=handler, adjust_price=False, training=True)
+                      handlers=handlers, adjust_price=False, training=True)
     train_dataset, val_dataset = ts_split(dataset=dataset,
                                           segments=[['2021-08-30', '2022-04-28'], ['2022-04-29', '2022-08-26']])
 

@@ -1,12 +1,12 @@
-from aiq.dataset import Dataset, Alpha158
+from aiq.dataset import Dataset, Alpha158, Alpha101
 from aiq.models import DEnsembleModel
 
 if __name__ == '__main__':
-    handler = Alpha158()
+    handlers = (Alpha158(), Alpha101())
     train_dataset = Dataset('./data', instruments='all', start_time='2021-08-30', end_time='2022-04-28',
-                            handler=handler, adjust_price=False, training=True)
+                            handler=handlers, adjust_price=False, training=True)
     valid_dataset = Dataset('./data', instruments='all', start_time='2022-04-29', end_time='2022-08-26',
-                            handler=handler, adjust_price=False)
+                            handler=handlers, adjust_price=False)
     model_params = {
         'base_model': 'gbm',
         'loss': 'mse',

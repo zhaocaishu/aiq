@@ -21,7 +21,7 @@ class Dataset(abc.ABC):
         instruments,
         start_time=None,
         end_time=None,
-        handler=None,
+        handlers=None,
         adjust_price=True,
         training=False
     ):
@@ -29,6 +29,7 @@ class Dataset(abc.ABC):
         pd.options.mode.copy_on_write = True
 
         # feature and label names
+        ts_handler, cs_handler = handlers
         self.feature_names_ = None
         self.label_name_ = None
 
@@ -53,8 +54,8 @@ class Dataset(abc.ABC):
                 df = self.adjust_price(df)
 
             # extract ticker factors
-            if handler is not None:
-                df = handler.fetch(df)
+            if ts_handler is not None:
+                df = ts_handler.fetch(df)
 
             dfs.append(df)
 
@@ -63,17 +64,18 @@ class Dataset(abc.ABC):
         self.df = self.df.set_index(['Date', 'Symbol'])
 
         # assign features and label name
-        if handler is not None:
-            self.feature_names_ = handler.feature_names
-            self.label_name_ = handler.label_name
+        if ts_handler is not None:
+            self.feature_names_ = ts_handler.feature_names
+            self.label_name_ = ts_handler.label_name
 
         # handler for cross-sectional factor
-        cs_handler = Alpha101()
-        self.df = cs_handler.fetch(self.df)
-        if self.feature_names_ is not None:
-            self.feature_names_ += cs_handler.feature_names
-        else:
-            self.feature_names_ = cs_handler.feature_names
+        if cs_handler is not None:
+            self.df = cs_handler.fetch(self.df)
+            if self.feature_names_ is not None:
+                self.feature_names_ += cs_handler.feature_names
+            else:
+                self.feature_names_ = cs_handler.feature_names
+            self.label_name_ = cs_handler.label_name
 
         # processors
         if self.feature_names_ is not None:

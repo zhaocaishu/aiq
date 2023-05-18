@@ -297,6 +297,9 @@ class Alpha158(DataHandler):
 
 
 class Alpha101(DataHandler):
+    def __init__(self, test_mode=False):
+        self.test_mode = test_mode
+
     def fetch(self, df: pd.DataFrame = None) -> pd.DataFrame:
         open = df['Open']
         close = df['Close']
@@ -339,9 +342,17 @@ class Alpha101(DataHandler):
             return x
 
         df = df.groupby('Symbol', group_keys=False).apply(ts_func_lv3)
+
+        if not self.test_mode:
+            df['LABELRANK'] = CSRank(df['LABEL'])
+
         return df
 
     @property
     def feature_names(self):
         return ['OVRANKCORR10', 'CVRANKCOV5', 'HVRANKCORR3', 'HVRANKCORR5', 'HVRANKCOV5',
                 'WVRANKCORR5', 'CHLRANKCORR12']
+
+    @property
+    def label_name(self):
+        return 'LABELRANK'
