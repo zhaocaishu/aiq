@@ -266,6 +266,22 @@ class Alpha158(DataHandler):
                             Sum(Abs(volume - Ref(volume, 1)), d) + 1e-12))
                 names.append('VSUMD%d' % d)
 
+        if use("VALUE"):
+            features.append(1.0 / df['Pb'])
+            features.append(1.0 / df['Pe_ttm'])
+            features.append(Mean(df['Dv_ttm'], 252))
+            names.append('BPLF')
+            names.append('EPTTM')
+            names.append('DVTTM')
+
+        if use("TURN"):
+            features.append(Mean(df['Turnover_rate_f'], 21))
+            features.append(Std(df['Turnover_rate_f'], 21))
+            features.append(Mean(df['Turnover_rate_f'], 21) / Mean(df['Turnover_rate_f'], 504))
+            names.append('TURN1M')
+            names.append('STDTURN1M')
+            names.append('BIASTURN1M')
+
         # features
         self.feature_names_ = names.copy()
 
