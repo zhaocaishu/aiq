@@ -22,8 +22,7 @@ class Dataset(abc.ABC):
         start_time=None,
         end_time=None,
         handlers=None,
-        adjust_price=True,
-        training=False
+        adjust_price=True
     ):
         # turn off warnings
         pd.options.mode.copy_on_write = True
@@ -90,16 +89,12 @@ class Dataset(abc.ABC):
             for processor in processors:
                 self.df = processor(self.df)
 
-        # reset index
-        self.df.reset_index(inplace=True)
-
-        # random shuffle
-        if training:
-            self.df = self.df.sample(frac=1.0)
-
         # recovery to original price
         if adjust_price:
             self.df = self.de_adjust_price(self.df)
+
+        # reset index
+        self.df.reset_index(inplace=True)
 
     @staticmethod
     def adjust_price(df):

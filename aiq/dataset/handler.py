@@ -288,8 +288,8 @@ class Alpha158(DataHandler):
         # labels
         if not self.test_mode:
             # regression target
-            self.label_name_ = 'LABEL'
             features.append(Ref(close, -2) / Ref(close, -1) - 1)
+            self.label_name_ = 'LABEL'
             names.append(self.label_name_)
 
         # concat all features and labels

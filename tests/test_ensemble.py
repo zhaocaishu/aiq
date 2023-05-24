@@ -4,7 +4,7 @@ from aiq.models import DEnsembleModel
 if __name__ == '__main__':
     handlers = (Alpha158(), Alpha101())
     train_dataset = Dataset('./data', instruments='all', start_time='2021-08-30', end_time='2022-04-28',
-                            handler=handlers, adjust_price=False, training=True)
+                            handler=handlers, adjust_price=False)
     valid_dataset = Dataset('./data', instruments='all', start_time='2022-04-29', end_time='2022-08-26',
                             handler=handlers, adjust_price=False)
     model_params = {

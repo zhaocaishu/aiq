@@ -33,8 +33,7 @@ def main():
                       instruments=args.instruments,
                       start_time=cfg.dataset.start_time,
                       end_time=cfg.dataset.end_time,
-                      handlers=handlers,
-                      training=True)
+                      handlers=handlers)
     train_dataset, val_dataset = ts_split(dataset=dataset,
                                           segments=[cfg.dataset.segments['train'], cfg.dataset.segments['valid']])
     print('Loaded %d items to train dataset, %d items to validation dataset' % (len(train_dataset), len(val_dataset)))
