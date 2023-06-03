@@ -81,7 +81,7 @@ class Dataset(abc.ABC):
             processors = [
                 CSFillna(target_cols=self.feature_names_),
                 CSFilter(target_cols=self.feature_names_),
-                # CSNeutralize(industry_num=110, industry_col='Industry_id', market_cap_col='Total_mv',
+                # CSNeutralize(industry_num=110, industry_col='Ind_class', market_cap_col='Total_mv',
                 #              target_cols=self.feature_names_),
                 # CSZScore(target_cols=self.feature_names_)
             ]
