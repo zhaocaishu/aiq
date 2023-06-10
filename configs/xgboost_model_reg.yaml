@@ -19,5 +19,6 @@ model:
     'reg_alpha': 10,
     'reg_lambda': 10,
     'eval_metric': 'rmse',
-    'nthread': 4
+    'nthread': 4,
+    'seed': 0
   }
