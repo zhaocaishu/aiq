@@ -275,12 +275,10 @@ class Alpha158(DataHandler):
             names.append('DVTTM')
 
         if use("TURN"):
-            features.append(Mean(df['Turnover_rate_f'], 21))
-            features.append(Std(df['Turnover_rate_f'], 21))
-            features.append(Mean(df['Turnover_rate_f'], 21) / Mean(df['Turnover_rate_f'], 504))
+            features.append(Mean(df['Turnover_rate'], 21))
+            features.append(Std(df['Turnover_rate'], 21))
             names.append('TURN1M')
             names.append('STDTURN1M')
-            names.append('BIASTURN1M')
 
         # features
         self.feature_names_ = names.copy()
