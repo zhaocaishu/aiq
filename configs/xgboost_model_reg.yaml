@@ -11,7 +11,7 @@ model:
   name: 'XGB'
   params: {
     'objective': 'reg:squarederror',
-    'eta': 0.0421,
+    'eta': 0.1,
     'tree_method': 'hist',
     'colsample_bytree': 0.8879,
     'max_depth': 8,
