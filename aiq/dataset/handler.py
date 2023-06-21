@@ -292,7 +292,7 @@ class Alpha158(DataHandler):
             labels = np.full(returns_1d_np.shape[0], None)
             for index in range(returns_1d_np.shape[0] - 5):
                 local_returns = returns_1d_np[index: index + 5]
-                labels[index] = np.mean(local_returns) / np.std(local_returns)
+                labels[index] = np.mean(local_returns) / (np.std(local_returns) + 1e-12)
             features.append(pd.Series(labels))
             self.label_name_ = 'LABEL'
             names.append(self.label_name_)
