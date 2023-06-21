@@ -286,7 +286,14 @@ class Alpha158(DataHandler):
         # labels
         if not self.test_mode:
             # regression target
-            features.append(Ref(close, -6) / Ref(close, -1) - 1)
+            # features.append(Ref(close, -6) / Ref(close, -1) - 1)
+            returns_1d = Ref(close / Ref(close, 1) - 1, -1)
+            returns_1d_np = returns_1d.values
+            labels = np.full(returns_1d_np.shape[0], None)
+            for index in range(returns_1d_np.shape[0] - 5):
+                local_returns = returns_1d_np[index: index + 5]
+                labels[index] = np.mean(local_returns) / np.std(local_returns)
+            features.append(pd.Series(labels))
             self.label_name_ = 'LABEL'
             names.append(self.label_name_)
 
