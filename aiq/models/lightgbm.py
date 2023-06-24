@@ -32,19 +32,21 @@ class LGBModel(BaseModel):
             dvalid = lgb.Dataset(x_valid, label=y_valid)
             evals.append(dvalid)
 
+        early_stopping_callback = lgb.early_stopping(
+            self.early_stopping_rounds if early_stopping_rounds is None else early_stopping_rounds
+        )
+        # NOTE: if you encounter error here. Please upgrade your lightgbm
+        verbose_eval_callback = lgb.log_evaluation(period=verbose_eval)
+        evals_result_callback = lgb.record_evaluation(eval_results)
+
         self.model = lgb.train(
             self.model_params,
             train_set=dtrain,
-            num_boost_round=num_boost_round,
+            num_boost_round=self.num_boost_round if num_boost_round is None else num_boost_round,
             valid_sets=evals,
             valid_names=['train', 'valid'],
-            early_stopping_rounds=early_stopping_rounds,
-            verbose_eval=verbose_eval,
-            evals_result=eval_results
+            callbacks=[early_stopping_callback, verbose_eval_callback, evals_result_callback]
         )
-        eval_results["train"] = list(eval_results["train"].values())[0]
-        if val_dataset is not None:
-            eval_results["valid"] = list(eval_results["valid"].values())[0]
 
     def predict(self, dataset: Dataset):
         if self.model is None:
