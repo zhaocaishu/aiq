@@ -42,7 +42,7 @@ class Dataset(abc.ABC):
             df = DataLoader.load(os.path.join(data_dir, 'features'), symbol=symbol, start_time=start_time,
                                  end_time=end_time)
 
-            # skip ticker of non-existed or small periods
+            # skip ticker of non-existed
             if df is None: continue
 
             # append ticker symbol
@@ -80,10 +80,7 @@ class Dataset(abc.ABC):
         if self.feature_names_ is not None:
             processors = [
                 CSFillna(target_cols=self.feature_names_),
-                CSFilter(target_cols=self.feature_names_),
-                # CSNeutralize(industry_num=31, industry_col='Ind_class', market_cap_col='Total_mv',
-                #              target_cols=self.feature_names_),
-                # CSZScore(target_cols=self.feature_names_)
+                CSFilter(target_cols=self.feature_names_)
             ]
 
             for processor in processors:
