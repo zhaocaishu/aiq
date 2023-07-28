@@ -1,6 +1,7 @@
 import abc
 import os
 from typing import List
+from datetime import timedelta
 
 import numpy as np
 import pandas as pd
@@ -16,13 +17,15 @@ class Dataset(abc.ABC):
     """
 
     def __init__(
-        self,
-        data_dir,
-        instruments,
-        start_time=None,
-        end_time=None,
-        handlers=None,
-        adjust_price=True
+            self,
+            data_dir,
+            instruments,
+            start_time=None,
+            end_time=None,
+            handlers=None,
+            adjust_price=True,
+            min_listing_days=365,
+            list_date_offset=180
     ):
         # turn off warnings
         pd.options.mode.copy_on_write = True
@@ -32,15 +35,16 @@ class Dataset(abc.ABC):
         self.feature_names_ = None
         self.label_name_ = None
 
-        # symbol of instruments
-        with open(os.path.join(data_dir, 'instruments/%s.txt' % instruments), 'r') as f:
-            self.symbols = [line.strip().split()[0] for line in f.readlines()]
+        # symbol's name and list date
+        self.symbols = DataLoader.load_symbols(data_dir, instruments, min_listing_days=min_listing_days)
 
         # process per symbol
         dfs = []
-        for symbol in self.symbols:
-            df = DataLoader.load(os.path.join(data_dir, 'features'), symbol=symbol, start_time=start_time,
-                                 end_time=end_time)
+        for symbol, list_date in self.symbols:
+            start_time = max(
+                datetime.strptime(list_date, '%Y-%m-%d') + timedelta(days=list_date_offset).strftime('%Y-%m-%d'),
+                start_time)
+            df = DataLoader.load_features(data_dir, symbol=symbol, start_time=start_time, end_time=end_time)
 
             # skip ticker of non-existed
             if df is None: continue
@@ -52,7 +56,7 @@ class Dataset(abc.ABC):
             if adjust_price:
                 df = self.adjust_price(df)
 
-            # extract ticker factors
+            # extract time-series factors
             if ts_handler is not None:
                 df = ts_handler.fetch(df)
 
@@ -67,9 +71,10 @@ class Dataset(abc.ABC):
             self.feature_names_ = ts_handler.feature_names
             self.label_name_ = ts_handler.label_name
 
-        # handler for cross-sectional factor
+        # extract cross-sectional factors
         if cs_handler is not None:
             self.df = cs_handler.fetch(self.df)
+
             if self.feature_names_ is not None:
                 self.feature_names_ += cs_handler.feature_names
             else:

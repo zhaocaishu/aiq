@@ -334,7 +334,6 @@ class Alpha101(DataHandler):
             x['HVRANKCORR5'] = -1.0 * Corr(x['High'], x['VOLUME_CSRANK'], 3)
             x['HVRANKCOV5'] = Cov(x['HIGH_CSRANK'], x['VOLUME_CSRANK'], 5)
             x['WVRANKCORR5'] = Corr(x['HIGH_CSRANK'], x['VOLUME_CSRANK'], 5)
-            x['CDRANK2'] = -1.0 * (close - Ref(close, 2))
             return x
 
         df = df.groupby('Symbol', group_keys=False).apply(ts_func_lv1)
@@ -342,7 +341,6 @@ class Alpha101(DataHandler):
         df['HVRANKCORR3'] = CSRank(df['HVRANKCORR3'])
         df['HVRANKCOV5'] = -1.0 * CSRank(df['HVRANKCOV5'])
         df['WVRANKCORR5'] = CSRank(df['WVRANKCORR5'])
-        df['CDRANK2'] = CSRank(df['CDRANK2'])
 
         def ts_func_lv2(x):
             x['HVRANKCORR3'] = -1.0 * Sum(x['HVRANKCORR3'], 3)
@@ -367,7 +365,7 @@ class Alpha101(DataHandler):
     @property
     def feature_names(self):
         return ['OVRANKCORR10', 'CVRANKCOV5', 'HVRANKCORR3', 'HVRANKCORR5', 'HVRANKCOV5',
-                'WVRANKCORR5', 'CHLRANKCORR12', 'CDRANK2']
+                'WVRANKCORR5', 'CHLRANKCORR12']
 
     @property
     def label_name(self):
