@@ -113,6 +113,7 @@ if __name__ == '__main__':
             codes.append(symbol)
 
     # 获取评测时间范围内的全部交易日期，区分交易所
+    days = dict()
     df = pd.read_csv(os.path.join(args.data_dir, 'calendars/days.csv'))
     for index, row in df.iterrows():
         exchange, date = row['Exchange'], row['Trade_date']
