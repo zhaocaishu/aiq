@@ -6,7 +6,7 @@ import backtrader as bt
 import backtrader.analyzers as btanalyzers
 import pandas as pd
 
-from aiq.dataset import Dataset, Alpha158, Alpha101, ts_split
+from aiq.dataset import Dataset, DataLoader, Alpha158, Alpha101, ts_split
 from aiq.models import XGBModel, LGBModel, DEnsembleModel
 from aiq.strategies import TopkDropoutStrategy
 from aiq.utils.config import config as cfg
@@ -105,7 +105,7 @@ if __name__ == '__main__':
 
     # 添加多个股票回测数据
     codes = []
-    symbols = DataLoader.load_symbols(data_dir, instruments, min_listing_days=cfg.dataset.min_listing_days)
+    symbols = DataLoader.load_symbols(args.data_dir, args.instruments, min_listing_days=cfg.dataset.min_listing_days)
     for symbol, list_date in symbols:
         symbol_start_time = (
                     datetime.strptime(list_date, '%Y-%m-%d') + timedelta(days=cfg.dataset.list_date_offset)).strftime(
