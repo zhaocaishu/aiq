@@ -6,6 +6,8 @@ from datetime import timedelta, datetime
 import numpy as np
 import pandas as pd
 
+from aiq.utils.date import date_add
+
 from .loader import DataLoader
 from .handler import Alpha101
 from .processor import CSFillna, CSNeutralize, CSFilter, CSZScore
@@ -27,8 +29,7 @@ class Dataset(abc.ABC):
             end_time=None,
             handlers=None,
             adjust_price=True,
-            min_listing_days=365,
-            list_date_offset=180
+            min_listing_days=365
     ):
         # feature and label names
         ts_handler, cs_handler = handlers
@@ -41,10 +42,8 @@ class Dataset(abc.ABC):
         # process per symbol
         dfs = []
         for symbol, list_date in self.symbols:
-            symbol_start_time = max(
-                (datetime.strptime(list_date, '%Y-%m-%d') + timedelta(days=list_date_offset)).strftime('%Y-%m-%d'),
-                start_time)
-            df = DataLoader.load_features(data_dir, symbol=symbol, start_time=symbol_start_time, end_time=end_time)
+            cur_start_time = max(date_add(start_time, n_days=min_listing_days), start_time)
+            df = DataLoader.load_features(data_dir, symbol=symbol, start_time=cur_start_time, end_time=end_time)
 
             # skip ticker of non-existed
             if df is None: continue

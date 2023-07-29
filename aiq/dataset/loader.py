@@ -4,6 +4,8 @@ from datetime import datetime
 
 import pandas as pd
 
+from aiq.utils.date import now_date, date_diff
+
 
 class DataLoader(abc.ABC):
     """
@@ -22,14 +24,12 @@ class DataLoader(abc.ABC):
             List[Tuple[str]]: list of symbol's name and list date
         """
         symbols = set()
-        now_date = datetime.strptime(datetime.now().strftime('%Y-%m-%d'), '%Y-%m-%d')
         instrument_names = instruments.split(',')
         for instrument_name in instrument_names:
             file_path = os.path.join(data_dir, 'instruments', instrument_name + '.csv')
             df = pd.read_csv(file_path)
             for index, row in df.iterrows():
-                list_date = datetime.strptime(row['List_date'], '%Y-%m-%d')
-                if (now_date - list_date).days > min_listing_days:
+                if date_diff(now_date(), row['List_date']) > min_listing_days:
                     symbols.add((row['Symbol'], row['List_date']))
 
         return list(symbols)

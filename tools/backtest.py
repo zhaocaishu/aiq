@@ -10,6 +10,7 @@ from aiq.dataset import Dataset, DataLoader, Alpha158, Alpha101, ts_split
 from aiq.models import XGBModel, LGBModel, DEnsembleModel
 from aiq.strategies import TopkDropoutStrategy
 from aiq.utils.config import config as cfg
+from aiq.utils.date import date_add
 
 
 class ZCSPandasData(bt.feeds.PandasData):
@@ -107,16 +108,14 @@ if __name__ == '__main__':
     codes = []
     symbols = DataLoader.load_symbols(args.data_dir, args.instruments, min_listing_days=cfg.dataset.min_listing_days)
     for symbol, list_date in symbols:
-        symbol_start_time = (
-                    datetime.strptime(list_date, '%Y-%m-%d') + timedelta(days=cfg.dataset.list_date_offset)).strftime(
-            '%Y-%m-%d')
+        symbol_start_time = date_add(list_date, n_days=cfg.dataset.min_listing_days)
         if symbol_start_time < cfg.dataset.segments['test'][0]:
             codes.append(symbol)
 
     # 获取评测时间范围内的全部交易日期，区分交易所
     df = pd.read_csv(os.path.join(args.data_dir, 'calendars/days.csv'))
     for index, row in df.iterrows():
-        exchange, date = row['Exchange', 'Trade_date']
+        exchange, date = row['Exchange'], row['Trade_date']
         if cfg.dataset.segments['test'][0] <= date <= cfg.dataset.segments['test'][1]:
             if exchange in days:
                 days[exchange].append(date)
