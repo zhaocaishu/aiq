@@ -3,7 +3,7 @@ from aiq.models import XGBModel, LGBModel
 
 if __name__ == '__main__':
     handlers = (Alpha158(), Alpha101())
-    dataset = Dataset('./data', instruments='all', start_time='2021-08-30', end_time='2022-08-26',
+    dataset = Dataset('./data', instruments='csi1000', start_time='2021-08-30', end_time='2022-08-26',
                       handlers=handlers, adjust_price=False)
     train_dataset, val_dataset = ts_split(dataset=dataset,
                                           segments=[['2021-08-30', '2022-04-28'], ['2022-04-29', '2022-08-26']])

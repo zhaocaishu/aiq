@@ -1,7 +1,7 @@
 import abc
 import os
 from typing import List
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 import numpy as np
 import pandas as pd
@@ -9,6 +9,9 @@ import pandas as pd
 from .loader import DataLoader
 from .handler import Alpha101
 from .processor import CSFillna, CSNeutralize, CSFilter, CSZScore
+
+# turn off warnings
+pd.options.mode.copy_on_write = True
 
 
 class Dataset(abc.ABC):
@@ -27,9 +30,6 @@ class Dataset(abc.ABC):
             min_listing_days=365,
             list_date_offset=180
     ):
-        # turn off warnings
-        pd.options.mode.copy_on_write = True
-
         # feature and label names
         ts_handler, cs_handler = handlers
         self.feature_names_ = None
@@ -41,10 +41,10 @@ class Dataset(abc.ABC):
         # process per symbol
         dfs = []
         for symbol, list_date in self.symbols:
-            start_time = max(
-                datetime.strptime(list_date, '%Y-%m-%d') + timedelta(days=list_date_offset).strftime('%Y-%m-%d'),
+            symbol_start_time = max(
+                (datetime.strptime(list_date, '%Y-%m-%d') + timedelta(days=list_date_offset)).strftime('%Y-%m-%d'),
                 start_time)
-            df = DataLoader.load_features(data_dir, symbol=symbol, start_time=start_time, end_time=end_time)
+            df = DataLoader.load_features(data_dir, symbol=symbol, start_time=symbol_start_time, end_time=end_time)
 
             # skip ticker of non-existed
             if df is None: continue

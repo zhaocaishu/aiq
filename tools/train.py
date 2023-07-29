@@ -10,7 +10,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Train a model')
     parser.add_argument('--cfg_file', type=str, default=None, help='specify the config for training')
     parser.add_argument('--data_dir', type=str, help='the data directory')
-    parser.add_argument('--instruments', type=str, default='all', help='instruments name')
+    parser.add_argument('--instruments', type=str, default='csi1000', help='instruments name')
     parser.add_argument('--save_dir', type=str, help='the saved directory')
 
     args = parser.parse_args()

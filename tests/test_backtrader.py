@@ -44,7 +44,7 @@ if __name__ == '__main__':
     cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
 
     # 添加多个股票回测数据
-    codes = ['AAPL', 'BABA', 'GOOG']
+    codes = ['000951.SZ', '601099.SH', '688326.SH']
     for code in codes:
         file_path = os.path.join('./data/features', code + '.csv')
         data = pd.read_csv(file_path)

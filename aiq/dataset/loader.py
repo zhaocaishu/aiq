@@ -15,21 +15,22 @@ class DataLoader(abc.ABC):
         """
         Args:
             data_dir (str): dataset directory
-            instruments (List[str]): index names
+            instruments (str): index names separated by ','
             min_listing_days (int): minimum listing days
 
         Returns:
             List[Tuple[str]]: list of symbol's name and list date
         """
         symbols = set()
-        for instrument in instruments:
-            file_path = os.path.join(data_dir, 'instruments', instrument + '.csv')
+        now_date = datetime.strptime(datetime.now().strftime('%Y-%m-%d'), '%Y-%m-%d')
+        instrument_names = instruments.split(',')
+        for instrument_name in instrument_names:
+            file_path = os.path.join(data_dir, 'instruments', instrument_name + '.csv')
             df = pd.read_csv(file_path)
-            for row in df.rows:
-                now_date = datetime.strptime(datetime.now().strftime('%Y-%m-%d'), '%Y-%m-%d')
+            for index, row in df.iterrows():
                 list_date = datetime.strptime(row['List_date'], '%Y-%m-%d')
                 if (now_date - list_date).days > min_listing_days:
-                    symbols.append((row['Symbol'], row['List_date']))
+                    symbols.add((row['Symbol'], row['List_date']))
 
         return list(symbols)
 
@@ -43,7 +44,7 @@ class DataLoader(abc.ABC):
             timestamp_col (str): column name of timestamp
             start_time (str): start of the time range.
             end_time (str): end of the time range.
-            min_trade_days (int): minimum trading days
+            min_trade_days (int): minimum trade days
 
         Returns:
             pd.DataFrame: dataset load from the files
