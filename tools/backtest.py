@@ -107,10 +107,10 @@ if __name__ == '__main__':
     # 添加多个股票回测数据
     codes = []
     symbols = DataLoader.load_symbols(args.data_dir, args.instruments, min_listing_days=cfg.dataset.min_listing_days)
-    for symbol, list_date in symbols:
-        symbol_start_time = date_add(list_date, n_days=cfg.dataset.min_listing_days)
-        if symbol_start_time < cfg.dataset.segments['test'][0]:
-            codes.append(symbol)
+    for code, list_date in symbols:
+        cur_start_time = date_add(list_date, n_days=cfg.dataset.min_listing_days)
+        if cur_start_time < cfg.dataset.segments['test'][0]:
+            codes.append(code)
 
     # 获取评测时间范围内的全部交易日期，区分交易所
     days = dict()

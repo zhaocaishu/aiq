@@ -42,8 +42,7 @@ class Dataset(abc.ABC):
         # process per symbol
         dfs = []
         for symbol, list_date in self.symbols:
-            cur_start_time = max(date_add(start_time, n_days=min_listing_days), start_time)
-            df = DataLoader.load_features(data_dir, symbol=symbol, start_time=cur_start_time, end_time=end_time)
+            df = DataLoader.load_features(data_dir, symbol=symbol, start_time=start_time, end_time=end_time)
 
             # skip ticker of non-existed
             if df is None: continue
@@ -58,6 +57,11 @@ class Dataset(abc.ABC):
             # extract time-series factors
             if ts_handler is not None:
                 df = ts_handler.fetch(df)
+
+            # drop data started from 1 year after list date
+            cur_start_time = date_add(list_date, n_days=min_listing_days)
+            if cur_start_time > start_time:
+                df = df[(df['Date'] >= cur_start_time)]
 
             dfs.append(df)
 

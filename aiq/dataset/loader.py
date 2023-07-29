@@ -13,7 +13,7 @@ class DataLoader(abc.ABC):
     """
 
     @staticmethod
-    def load_symbols(data_dir, instruments, min_listing_days=365):
+    def load_symbols(data_dir, instruments, min_listing_days=90):
         """
         Args:
             data_dir (str): dataset directory
@@ -35,8 +35,7 @@ class DataLoader(abc.ABC):
         return list(symbols)
 
     @staticmethod
-    def load_features(data_dir, symbol, timestamp_col='Date', start_time=None, end_time=None,
-                      min_trade_days=180) -> pd.DataFrame:
+    def load_features(data_dir, symbol, timestamp_col='Date', start_time=None, end_time=None) -> pd.DataFrame:
         """
         Args:
             data_dir (str): dataset directory
@@ -44,7 +43,6 @@ class DataLoader(abc.ABC):
             timestamp_col (str): column name of timestamp
             start_time (str): start of the time range.
             end_time (str): end of the time range.
-            min_trade_days (int): minimum trade days
 
         Returns:
             pd.DataFrame: dataset load from the files
@@ -57,7 +55,5 @@ class DataLoader(abc.ABC):
             df = df[(df[timestamp_col] >= start_time)]
         if end_time is not None:
             df = df[(df[timestamp_col] <= end_time)]
-        if df.shape[0] < min_trade_days:
-            return None
         df = df.sort_values(by=timestamp_col, ascending=True)
         return df
