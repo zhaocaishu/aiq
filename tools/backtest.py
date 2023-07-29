@@ -1,5 +1,6 @@
 import os
 import argparse
+from datetime import datetime, timedelta
 
 import backtrader as bt
 import backtrader.analyzers as btanalyzers
@@ -103,21 +104,26 @@ if __name__ == '__main__':
     cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
 
     # 添加多个股票回测数据
-    with open(os.path.join(args.data_dir, 'instruments/%s.txt' % args.instruments), 'r') as f:
-        codes = {line.strip().split()[0] for line in f.readlines()}
+    codes = []
+    symbols = DataLoader.load_symbols(data_dir, instruments, min_listing_days=cfg.dataset.min_listing_days)
+    for symbol, list_date in symbols:
+        symbol_start_time = (
+                    datetime.strptime(list_date, '%Y-%m-%d') + timedelta(days=cfg.dataset.list_date_offset)).strftime(
+            '%Y-%m-%d')
+        if symbol_start_time < cfg.dataset.segments['test'][0]:
+            codes.append(symbol)
 
     # 获取评测时间范围内的全部交易日期，区分交易所
-    with open(os.path.join(args.data_dir, 'calendars/days.txt'), 'r') as f:
-        days = dict()
-        for line in f.readlines():
-            exchange, date = line.strip().split()
-            if cfg.dataset.segments['test'][0] <= date <= cfg.dataset.segments['test'][1]:
-                if exchange in days:
-                    days[exchange].append(date)
-                else:
-                    days[exchange] = [date]
-        for exchange in days:
-            days[exchange] = sorted(days[exchange])
+    df = pd.read_csv(os.path.join(args.data_dir, 'calendars/days.csv'))
+    for index, row in df.iterrows():
+        exchange, date = row['Exchange', 'Trade_date']
+        if cfg.dataset.segments['test'][0] <= date <= cfg.dataset.segments['test'][1]:
+            if exchange in days:
+                days[exchange].append(date)
+            else:
+                days[exchange] = [date]
+    for exchange in days:
+        days[exchange] = sorted(days[exchange])
 
     # 加入回测数据
     code_cnt = 0
