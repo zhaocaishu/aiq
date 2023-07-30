@@ -22,14 +22,14 @@ class Dataset(abc.ABC):
     """
 
     def __init__(
-            self,
-            data_dir,
-            instruments,
-            start_time=None,
-            end_time=None,
-            handlers=None,
-            adjust_price=True,
-            min_listing_days=365
+        self,
+        data_dir,
+        instruments,
+        start_time=None,
+        end_time=None,
+        handlers=None,
+        adjust_price=True,
+        min_listing_days=365
     ):
         # feature and label names
         ts_handler, cs_handler = handlers
