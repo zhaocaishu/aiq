@@ -29,7 +29,7 @@ class DataLoader(abc.ABC):
             file_path = os.path.join(data_dir, 'instruments', instrument_name + '.csv')
             df = pd.read_csv(file_path)
             for index, row in df.iterrows():
-                if date_diff(now_date(), row['List_date']) > min_listing_days:
+                if date_diff(row['List_date'], now_date()) > min_listing_days:
                     symbols.add((row['Symbol'], row['List_date']))
 
         return list(symbols)
