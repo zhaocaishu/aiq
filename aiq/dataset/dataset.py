@@ -58,7 +58,7 @@ class Dataset(abc.ABC):
             if ts_handler is not None:
                 df = ts_handler.fetch(df)
 
-            # drop data started from min_listing_days after list date
+            # keep data started from min_listing_days after list date
             cur_start_time = date_add(list_date, n_days=min_listing_days)
             if cur_start_time > start_time:
                 df = df[(df['Date'] >= cur_start_time)]
