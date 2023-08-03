@@ -108,11 +108,11 @@ if __name__ == '__main__':
     all_symbols = DataLoader.load_symbols(args.data_dir, args.instruments,
                                           min_listing_days=cfg.dataset.min_listing_days)
 
-    symbols = []
+    filtered_symbols = []
     for symbol, list_date in all_symbols:
         cur_start_time = date_add(list_date, n_days=cfg.dataset.min_listing_days)
         if cur_start_time <= cfg.dataset.segments['test'][0]:
-            symbols.append(symbol)
+            filtered_symbols.append(symbol)
 
     # 获取评测时间范围内的全部交易日期，区分交易所
     days = dict()
@@ -128,19 +128,19 @@ if __name__ == '__main__':
         days[exchange] = sorted(days[exchange])
 
     # 加入回测数据
-    symbol_cnt = 0
-    for symbol in symbols:
+    count = 0
+    for symbol in filtered_symbols:
         exchange = symbol.split('.')[-1]
         assert exchange in ['SH', 'SZ']
         trade_days = days[exchange]
         data = df_prediction[df_prediction['Symbol'] == symbol]
         if list(data['Date'].values) != trade_days:
             continue
-        symbol_cnt += 1
+        count += 1
         data.index = pd.to_datetime(data['Date'])
         data_feed = ZCSPandasData(dataname=data)
         cerebro.adddata(data_feed, name=symbol)
-    print('共计%d个股票，添加%d个股票进入回测数据' % (len(symbols), symbol_cnt))
+    print('共计%d个股票，添加%d个股票进入回测数据' % (len(filtered_symbols), count))
 
     # 开始资金
     start_portfolio = cerebro.broker.getvalue()
