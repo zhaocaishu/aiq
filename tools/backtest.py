@@ -111,7 +111,7 @@ if __name__ == '__main__':
     symbols = []
     for symbol, list_date in all_symbols:
         cur_start_time = date_add(list_date, n_days=cfg.dataset.min_listing_days)
-        if cur_start_time < cfg.dataset.segments['test'][0]:
+        if cur_start_time <= cfg.dataset.segments['test'][0]:
             symbols.append(symbol)
 
     # 获取评测时间范围内的全部交易日期，区分交易所

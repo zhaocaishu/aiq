@@ -6,7 +6,7 @@ dataset:
     'valid': [ '2022-01-01', '2022-11-31' ],
     'test': [ '2023-01-01', '2023-05-01' ]
   }
-  min_listing_days: 365
+  min_listing_days: 90
 
 model:
   name: 'XGB'

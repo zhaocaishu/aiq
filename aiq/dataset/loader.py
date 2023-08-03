@@ -13,7 +13,7 @@ class DataLoader(abc.ABC):
     """
 
     @staticmethod
-    def load_symbols(data_dir, instruments, min_listing_days=90):
+    def load_symbols(data_dir, instruments, min_listing_days):
         """
         Args:
             data_dir (str): dataset directory

@@ -29,7 +29,7 @@ class Dataset(abc.ABC):
         end_time=None,
         handlers=None,
         adjust_price=True,
-        min_listing_days=365
+        min_listing_days=90
     ):
         # feature and label names
         ts_handler, cs_handler = handlers
