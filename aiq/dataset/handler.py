@@ -349,12 +349,12 @@ class Alpha101(DataHandler):
             return x
 
         df = df.groupby('Symbol', group_keys=False).apply(ts_func_lv2)
-        df['CHLRANKCORR12'] = CSRank(df['CHLRANKCORR12'])
 
         def ts_func_lv3(x):
             x['CHLRANKCORR12'] = -1.0 * Corr(x['CHLRANKCORR12'], x['VOLUME_CSRANK'], 6)
             return x
 
+        df['CHLRANKCORR12'] = CSRank(df['CHLRANKCORR12'])
         df = df.groupby('Symbol', group_keys=False).apply(ts_func_lv3)
 
         if not self.test_mode:
