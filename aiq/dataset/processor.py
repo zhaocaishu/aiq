@@ -74,7 +74,8 @@ class CSFillna(Processor):
         self.target_cols = target_cols
 
     def __call__(self, df):
-        df[self.target_cols] = df[self.target_cols].groupby('Date', group_keys=False).apply(lambda x: x.fillna(x.mean()))
+        df[self.target_cols] = df[self.target_cols].groupby('Date', group_keys=False).apply(
+            lambda x: x.fillna(x.mean()))
         return df
 
 
@@ -95,15 +96,14 @@ class CSProcessor(Processor):
     This processor is designed for Alpha158. And will be replaced by simple processors in the future
     """
 
-    def __init__(self, fillna_feature=True, clip_feature_outlier=True, shrink_feature_outlier=True,
-                 norm_label=False, clip_label_outlier=False, fillna_label=False):
+    def __init__(self,
+                 clip_feature_outlier=True,
+                 norm_label=False,
+                 clip_label_outlier=False):
         # Options
-        self.fillna_feature = fillna_feature
-        self.clip_feature_outlier = shrink_feature_outlier
-        self.shrink_feature_outlier = clip_label_outlier
+        self.clip_feature_outlier = clip_feature_outlier
         self.norm_label = norm_label
-        self.fillna_label = clip_feature_outlier
-        self.clip_label_outlier = fillna_label
+        self.clip_label_outlier = clip_label_outlier
 
     def __call__(self, df):
         return self._transform(df)
@@ -114,8 +114,6 @@ class CSProcessor(Processor):
             x /= x.std()
             if self.clip_label_outlier:
                 x.clip(-3, 3, inplace=True)
-            if self.fillna_label:
-                x.fillna(0, inplace=True)
             return x
 
         def _feature_norm(x):
@@ -123,11 +121,6 @@ class CSProcessor(Processor):
             x /= x.abs().median() * 1.4826
             if self.clip_feature_outlier:
                 x.clip(-3, 3, inplace=True)
-            if self.shrink_feature_outlier:
-                x.where(x <= 3, 3 + (x - 3).div(x.max() - 3) * 0.5, inplace=True)
-                x.where(x >= -3, -3 - (x + 3).div(x.min() + 3) * 0.5, inplace=True)
-            if self.fillna_feature:
-                x.fillna(0, inplace=True)
             return x
 
         # Label
@@ -137,10 +130,10 @@ class CSProcessor(Processor):
 
         # Features
         cols = df.columns[df.columns.str.contains("^KLEN|^KLOW|^KUP")]
-        df[cols] = df[cols].apply(lambda x: x**0.25).groupby('Date', group_keys=False).apply(_feature_norm)
+        df[cols] = df[cols].apply(lambda x: x ** 0.25).groupby('Date', group_keys=False).apply(_feature_norm)
 
         cols = df.columns[df.columns.str.contains("^KLOW2|^KUP2")]
-        df[cols] = df[cols].apply(lambda x: x**0.5).groupby('Date', group_keys=False).apply(_feature_norm)
+        df[cols] = df[cols].apply(lambda x: x ** 0.5).groupby('Date', group_keys=False).apply(_feature_norm)
 
         _cols = [
             "KMID",
