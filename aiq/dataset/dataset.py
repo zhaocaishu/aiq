@@ -10,7 +10,7 @@ from aiq.utils.date import date_add
 
 from .loader import DataLoader
 from .handler import Alpha101
-from .processor import CSFillna, CSNeutralize, CSFilter, CSZScore
+from .processor import CSFillna, CSNeutralize, CSFilter, CSZScore, CSProcessor
 
 # turn off warnings
 pd.options.mode.copy_on_write = True
@@ -88,7 +88,7 @@ class Dataset(abc.ABC):
         if self.feature_names_ is not None:
             processors = [
                 CSFillna(target_cols=self.feature_names_),
-                CSFilter(target_cols=self.feature_names_)
+                CSProcessor()
             ]
 
             for processor in processors:
