@@ -10,14 +10,13 @@ import statsmodels.api as sm
 
 def mad_filter(x: pd.DataFrame):
     """Robust statistics for outlier filter:
-        mean(x) = median(x)
-        std(x) = MAD(x) * 1.4826
-    Reference:
-        https://en.wikipedia.org/wiki/Median_absolute_deviation.
     """
-    x = x - x.median()
-    mad = x.abs().median()
-    x = np.clip(x / mad / 1.4826, -3, 3)
+    xm = x.median()
+    xam = (x - xm).abs().median()
+    for i in range(x.shape[1]):
+        col = x.columns[i]
+        x[col].where(x[col] > xm[i] + 5 * xam[i], xm[i] + 5 * xam[i], inplace=True)
+        x[col].where(x[col] < xm[i] - 5 * xam[i], xm[i] - 5 * xam[i], inplace=True)
     return x
 
 

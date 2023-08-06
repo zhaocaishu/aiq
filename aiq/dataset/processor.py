@@ -117,10 +117,13 @@ class CSProcessor(Processor):
             return x
 
         def _feature_norm(x):
-            x = x - x.median()  # copy
-            x /= x.abs().median() * 1.4826
+            xm = x.median()
+            xam = (x - xm).abs().median()
             if self.clip_feature_outlier:
-                x.clip(-3, 3, inplace=True)
+                for i in range(x.shape[1]):
+                    col = x.columns[i]
+                    x[col].where(x[col] > xm[i] + 5 * xam[i], xm[i] + 5 * xam[i], inplace=True)
+                    x[col].where(x[col] < xm[i] - 5 * xam[i], xm[i] - 5 * xam[i], inplace=True)
             return x
 
         # Label
