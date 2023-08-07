@@ -87,7 +87,7 @@ class Dataset(abc.ABC):
         # processors
         if self.feature_names_ is not None:
             processors = [
-                CSProcessor(),
+                CSFilter(target_cols=self.feature_names_),
                 CSFillna(target_cols=self.feature_names_)
             ]
 

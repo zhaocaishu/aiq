@@ -96,10 +96,7 @@ class CSProcessor(Processor):
     This processor is designed for Alpha158. And will be replaced by simple processors in the future
     """
 
-    def __init__(self,
-                 clip_feature_outlier=True,
-                 norm_label=False,
-                 clip_label_outlier=False):
+    def __init__(self, clip_feature_outlier=True, norm_label=False, clip_label_outlier=False):
         # Options
         self.clip_feature_outlier = clip_feature_outlier
         self.norm_label = norm_label
@@ -117,14 +114,14 @@ class CSProcessor(Processor):
             return x
 
         def _feature_norm(x):
-            xm = x.median()
-            xam = (x - xm).abs().median()
             if self.clip_feature_outlier:
-                for i in range(x.shape[1]):
-                    col = x.columns[i]
-                    x[col].where(x[col] > xm[i] + 5 * xam[i], xm[i] + 5 * xam[i], inplace=True)
-                    x[col].where(x[col] < xm[i] - 5 * xam[i], xm[i] - 5 * xam[i], inplace=True)
-            return x
+                x_mean = x.median()
+                x_std = (x - x_mean).abs().median()
+                x_up = x_mean + 5 * x_std
+                x_down = x_mean - 5 * x_std
+                return x.clip(x_down, x_up, axis=1)
+            else:
+                return x
 
         # Label
         if self.norm_label:

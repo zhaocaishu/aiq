@@ -11,13 +11,11 @@ import statsmodels.api as sm
 def mad_filter(x: pd.DataFrame):
     """Robust statistics for outlier filter:
     """
-    xm = x.median()
-    xam = (x - xm).abs().median()
-    for i in range(x.shape[1]):
-        col = x.columns[i]
-        x[col].where(x[col] > xm[i] + 5 * xam[i], xm[i] + 5 * xam[i], inplace=True)
-        x[col].where(x[col] < xm[i] - 5 * xam[i], xm[i] - 5 * xam[i], inplace=True)
-    return x
+    x_mean = x.median()
+    x_std = (x - x_mean).abs().median()
+    x_up = x_mean + 5 * x_std
+    x_down = x_mean - 5 * x_std
+    return x.clip(x_down, x_up, axis=1)
 
 
 def neutralize(x: pd.DataFrame, industry_num, industry_col=None, market_cap_col=None, target_cols=None):
