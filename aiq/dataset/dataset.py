@@ -10,7 +10,7 @@ from aiq.utils.date import date_add
 
 from .loader import DataLoader
 from .handler import Alpha101
-from .processor import CSFillna, CSNeutralize, CSFilter, CSZScore, CSProcessor
+from .processor import CSFillna, CSNeutralize, CSFilter, CSZScore
 
 # turn off warnings
 pd.options.mode.copy_on_write = True

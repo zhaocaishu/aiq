@@ -31,4 +31,4 @@ def neutralize(x: pd.DataFrame, industry_num, industry_col=None, market_cap_col=
 
 
 def zscore(x: Union[pd.Series, pd.DataFrame]):
-    return (x - x.mean()).div(x.std())
+    return (x - x.mean()).div(x.std() + + 1e-12)
