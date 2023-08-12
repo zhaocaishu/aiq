@@ -65,8 +65,7 @@ class Dataset(abc.ABC):
                 df = df[(df['Date'] >= cur_start_time)]
 
             # check if symbol has enough trade days
-            if df.shape[0] < min_trade_days:
-                continue
+            if df.shape[0] < min_trade_days: continue
 
             dfs.append(df)
 
