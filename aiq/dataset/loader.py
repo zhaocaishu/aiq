@@ -13,12 +13,13 @@ class DataLoader(abc.ABC):
     """
 
     @staticmethod
-    def load_symbols(data_dir, instruments, min_listing_days):
+    def load_symbols(data_dir, instruments, start_time=None, end_time=None):
         """
         Args:
             data_dir (str): dataset directory
             instruments (str): index names separated by ','
-            min_listing_days (int): minimum listing days
+            start_time (str): start time
+            end_time (str): end_time
 
         Returns:
             List[Tuple[str]]: list of symbol's name and list date
@@ -28,9 +29,12 @@ class DataLoader(abc.ABC):
         for instrument_name in instrument_names:
             file_path = os.path.join(data_dir, 'instruments', instrument_name + '.csv')
             df = pd.read_csv(file_path)
+            if start_time is not None:
+                df = df[df['Date'] >= start_time]
+            if end_time is not None:
+                df = df[df['Date'] <= end_time]
             for index, row in df.iterrows():
-                if date_diff(row['List_date'], now_date()) > min_listing_days:
-                    symbols.add((row['Symbol'], row['List_date']))
+                symbols.add((row['Symbol'], row['List_date']))
 
         return list(symbols)
 

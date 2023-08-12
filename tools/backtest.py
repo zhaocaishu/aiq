@@ -105,14 +105,9 @@ if __name__ == '__main__':
     cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
 
     # 添加多个股票回测数据
-    all_symbols = DataLoader.load_symbols(args.data_dir, args.instruments,
-                                          min_listing_days=cfg.dataset.min_listing_days)
-
-    filtered_symbols = []
-    for symbol, list_date in all_symbols:
-        cur_start_time = date_add(list_date, n_days=cfg.dataset.min_listing_days)
-        if cur_start_time <= cfg.dataset.segments['test'][0]:
-            filtered_symbols.append(symbol)
+    symbols = DataLoader.load_symbols(args.data_dir, args.instruments,
+                                      start_time=cfg.dataset.segments['test'][0],
+                                      end_time=cfg.dataset.segments['test'][1])
 
     # 获取评测时间范围内的全部交易日期，区分交易所
     days = dict()
@@ -129,7 +124,7 @@ if __name__ == '__main__':
 
     # 加入回测数据
     count = 0
-    for symbol in filtered_symbols:
+    for symbol in symbols:
         exchange = symbol.split('.')[-1]
         assert exchange in ['SH', 'SZ']
         trade_days = days[exchange]

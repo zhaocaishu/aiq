@@ -29,18 +29,19 @@ class Dataset(abc.ABC):
         end_time=None,
         handlers=None,
         adjust_price=True,
-        min_listing_days=90
+        cutoff_trade_days=90,
+        min_trade_days=90
     ):
         # feature and label names
-        ts_handler, cs_handler = handlers
         self.feature_names_ = None
         self.label_name_ = None
 
         # symbol's name and list date
-        self.symbols = DataLoader.load_symbols(data_dir, instruments, min_listing_days=min_listing_days)
+        self.symbols = DataLoader.load_symbols(data_dir, instruments, start_time=start_time, end_time=end_time)
 
         # process per symbol
         dfs = []
+        ts_handler, cs_handler = handlers
         for symbol, list_date in self.symbols:
             df = DataLoader.load_features(data_dir, symbol=symbol, start_time=start_time, end_time=end_time)
 
@@ -58,10 +59,14 @@ class Dataset(abc.ABC):
             if ts_handler is not None:
                 df = ts_handler.fetch(df)
 
-            # keep data started from min_listing_days after list date
-            cur_start_time = date_add(list_date, n_days=min_listing_days)
+            # keep data started from cutoff_trade_days after list date
+            cur_start_time = date_add(list_date, n_days=cutoff_trade_days)
             if cur_start_time > start_time:
                 df = df[(df['Date'] >= cur_start_time)]
+
+            # check if symbol has enough trade days
+            if df.shape[0] < min_trade_days:
+                continue
 
             dfs.append(df)
 
