@@ -267,11 +267,7 @@ class Alpha158(DataHandler):
                 names.append('VSUMD%d' % d)
 
         if use("ILLIQ"):
-            illiq = 0
-            for d in range(1, 11):
-                illiq += Abs(Ref(df['Change'], d)) / Ref(df['AMount'], d)
-            illiq *= 0.1
-            features.append(illiq)
+            features.append(Mean(Abs(df['Change']) / df['AMount'], 10))
             names.append('ILLIQ')
 
         if use("VALUE"):
