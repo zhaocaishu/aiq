@@ -124,7 +124,7 @@ if __name__ == '__main__':
 
     # 加入回测数据
     count = 0
-    for symbol in symbols:
+    for symbol, list_date in symbols:
         exchange = symbol.split('.')[-1]
         assert exchange in ['SH', 'SZ']
         trade_days = days[exchange]
