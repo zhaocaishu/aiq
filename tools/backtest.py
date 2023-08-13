@@ -135,7 +135,7 @@ if __name__ == '__main__':
         data.index = pd.to_datetime(data['Date'])
         data_feed = ZCSPandasData(dataname=data)
         cerebro.adddata(data_feed, name=symbol)
-    print('共计%d个股票，添加%d个股票进入回测数据' % (len(filtered_symbols), count))
+    print('共计%d个股票，添加%d个股票进入回测数据' % (len(symbols), count))
 
     # 开始资金
     start_portfolio = cerebro.broker.getvalue()
