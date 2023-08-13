@@ -266,6 +266,14 @@ class Alpha158(DataHandler):
                             Sum(Abs(volume - Ref(volume, 1)), d) + 1e-12))
                 names.append('VSUMD%d' % d)
 
+        if use("ILLIQ"):
+            illiq = 0
+            for d in range(1, 11):
+                illiq += Abs(Ref(df['Change'], d)) / Ref(df['Amount'], d)
+            illiq *= 0.1
+            features.append(illiq)
+            names.append('ILLIQ')
+
         if use("VALUE"):
             features.append(1.0 / df['Pb'])
             features.append(1.0 / df['Pe_ttm'])
