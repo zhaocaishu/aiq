@@ -269,7 +269,7 @@ class Alpha158(DataHandler):
         if use("ILLIQ"):
             illiq = 0
             for d in range(1, 11):
-                illiq += Abs(Ref(df['Change'], d)) / Ref(df['Amount'], d)
+                illiq += Abs(Ref(df['Change'], d)) / Ref(df['AMount'], d)
             illiq *= 0.1
             features.append(illiq)
             names.append('ILLIQ')
