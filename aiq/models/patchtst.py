@@ -169,7 +169,36 @@ class PatchTSTModel(BaseModel):
 
                 scheduler.step()
 
+            train_loss = np.average(train_loss)
+            val_loss = self.eval(val_dataset, criterion)
+            print("Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Val Loss: {3:.7f}".format(
+                epoch + 1, train_steps, train_loss, val_loss))
             print("Epoch: {} cost time: {}".format(epoch + 1, time.time() - epoch_time))
+
+    def eval(self, dataset: Dataset, criterion):
+        self.model.eval()
+
+        total_loss = []
+        val_loader = torch.utils.data.DataLoader(dataset, batch_size=self.model_params.batch_size)
+        with torch.no_grad():
+            for i, (batch_x, batch_y) in enumerate(val_loader):
+                batch_x = batch_x.squeeze(0).float().to(self.device)
+                batch_y = batch_y.squeeze(0).float()
+
+                outputs = self.model(batch_x)
+                f_dim = -1 if self.model_params.features == 'MS' else 0
+                outputs = outputs[:, -self.model_params.pred_len:, f_dim:]
+                batch_y = batch_y[:, -self.model_params.pred_len:, f_dim:].to(self.device)
+
+                pred = outputs.detach().cpu()
+                true = batch_y.detach().cpu()
+
+                loss = criterion(pred, true)
+
+                total_loss.append(loss)
+        total_loss = np.average(total_loss)
+        self.model.train()
+        return total_loss
 
     def predict(self, dataset: Dataset) -> object:
         self.model.eval()

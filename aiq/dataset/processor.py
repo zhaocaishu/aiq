@@ -113,7 +113,6 @@ class TSStandardize(Processor):
             pickle.dump({'mean': self.mean, 'std': self.std}, f)
 
     def __call__(self, df: pd.DataFrame = None):
-        print(self.mean, self.std)
         for symbol in self.mean.index.values:
             df.loc[symbol, self.target_cols] = (df.loc[symbol, self.target_cols] - self.mean.loc[symbol]) / \
                                                self.std.loc[symbol]

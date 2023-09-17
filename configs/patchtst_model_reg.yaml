@@ -6,13 +6,15 @@ dataset:
     'valid': [ '2022-01-01', '2022-11-31' ],
     'test': [ '2023-01-01', '2023-05-01' ]
   }
+  feature_names: ['Adj_Open', 'Adj_Close', 'Adj_High', 'Adj_Low', 'Volume']
+  label_names: ['Return']
 
 model:
   name: 'PatchTST'
   params: {
     'features': 'MS',
     'seq_len': 96,
-    'pred_len': 96,
+    'pred_len': 1,
     'enc_in': 5,
     'e_layers': 3,
     'n_heads': 4,
@@ -32,7 +34,6 @@ model:
     'kernel_size': 25,
     'pct_start': 0.3,
     'train_epochs': 10,
-    'itr': 1,
     'batch_size': 1,
     'learning_rate': 0.0001,
   }

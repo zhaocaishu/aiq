@@ -10,6 +10,7 @@ from torch.utils.data import Dataset
 
 from aiq.utils.date import date_add
 from aiq.dataset.processor import TSStandardize
+from aiq.ops import Ref
 
 from .loader import DataLoader
 
@@ -26,6 +27,8 @@ class TSDataset(Dataset):
         save_dir,
         start_time=None,
         end_time=None,
+        feature_names=None,
+        label_names=None,
         adjust_price=True,
         cutoff_trade_days=90,
         min_trade_days=90,
@@ -34,12 +37,8 @@ class TSDataset(Dataset):
         training=True
     ):
         # feature and label column names
-        if adjust_price:
-            self.feature_names_ = ['Adj_Open', 'Adj_Close', 'Adj_High', 'Adj_Low', 'Volume']
-            self.label_names_ = ['Adj_Close']
-        else:
-            self.feature_names_ = ['Open', 'Close', 'High', 'Low', 'Volume']
-            self.label_names_ = ['Close']
+        self.feature_names_ = feature_names
+        self.label_names_ = label_names
 
         # input and prediction sequence length
         self.seq_len = seq_len
@@ -75,13 +74,17 @@ class TSDataset(Dataset):
             # check if symbol has enough trade days
             if df.shape[0] < min_trade_days: continue
 
+            # prediction target
+            df['Return'] = Ref(df['Close'], -5) / df['Close'] - 1
+            df = df.dropna(subset=['Return'])
+
             dfs.append(df)
 
         # concat dataframes and set index
         self.df = pd.concat(dfs, ignore_index=True)
 
         # data pre-processing
-        self.df.set_index('Symbol', inplace = True)
+        self.df.set_index('Symbol', inplace=True)
         ts_standardize = TSStandardize(target_cols=self.feature_names_, save_dir=self.save_dir)
         if self.training:
             ts_standardize.fit(self.df)
