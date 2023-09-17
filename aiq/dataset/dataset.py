@@ -5,6 +5,7 @@ from datetime import timedelta, datetime
 
 import numpy as np
 import pandas as pd
+from torch.utils.data import Dataset
 
 from aiq.utils.date import date_add
 
@@ -16,7 +17,7 @@ from .processor import CSFillna, CSNeutralize, CSFilter, CSZScore
 pd.options.mode.copy_on_write = True
 
 
-class Dataset(abc.ABC):
+class Dataset(Dataset):
     """
     Preparing data for model training and inference.
     """

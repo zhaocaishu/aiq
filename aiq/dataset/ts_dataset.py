@@ -20,18 +20,18 @@ class TSDataset(Dataset):
     """
 
     def __init__(
-            self,
-            data_dir,
-            instruments,
-            save_dir,
-            start_time=None,
-            end_time=None,
-            adjust_price=True,
-            cutoff_trade_days=90,
-            min_trade_days=90,
-            input_len=60,
-            pred_len=6,
-            training=True
+        self,
+        data_dir,
+        instruments,
+        save_dir,
+        start_time=None,
+        end_time=None,
+        adjust_price=True,
+        cutoff_trade_days=90,
+        min_trade_days=90,
+        seq_len=60,
+        pred_len=6,
+        training=True
     ):
         # feature and label column names
         if adjust_price:
@@ -42,7 +42,7 @@ class TSDataset(Dataset):
             self.label_names_ = ['Close']
 
         # input and prediction sequence length
-        self.input_len = input_len
+        self.seq_len = seq_len
         self.pred_len = pred_len
 
         # options
@@ -90,18 +90,17 @@ class TSDataset(Dataset):
             self.df = ts_standardize(self.df)
         self.df.reset_index(inplace=True)
 
-        # build input and prediction trade days
-        trading_days = DataLoader.load_calendars(data_dir, start_time=start_time, end_time=end_time)
-
+        # build input and label data
         self.data = []
+        trading_days = DataLoader.load_calendars(data_dir, start_time=start_time, end_time=end_time)
         if self.training:
-            for i in range(input_len, len(trading_days) - pred_len + 1):
-                input_trade_days = trading_days[i - input_len: i]
+            for i in range(seq_len, len(trading_days) - pred_len + 1):
+                input_trade_days = trading_days[i - seq_len: i]
                 pred_trade_days = trading_days[i: i + pred_len]
                 self.data.append((input_trade_days, pred_trade_days))
         else:
-            for i in range(input_len, len(trading_days) + 1):
-                input_trade_days = trading_days[i - input_len: i]
+            for i in range(seq_len, len(trading_days) + 1):
+                input_trade_days = trading_days[i - seq_len: i]
                 self.data.append(input_trade_days)
 
     @staticmethod
@@ -127,12 +126,12 @@ class TSDataset(Dataset):
             for idx, row in symbol_day_count.iterrows():
                 symbol = row['Symbol']
                 day_count = row['Date']
-                if day_count != (self.input_len + self.pred_len):
+                if day_count != (self.seq_len + self.pred_len):
                     continue
 
                 s_df = d_df[d_df['Symbol'] == symbol]
-                input = torch.Tensor(s_df[self.feature_names].values[:self.input_len, :])
-                pred = torch.Tensor(s_df[self.label_names].values[self.input_len:, :])
+                input = torch.Tensor(s_df[self.feature_names].values[:self.seq_len, :])
+                pred = torch.Tensor(s_df[self.label_names].values[self.seq_len:, :])
                 inputs.append(input)
                 preds.append(pred)
 
@@ -150,11 +149,11 @@ class TSDataset(Dataset):
             for idx, row in symbol_day_count.iterrows():
                 symbol = row['Symbol']
                 day_count = row['Date']
-                if day_count != self.input_len:
+                if day_count != self.seq_len:
                     continue
 
                 s_df = d_df[d_df['Symbol'] == symbol]
-                input = torch.Tensor(s_df[self.feature_names].values[:self.input_len, :])
+                input = torch.Tensor(s_df[self.feature_names].values[:self.seq_len, :])
                 inputs.append(input)
 
             inputs = torch.stack(inputs)
