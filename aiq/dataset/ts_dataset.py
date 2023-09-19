@@ -94,8 +94,9 @@ class TSDataset(Dataset):
         self.df.reset_index(inplace=True)
 
         # build input and label data
+        trading_days = np.sort(self.df['Date'].unique())
+
         self.data = []
-        trading_days = DataLoader.load_calendars(data_dir, start_time=start_time, end_time=end_time)
         if self.training:
             for i in range(seq_len, len(trading_days) - pred_len + 1):
                 input_trade_days = trading_days[i - seq_len: i]

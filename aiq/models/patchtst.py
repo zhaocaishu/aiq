@@ -135,7 +135,6 @@ class PatchTSTModel(BaseModel):
                                             pct_start=self.model_params.pct_start,
                                             epochs=self.model_params.train_epochs,
                                             max_lr=self.model_params.learning_rate)
-
         for epoch in range(self.model_params.train_epochs):
             iter_count = 0
             train_loss = []
