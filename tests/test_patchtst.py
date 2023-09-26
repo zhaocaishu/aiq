@@ -20,3 +20,5 @@ if __name__ == '__main__':
                             seq_len=cfg.model.params.seq_len, pred_len=cfg.model.params.pred_len, training=True)
     patch_tst = PatchTSTModel(model_params=cfg.model.params)
     patch_tst.fit(train_dataset=train_dataset, val_dataset=val_dataset)
+    patch_tst.save(model_dir='./temp')
+    patch_tst.load(model_dir='./temp')
