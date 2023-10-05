@@ -1,8 +1,8 @@
 import argparse
 import os
 
-from aiq.dataset import Dataset, Alpha158, Alpha101, ts_split
-from aiq.models import XGBModel, LGBModel, DEnsembleModel
+from aiq.dataset import Dataset, TSDataset, Alpha158, Alpha101, ts_split
+from aiq.models import XGBModel, LGBModel, DEnsembleModel, PatchTSTModel
 from aiq.utils.config import config as cfg
 
 
@@ -28,14 +28,26 @@ def main():
 
     # dataset
     print(cfg.dataset.segments)
-    handlers = (Alpha158(), Alpha101())
-    dataset = Dataset(args.data_dir,
-                      instruments=args.instruments,
-                      start_time=cfg.dataset.start_time,
-                      end_time=cfg.dataset.end_time,
-                      handlers=handlers)
-    train_dataset, val_dataset = ts_split(dataset=dataset,
-                                          segments=[cfg.dataset.segments['train'], cfg.dataset.segments['valid']])
+    if cfg.model.name == 'PatchTST':
+        train_dataset = TSDataset(data_dir=args.data_dir, save_dir=args.save_dir, instruments=args.instruments,
+                                  start_time=cfg.dataset.segments['train'][0],
+                                  end_time=cfg.dataset.segments['train'][1], feature_names=cfg.dataset.feature_names,
+                                  label_names=cfg.dataset.label_names, adjust_price=True,
+                                  seq_len=cfg.model.params.seq_len, pred_len=cfg.model.params.pred_len, training=True)
+        val_dataset = TSDataset(data_dir=args.data_dir, save_dir=args.save_dir, instruments=args.instruments,
+                                start_time=cfg.dataset.segments['valid'][0],
+                                end_time=cfg.dataset.segments['valid'][1], feature_names=cfg.dataset.feature_names,
+                                label_names=cfg.dataset.label_names, adjust_price=True,
+                                seq_len=cfg.model.params.seq_len, pred_len=cfg.model.params.pred_len, training=False)
+    else:
+        handlers = (Alpha158(), Alpha101())
+        dataset = Dataset(args.data_dir,
+                          instruments=args.instruments,
+                          start_time=cfg.dataset.start_time,
+                          end_time=cfg.dataset.end_time,
+                          handlers=handlers)
+        train_dataset, val_dataset = ts_split(dataset=dataset,
+                                              segments=[cfg.dataset.segments['train'], cfg.dataset.segments['valid']])
     print('Loaded %d items to train dataset, %d items to validation dataset' % (len(train_dataset), len(val_dataset)))
 
     # train model
@@ -51,6 +63,8 @@ def main():
         model = DEnsembleModel(feature_cols=train_dataset.feature_names,
                                label_col=[train_dataset.label_name],
                                **dict(cfg.model.params))
+    elif cfg.model.name == 'PatchTST':
+        model = PatchTSTModel(model_params=cfg.model.params)
 
     model.fit(train_dataset=train_dataset, val_dataset=val_dataset)
 

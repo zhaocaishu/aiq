@@ -193,9 +193,7 @@ class PatchTSTModel(BaseModel):
 
                 pred = outputs.detach().cpu()
                 true = batch_y.detach().cpu()
-
                 loss = criterion(pred, true)
-
                 total_loss.append(loss)
         total_loss = np.average(total_loss)
         self.model.train()

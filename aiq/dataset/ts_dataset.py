@@ -94,10 +94,9 @@ class TSDataset(Dataset):
         self.df.reset_index(inplace=True)
 
         # build input and label data
-        trading_days = np.sort(self.df['Date'].unique())
-
         self.data = []
-        if self.training:
+        trading_days = np.sort(self.df['Date'].unique())
+        if self.label_names is not None:
             for i in range(seq_len, len(trading_days) - pred_len + 1):
                 input_trade_days = trading_days[i - seq_len: i]
                 pred_trade_days = trading_days[i: i + pred_len]
@@ -118,7 +117,7 @@ class TSDataset(Dataset):
         return self.df
 
     def __getitem__(self, index):
-        if self.training:
+        if self.label_names is not None:
             input_trade_days, pred_trade_days = self.data[index]
             d_df = self.df[(self.df['Date'] >= input_trade_days[0]) & (self.df['Date'] <= pred_trade_days[-1])]
 
@@ -126,7 +125,7 @@ class TSDataset(Dataset):
             symbol_day_count.reset_index(inplace=True)
 
             inputs = []
-            preds = []
+            labels = []
             for idx, row in symbol_day_count.iterrows():
                 symbol = row['Symbol']
                 day_count = row['Date']
@@ -135,13 +134,13 @@ class TSDataset(Dataset):
 
                 s_df = d_df[d_df['Symbol'] == symbol]
                 input = torch.Tensor(s_df[self.feature_names].values[:self.seq_len, :])
-                pred = torch.Tensor(s_df[self.label_names].values[self.seq_len:, :])
+                label = torch.Tensor(s_df[self.label_names].values[self.seq_len:, :])
                 inputs.append(input)
-                preds.append(pred)
+                labels.append(label)
 
             inputs = torch.stack(inputs)
-            preds = torch.stack(preds)
-            return inputs, preds
+            labels = torch.stack(labels)
+            return inputs, labels
         else:
             input_trade_days = self.data[index]
             d_df = self.df[(self.df['Date'] >= input_trade_days[0]) & (self.df['Date'] <= input_trade_days[-1])]
