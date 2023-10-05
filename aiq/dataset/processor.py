@@ -113,7 +113,7 @@ class TSStandardize(Processor):
             pickle.dump({'mean': self.mean, 'std': self.std}, f)
 
     def __call__(self, df: pd.DataFrame = None):
-        # filter symbols without mean and std data
+        # remove symbols without mean and std data
         symbols = []
         for symbol in df.index.unique():
             if symbol in self.mean.index.unique():
