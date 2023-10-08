@@ -124,7 +124,7 @@ class PatchTSTModel(BaseModel):
         else:
             self.device = 'cpu'
         self.model_params = model_params
-        self.model = PatchTST(configs=self.model_params)
+        self.model = PatchTST(configs=self.model_params).to(self.device)
 
     def fit(self, train_dataset: Dataset, val_dataset: Dataset = None):
         train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=self.model_params.batch_size, shuffle=True)
