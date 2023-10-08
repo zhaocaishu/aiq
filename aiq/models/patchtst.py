@@ -119,7 +119,10 @@ class PatchTST(nn.Module):
 
 class PatchTSTModel(BaseModel):
     def __init__(self, model_params=None):
-        self.device = 'cpu'
+        if torch.cuda.device_count() == 1:
+            self.device = torch.device('cuda:0')
+        else:
+            self.device = 'cpu'
         self.model_params = model_params
         self.model = PatchTST(configs=self.model_params)
 
