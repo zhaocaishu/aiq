@@ -23,8 +23,8 @@ model:
     'dropout': 0.3,
     'fc_dropout': 0.3,
     'head_dropout': 0,
-    'patch_len': 16,
-    'stride': 8,
+    'patch_len': 4,
+    'stride': 2,
     'individual': 0,
     'padding_patch': 'end',
     'revin': 1,
@@ -35,5 +35,5 @@ model:
     'pct_start': 0.3,
     'train_epochs': 10,
     'batch_size': 1,
-    'learning_rate': 0.0001,
+    'learning_rate': 0.001,
   }

@@ -150,7 +150,7 @@ class PatchTSTModel(BaseModel):
                 iter_count += 1
                 optimizer.zero_grad()
                 batch_x = batch_x.squeeze(0).float().to(self.device)
-                batch_y = batch_y.squeeze(0).float().to(self.device)
+                batch_y = batch_y.squeeze(0).float()
 
                 outputs = self.model(batch_x)
 
@@ -190,6 +190,7 @@ class PatchTSTModel(BaseModel):
                 batch_y = batch_y.squeeze(0).float()
 
                 outputs = self.model(batch_x)
+
                 f_dim = -1 if self.model_params.features == 'MS' else 0
                 outputs = outputs[:, -self.model_params.pred_len:, f_dim:]
                 batch_y = batch_y[:, -self.model_params.pred_len:, f_dim:].to(self.device)
