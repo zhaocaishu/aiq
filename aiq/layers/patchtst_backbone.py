@@ -169,8 +169,6 @@ class TSTiEncoder(nn.Module):  # i means channel-independent
 
         return z
 
-    # Cell
-
 
 class TSTEncoder(nn.Module):
     def __init__(self, q_len, d_model, n_heads, d_k=None, d_v=None, d_ff=None,
@@ -240,7 +238,7 @@ class TSTEncoderLayer(nn.Module):
         # Multi-Head attention sublayer
         if self.pre_norm:
             src = self.norm_attn(src)
-        ## Multi-Head attention
+        # Multi-Head attention
         if self.res_attention:
             src2, attn, scores = self.self_attn(src, src, src, prev, key_padding_mask=key_padding_mask,
                                                 attn_mask=attn_mask)
@@ -248,7 +246,7 @@ class TSTEncoderLayer(nn.Module):
             src2, attn = self.self_attn(src, src, src, key_padding_mask=key_padding_mask, attn_mask=attn_mask)
         if self.store_attn:
             self.attn = attn
-        ## Add & Norm
+        # Add & Norm
         src = src + self.dropout_attn(src2)  # Add: residual connection with residual dropout
         if not self.pre_norm:
             src = self.norm_attn(src)
@@ -256,9 +254,9 @@ class TSTEncoderLayer(nn.Module):
         # Feed-forward sublayer
         if self.pre_norm:
             src = self.norm_ffn(src)
-        ## Position-wise Feed-Forward
+        # Position-wise Feed-Forward
         src2 = self.ff(src)
-        ## Add & Norm
+        # Add & Norm
         src = src + self.dropout_ffn(src2)  # Add: residual connection with residual dropout
         if not self.pre_norm:
             src = self.norm_ffn(src)
@@ -304,11 +302,9 @@ class _MultiheadAttention(nn.Module):
         if V is None: V = Q
 
         # Linear (+ split in multiple heads)
-        q_s = self.W_Q(Q).view(bs, -1, self.n_heads, self.d_k).transpose(1,
-                                                                         2)  # q_s    : [bs x n_heads x max_q_len x d_k]
-        k_s = self.W_K(K).view(bs, -1, self.n_heads, self.d_k).permute(0, 2, 3,
-                                                                       1)  # k_s    : [bs x n_heads x d_k x q_len] - transpose(1,2) + transpose(2,3)
-        v_s = self.W_V(V).view(bs, -1, self.n_heads, self.d_v).transpose(1, 2)  # v_s    : [bs x n_heads x q_len x d_v]
+        q_s = self.W_Q(Q).view(bs, -1, self.n_heads, self.d_k).transpose(1, 2)  # q_s: [bs x n_heads x max_q_len x d_k]
+        k_s = self.W_K(K).view(bs, -1, self.n_heads, self.d_k).permute(0, 2, 3, 1)  # k_s: [bs x n_heads x d_k x q_len] - transpose(1,2) + transpose(2,3)
+        v_s = self.W_V(V).view(bs, -1, self.n_heads, self.d_v).transpose(1, 2)  # v_s: [bs x n_heads x q_len x d_v]
 
         # Apply Scaled Dot-Product Attention (multiple heads)
         if self.res_attention:
@@ -344,7 +340,7 @@ class _ScaledDotProductAttention(nn.Module):
 
     def forward(self, q: Tensor, k: Tensor, v: Tensor, prev: Optional[Tensor] = None,
                 key_padding_mask: Optional[Tensor] = None, attn_mask: Optional[Tensor] = None):
-        '''
+        """
         Input shape:
             q               : [bs x n_heads x max_q_len x d_k]
             k               : [bs x n_heads x d_k x seq_len]
@@ -356,7 +352,7 @@ class _ScaledDotProductAttention(nn.Module):
             output:  [bs x n_heads x q_len x d_v]
             attn   : [bs x n_heads x q_len x seq_len]
             scores : [bs x n_heads x q_len x seq_len]
-        '''
+        """
 
         # Scaled MatMul (q, k) - similarity scores for all pairs of positions in an input sequence
         attn_scores = torch.matmul(q, k) * self.scale  # attn_scores : [bs x n_heads x max_q_len x q_len]

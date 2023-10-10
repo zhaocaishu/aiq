@@ -133,8 +133,8 @@ class TSDataset(Dataset):
                     continue
 
                 s_df = d_df[d_df['Symbol'] == symbol]
-                input = torch.Tensor(s_df[self.feature_names].values[:self.seq_len, :])
-                label = torch.Tensor(s_df[self.label_names].values[self.seq_len:, :])
+                input = torch.FloatTensor(s_df[self.feature_names].values[:self.seq_len, :])
+                label = torch.FloatTensor(s_df[self.label_names].values[self.seq_len:, :])
                 inputs.append(input)
                 labels.append(label)
 
@@ -156,7 +156,7 @@ class TSDataset(Dataset):
                     continue
 
                 s_df = d_df[d_df['Symbol'] == symbol]
-                input = torch.Tensor(s_df[self.feature_names].values[:self.seq_len, :])
+                input = torch.FloatTensor(s_df[self.feature_names].values[:self.seq_len, :])
                 inputs.append(input)
 
             inputs = torch.stack(inputs)
