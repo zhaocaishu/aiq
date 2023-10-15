@@ -2,7 +2,7 @@ import argparse
 import os
 
 from aiq.dataset import Dataset, TSDataset, Alpha158, Alpha101, ts_split
-from aiq.models import XGBModel, LGBModel, DEnsembleModel, PatchTSTModel
+from aiq.models import XGBModel, LGBModel, DEnsembleModel, PatchTSTModel, NLinearModel
 from aiq.utils.config import config as cfg
 
 
@@ -28,7 +28,7 @@ def main():
 
     # dataset
     print(cfg.dataset.segments)
-    if cfg.model.name == 'PatchTST':
+    if cfg.model.name in ['PatchTST', 'NLinearModel']:
         train_dataset = TSDataset(data_dir=args.data_dir, save_dir=args.save_dir, instruments=args.instruments,
                                   start_time=cfg.dataset.segments['train'][0],
                                   end_time=cfg.dataset.segments['train'][1], feature_names=cfg.dataset.feature_names,
@@ -65,6 +65,8 @@ def main():
                                **dict(cfg.model.params))
     elif cfg.model.name == 'PatchTST':
         model = PatchTSTModel(model_params=cfg.model.params)
+    elif cfg.model.name == 'NLinear':
+        model = NLinearModel(model_params=cfg.model.params)
 
     model.fit(train_dataset=train_dataset, val_dataset=val_dataset)
 

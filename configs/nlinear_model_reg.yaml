@@ -10,28 +10,13 @@ dataset:
   label_names: ['Return']
 
 model:
-  name: 'PatchTST'
+  name: 'NLinear'
   params: {
     'features': 'MS',
     'seq_len': 96,
     'pred_len': 1,
-    'enc_in': 5,
-    'e_layers': 3,
-    'n_heads': 4,
-    'd_model': 16,
-    'd_ff': 128,
-    'dropout': 0.3,
-    'fc_dropout': 0.3,
-    'head_dropout': 0,
-    'patch_len': 4,
-    'stride': 2,
+    'enc_in': 7,
     'individual': 0,
-    'padding_patch': 'end',
-    'revin': 1,
-    'affine': 0,
-    'subtract_last': 0,
-    'decomposition': 0,
-    'kernel_size': 25,
     'pct_start': 0.3,
     'train_epochs': 10,
     'batch_size': 1,
