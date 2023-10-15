@@ -1,7 +1,17 @@
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
+import os
+import time
+import json
+
 import numpy as np
+import torch
+from torch import nn
+from torch import Tensor
+import torch.nn.functional as F
+from torch import optim
+from torch.optim import lr_scheduler
+from torch.utils.data import Dataset
+
+from .base import BaseModel
 
 
 class NLinear(nn.Module):
@@ -10,7 +20,7 @@ class NLinear(nn.Module):
     """
 
     def __init__(self, configs):
-        super(Model, self).__init__()
+        super(NLinear, self).__init__()
         self.seq_len = configs.seq_len
         self.pred_len = configs.pred_len
 
