@@ -28,7 +28,7 @@ def main():
 
     # dataset
     print(cfg.dataset.segments)
-    if cfg.model.name in ['PatchTST', 'NLinearModel']:
+    if cfg.model.name in ['PatchTST', 'NLinear']:
         train_dataset = TSDataset(data_dir=args.data_dir, save_dir=args.save_dir, instruments=args.instruments,
                                   start_time=cfg.dataset.segments['train'][0],
                                   end_time=cfg.dataset.segments['train'][1], feature_names=cfg.dataset.feature_names,
