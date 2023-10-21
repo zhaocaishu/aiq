@@ -19,6 +19,6 @@ model:
     'individual': 0,
     'pct_start': 0.3,
     'train_epochs': 10,
-    'batch_size': 1,
+    'batch_size': 2048,
     'learning_rate': 0.01,
   }
