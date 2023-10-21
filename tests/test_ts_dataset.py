@@ -9,7 +9,7 @@ if __name__ == '__main__':
                            feature_names=['Adj_Open', 'Adj_Close', 'Adj_High', 'Adj_Low', 'Volume'],
                            label_names=['Adj_Close'])
 
-    data_loader = torch.utils.data.DataLoader(ts_dataset, batch_size=1)
+    data_loader = torch.utils.data.DataLoader(ts_dataset, batch_size=1024)
 
     for batch_idx, sample in enumerate(data_loader):
         input, target = sample

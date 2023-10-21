@@ -100,11 +100,39 @@ class TSDataset(Dataset):
             for i in range(seq_len, len(trading_days) - pred_len + 1):
                 input_trade_days = trading_days[i - seq_len: i]
                 pred_trade_days = trading_days[i: i + pred_len]
-                self.data.append((input_trade_days, pred_trade_days))
+
+                d_df = self.df[(self.df['Date'] >= input_trade_days[0]) & (self.df['Date'] <= pred_trade_days[-1])]
+
+                symbol_day_count = d_df[['Symbol', 'Date']].groupby(['Symbol']).count()
+                symbol_day_count.reset_index(inplace=True)
+
+                for idx, row in symbol_day_count.iterrows():
+                    symbol = row['Symbol']
+                    day_count = row['Date']
+                    if day_count != (self.seq_len + self.pred_len):
+                        continue
+
+                    s_df = d_df[d_df['Symbol'] == symbol]
+                    input = torch.FloatTensor(s_df[self.feature_names].values[:self.seq_len, :])
+                    label = torch.FloatTensor(s_df[self.label_names].values[self.seq_len:, :])
+                    self.data.append((input, label))
         else:
             for i in range(seq_len, len(trading_days) + 1):
                 input_trade_days = trading_days[i - seq_len: i]
-                self.data.append(input_trade_days)
+                d_df = self.df[(self.df['Date'] >= input_trade_days[0]) & (self.df['Date'] <= input_trade_days[-1])]
+
+                symbol_day_count = d_df[['Symbol', 'Date']].groupby(['Symbol']).count()
+                symbol_day_count.reset_index(inplace=True)
+
+                for idx, row in symbol_day_count.iterrows():
+                    symbol = row['Symbol']
+                    day_count = row['Date']
+                    if day_count != self.seq_len:
+                        continue
+
+                    s_df = d_df[d_df['Symbol'] == symbol]
+                    input = torch.FloatTensor(s_df[self.feature_names].values[:self.seq_len, :])
+                    self.data.append(input)
 
     @staticmethod
     def adjust_price(df):
@@ -118,48 +146,10 @@ class TSDataset(Dataset):
 
     def __getitem__(self, index):
         if self.label_names is not None:
-            input_trade_days, pred_trade_days = self.data[index]
-            d_df = self.df[(self.df['Date'] >= input_trade_days[0]) & (self.df['Date'] <= pred_trade_days[-1])]
-
-            symbol_day_count = d_df[['Symbol', 'Date']].groupby(['Symbol']).count()
-            symbol_day_count.reset_index(inplace=True)
-
-            inputs = []
-            labels = []
-            for idx, row in symbol_day_count.iterrows():
-                symbol = row['Symbol']
-                day_count = row['Date']
-                if day_count != (self.seq_len + self.pred_len):
-                    continue
-
-                s_df = d_df[d_df['Symbol'] == symbol]
-                input = torch.FloatTensor(s_df[self.feature_names].values[:self.seq_len, :])
-                label = torch.FloatTensor(s_df[self.label_names].values[self.seq_len:, :])
-                inputs.append(input)
-                labels.append(label)
-
-            inputs = torch.stack(inputs)
-            labels = torch.stack(labels)
+            inputs, labels = self.data[index]
             return inputs, labels
         else:
-            input_trade_days = self.data[index]
-            d_df = self.df[(self.df['Date'] >= input_trade_days[0]) & (self.df['Date'] <= input_trade_days[-1])]
-
-            symbol_day_count = d_df[['Symbol', 'Date']].groupby(['Symbol']).count()
-            symbol_day_count.reset_index(inplace=True)
-
-            inputs = []
-            for idx, row in symbol_day_count.iterrows():
-                symbol = row['Symbol']
-                day_count = row['Date']
-                if day_count != self.seq_len:
-                    continue
-
-                s_df = d_df[d_df['Symbol'] == symbol]
-                input = torch.FloatTensor(s_df[self.feature_names].values[:self.seq_len, :])
-                inputs.append(input)
-
-            inputs = torch.stack(inputs)
+            inputs = self.data[index]
             return inputs
 
     def __len__(self):
