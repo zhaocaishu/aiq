@@ -98,20 +98,20 @@ class TSDataset(Dataset):
 
         # build input and label data
         self.data = []
-        for symbol in symbols:
+        for symbol in tqdm(symbols):
             s_df = self.df.loc[symbol]
             s_trading_days = np.sort(s_df['Date'].unique())
             s_df.set_index('Date', inplace=True)
 
             if self.label_names is not None:
-                for i in tqdm(range(seq_len, len(s_trading_days) - pred_len + 1)):
+                for i in range(seq_len, len(s_trading_days) - pred_len + 1):
                     input_label_trade_days = s_trading_days[i - seq_len: i + pred_len]
                     input_label_df = s_df.loc[input_label_trade_days]
                     input = torch.FloatTensor(input_label_df[self.feature_names].values[:self.seq_len, :])
                     label = torch.FloatTensor(input_label_df[self.label_names].values[self.seq_len:, :])
                     self.data.append((input, label))
             else:
-                for i in tqdm(range(seq_len, len(s_trading_days) + 1)):
+                for i in range(seq_len, len(s_trading_days) + 1):
                     input_trade_days = s_trading_days[i - seq_len: i + pred_len]
                     input_df = s_df.loc[input_trade_days]
                     input = torch.FloatTensor(input_df[self.feature_names].values[:self.seq_len, :])
