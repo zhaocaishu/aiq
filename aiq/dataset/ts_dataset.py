@@ -54,7 +54,6 @@ class TSDataset(Dataset):
         self.symbols = DataLoader.load_symbols(data_dir, instruments, start_time=start_time, end_time=end_time)
 
         # process per symbol
-        symbols = []
         dfs = []
         for symbol, list_date in self.symbols:
             df = DataLoader.load_features(data_dir, symbol=symbol, start_time=start_time, end_time=end_time)
@@ -81,7 +80,6 @@ class TSDataset(Dataset):
             df['Return'] = Ref(df['Close'], -5) / df['Close'] - 1
             df = df.dropna(subset=['Return'])
 
-            symbols.append(symbol)
             dfs.append(df)
 
         # concat dataframes and set index
@@ -95,6 +93,9 @@ class TSDataset(Dataset):
             self.df = ts_standardize(self.df)
         else:
             self.df = ts_standardize(self.df)
+
+        # list all symbol names
+        symbols = self.df.index.unique().tolist()
 
         # build input and label data
         self.data = []
