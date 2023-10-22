@@ -46,7 +46,7 @@ class Dataset(Dataset):
         for symbol, list_date in self.symbols:
             df = DataLoader.load_features(data_dir, symbol=symbol, start_time=start_time, end_time=end_time)
 
-            # skip ticker of non-existed
+            # skip symbol of non-existed
             if df is None: continue
 
             # append ticker symbol
