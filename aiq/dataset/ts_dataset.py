@@ -93,26 +93,21 @@ class TSDataset(Dataset):
             self.df = ts_standardize(self.df)
         self.df.reset_index(inplace=True)
 
+        trading_days = np.sort(self.df['Date'].unique())
+
         # build input and label data
         self.data = []
-        trading_days = np.sort(self.df['Date'].unique())
         if self.label_names is not None:
             for i in range(seq_len, len(trading_days) - pred_len + 1):
                 input_trade_days = trading_days[i - seq_len: i]
                 pred_trade_days = trading_days[i: i + pred_len]
-
                 d_df = self.df[(self.df['Date'] >= input_trade_days[0]) & (self.df['Date'] <= pred_trade_days[-1])]
 
-                symbol_day_count = d_df[['Symbol', 'Date']].groupby(['Symbol']).count()
-                symbol_day_count.reset_index(inplace=True)
-
-                for idx, row in symbol_day_count.iterrows():
-                    symbol = row['Symbol']
-                    day_count = row['Date']
-                    if day_count != (self.seq_len + self.pred_len):
+                for symbol in d_df['Symbol'].unique():
+                    s_df = d_df[d_df['Symbol'] == symbol]
+                    if s_df.shape[0] != (self.seq_len + self.pred_len):
                         continue
 
-                    s_df = d_df[d_df['Symbol'] == symbol]
                     input = torch.FloatTensor(s_df[self.feature_names].values[:self.seq_len, :])
                     label = torch.FloatTensor(s_df[self.label_names].values[self.seq_len:, :])
                     self.data.append((input, label))
@@ -121,16 +116,11 @@ class TSDataset(Dataset):
                 input_trade_days = trading_days[i - seq_len: i]
                 d_df = self.df[(self.df['Date'] >= input_trade_days[0]) & (self.df['Date'] <= input_trade_days[-1])]
 
-                symbol_day_count = d_df[['Symbol', 'Date']].groupby(['Symbol']).count()
-                symbol_day_count.reset_index(inplace=True)
-
-                for idx, row in symbol_day_count.iterrows():
-                    symbol = row['Symbol']
-                    day_count = row['Date']
-                    if day_count != self.seq_len:
+                for symbol in d_df['Symbol'].unique():
+                    s_df = d_df[d_df['Symbol'] == symbol]
+                    if s_df.shape[0] != self.seq_len:
                         continue
 
-                    s_df = d_df[d_df['Symbol'] == symbol]
                     input = torch.FloatTensor(s_df[self.feature_names].values[:self.seq_len, :])
                     self.data.append(input)
 
