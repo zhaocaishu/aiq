@@ -1,5 +1,6 @@
 import abc
 import os
+import time
 from typing import List
 from tqdm import tqdm
 
@@ -53,6 +54,7 @@ class TSDataset(Dataset):
         self.symbols = DataLoader.load_symbols(data_dir, instruments, start_time=start_time, end_time=end_time)
 
         # process per symbol
+        symbols = []
         dfs = []
         for symbol, list_date in self.symbols:
             df = DataLoader.load_features(data_dir, symbol=symbol, start_time=start_time, end_time=end_time)
@@ -79,6 +81,7 @@ class TSDataset(Dataset):
             df['Return'] = Ref(df['Close'], -5) / df['Close'] - 1
             df = df.dropna(subset=['Return'])
 
+            symbols.append(symbol)
             dfs.append(df)
 
         # concat dataframes and set index
@@ -92,37 +95,26 @@ class TSDataset(Dataset):
             self.df = ts_standardize(self.df)
         else:
             self.df = ts_standardize(self.df)
-        self.df.reset_index(inplace=True)
-
-        trading_days = np.sort(self.df['Date'].unique())
 
         # build input and label data
         self.data = []
-        if self.label_names is not None:
-            for i in tqdm(range(seq_len, len(trading_days) - pred_len + 1)):
-                input_trade_days = trading_days[i - seq_len: i]
-                pred_trade_days = trading_days[i: i + pred_len]
-                d_df = self.df[(self.df['Date'] >= input_trade_days[0]) & (self.df['Date'] <= pred_trade_days[-1])]
+        for symbol in symbols:
+            s_df = self.df.loc[symbol]
+            s_trading_days = np.sort(s_df['Date'].unique())
+            s_df.set_index('Date', inplace=True)
 
-                for symbol in d_df['Symbol'].unique():
-                    s_df = d_df[d_df['Symbol'] == symbol]
-                    if s_df.shape[0] != (self.seq_len + self.pred_len):
-                        continue
-
-                    input = torch.FloatTensor(s_df[self.feature_names].values[:self.seq_len, :])
-                    label = torch.FloatTensor(s_df[self.label_names].values[self.seq_len:, :])
+            if self.label_names is not None:
+                for i in tqdm(range(seq_len, len(s_trading_days) - pred_len + 1)):
+                    input_label_trade_days = s_trading_days[i - seq_len: i + pred_len]
+                    input_label_df = s_df.loc[input_label_trade_days]
+                    input = torch.FloatTensor(input_label_df[self.feature_names].values[:self.seq_len, :])
+                    label = torch.FloatTensor(input_label_df[self.label_names].values[self.seq_len:, :])
                     self.data.append((input, label))
-        else:
-            for i in tqdm(range(seq_len, len(trading_days) + 1)):
-                input_trade_days = trading_days[i - seq_len: i]
-                d_df = self.df[(self.df['Date'] >= input_trade_days[0]) & (self.df['Date'] <= input_trade_days[-1])]
-
-                for symbol in d_df['Symbol'].unique():
-                    s_df = d_df[d_df['Symbol'] == symbol]
-                    if s_df.shape[0] != self.seq_len:
-                        continue
-
-                    input = torch.FloatTensor(s_df[self.feature_names].values[:self.seq_len, :])
+            else:
+                for i in tqdm(range(seq_len, len(s_trading_days) + 1)):
+                    input_trade_days = s_trading_days[i - seq_len: i + pred_len]
+                    input_df = s_df.loc[input_trade_days]
+                    input = torch.FloatTensor(input_df[self.feature_names].values[:self.seq_len, :])
                     self.data.append(input)
 
     @staticmethod
