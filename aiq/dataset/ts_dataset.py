@@ -1,6 +1,7 @@
 import abc
 import os
 from typing import List
+from tqdm import tqdm
 
 import numpy as np
 import pandas as pd
@@ -98,7 +99,7 @@ class TSDataset(Dataset):
         # build input and label data
         self.data = []
         if self.label_names is not None:
-            for i in range(seq_len, len(trading_days) - pred_len + 1):
+            for i in tqdm(range(seq_len, len(trading_days) - pred_len + 1)):
                 input_trade_days = trading_days[i - seq_len: i]
                 pred_trade_days = trading_days[i: i + pred_len]
                 d_df = self.df[(self.df['Date'] >= input_trade_days[0]) & (self.df['Date'] <= pred_trade_days[-1])]
@@ -112,7 +113,7 @@ class TSDataset(Dataset):
                     label = torch.FloatTensor(s_df[self.label_names].values[self.seq_len:, :])
                     self.data.append((input, label))
         else:
-            for i in range(seq_len, len(trading_days) + 1):
+            for i in tqdm(range(seq_len, len(trading_days) + 1)):
                 input_trade_days = trading_days[i - seq_len: i]
                 d_df = self.df[(self.df['Date'] >= input_trade_days[0]) & (self.df['Date'] <= input_trade_days[-1])]
 
