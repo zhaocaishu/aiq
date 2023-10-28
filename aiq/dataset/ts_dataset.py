@@ -94,9 +94,9 @@ class TSDataset(Dataset):
 
         # concat dataframes and set index
         self.df = pd.concat(dfs, ignore_index=True)
+        self.df.set_index('Symbol', inplace=True)
 
         # data pre-processing
-        self.df.set_index('Symbol', inplace=True)
         ts_standardize = TSStandardize(target_cols=self.feature_names_, save_dir=self.save_dir)
         if self.training:
             ts_standardize.fit(self.df)
