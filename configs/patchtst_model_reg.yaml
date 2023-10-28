@@ -6,8 +6,8 @@ dataset:
     'valid': [ '2022-01-01', '2022-11-31' ],
     'test': [ '2023-01-01', '2023-05-01' ]
   }
-  feature_names: ['Adj_Open', 'Adj_Close', 'Adj_High', 'Adj_Low', 'Volume']
-  label_names: ['Return']
+  feature_names: ['Adj_Open', 'Adj_Close', 'Adj_High', 'Adj_Low', 'Volume', 'ADV20', 'Return']
+  label_names: ['Label']
 
 model:
   name: 'PatchTST'

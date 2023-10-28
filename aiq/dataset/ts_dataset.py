@@ -12,7 +12,7 @@ from torch.utils.data import Dataset
 
 from aiq.utils.date import date_add
 from aiq.dataset.processor import TSStandardize
-from aiq.ops import Ref
+from aiq.ops import Ref, Mean
 
 from .loader import DataLoader
 
@@ -76,12 +76,19 @@ class TSDataset(Dataset):
             # check if symbol has enough trade days
             if df.shape[0] < min_trade_days: continue
 
-            # prediction target
+            # features and target
             if adjust_price:
-                df['Return'] = Ref(df['Adj_Close'], -5) / df['Adj_Close'] - 1
+                close = df['Adj_Close']
             else:
-                df['Return'] = Ref(df['Close'], -5) / df['Close'] - 1
-            df = df.dropna(subset=['Return'])
+                close = df['Close']
+
+            df['ADV20'] = Mean(df['Volume'], 20)
+            df['Return'] = close / Ref(close, 1) - 1
+            df['Label'] = Ref(close, -5) / close - 1
+
+            # process na
+            df = df.dropna(subset=['Label'])
+            df = df.fillna(0)
 
             dfs.append(df)
 
@@ -97,7 +104,6 @@ class TSDataset(Dataset):
         else:
             self.df = ts_standardize(self.df)
 
-        # list all symbol names
         symbols = self.df.index.unique().tolist()
 
         # build input and label data
