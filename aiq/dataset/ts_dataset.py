@@ -32,8 +32,7 @@ class TSDataset(Dataset):
         feature_names=None,
         label_names=None,
         adjust_price=True,
-        cutoff_trade_days=90,
-        min_trade_days=90,
+        min_trade_days=63,
         seq_len=60,
         pred_len=6,
         training=True
@@ -68,8 +67,8 @@ class TSDataset(Dataset):
             if adjust_price:
                 df = self.adjust_price(df)
 
-            # keep data started from cutoff_trade_days after list date
-            cur_start_time = date_add(list_date, n_days=cutoff_trade_days)
+            # keep data started from min_trade_days after list date
+            cur_start_time = date_add(list_date, n_days=min_trade_days)
             if cur_start_time > start_time:
                 df = df[(df['Date'] >= cur_start_time)]
 
@@ -144,12 +143,8 @@ class TSDataset(Dataset):
         return self.df
 
     def __getitem__(self, index):
-        if self.label_names is not None:
-            inputs, labels = self.data[index]
-            return inputs, labels
-        else:
-            inputs = self.data[index]
-            return inputs
+        item = self.data[index]
+        return item
 
     def __len__(self):
         return len(self.data)
