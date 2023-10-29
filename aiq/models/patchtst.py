@@ -226,15 +226,6 @@ class PatchTSTModel(BaseModel):
         model_file = os.path.join(model_dir, 'model.pth')
         torch.save(self.model, model_file)
 
-        model_params = {
-            'model_params': self.model_params
-        }
-        with open(os.path.join(model_dir, 'model.params'), 'w') as f:
-            json.dump(model_params, f)
-
     def load(self, model_dir):
         model_file = os.path.join(model_dir, 'model.pth')
         self.model = torch.load(model_file)
-        with open(os.path.join(model_dir, 'model.params'), 'r') as f:
-            model_params = json.load(f)
-            self.model_params = model_params['model_params']
