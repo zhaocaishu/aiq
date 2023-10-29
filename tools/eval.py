@@ -4,7 +4,7 @@ import os
 import numpy as np
 from sklearn.metrics import mean_squared_error
 
-from aiq.dataset import Dataset, Alpha158, Alpha101, ts_split
+from aiq.dataset import Dataset, TSDataset, Alpha158, Alpha101, ts_split
 from aiq.models import XGBModel, LGBModel, DEnsembleModel, PatchTSTModel, NLinearModel
 from aiq.utils.config import config as cfg
 
