@@ -15,7 +15,7 @@ model:
     'features': 'MS',
     'seq_len': 96,
     'pred_len': 1,
-    'enc_in': 5,
+    'enc_in': 7,
     'e_layers': 3,
     'n_heads': 4,
     'd_model': 16,

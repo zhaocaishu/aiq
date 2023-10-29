@@ -15,7 +15,7 @@ model:
     'features': 'MS',
     'seq_len': 96,
     'pred_len': 1,
-    'enc_in': 5,
+    'enc_in': 7,
     'individual': 0,
     'pct_start': 0.3,
     'train_epochs': 10,
