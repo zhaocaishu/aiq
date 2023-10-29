@@ -34,8 +34,8 @@ def main():
     print(cfg.dataset.segments)
     if cfg.model.name in ['PatchTST', 'NLinear']:
         test_dataset = TSDataset(data_dir=args.data_dir, save_dir=args.save_dir, instruments=args.instruments,
-                                 start_time=cfg.dataset.segments['test'][0],
-                                 end_time=cfg.dataset.segments['test'][1], feature_names=cfg.dataset.feature_names,
+                                 start_time=cfg.dataset.start_time, end_time=cfg.dataset.end_time,
+                                 segment=cfg.dataset.segments['test'], feature_names=cfg.dataset.feature_names,
                                  label_names=cfg.dataset.label_names, adjust_price=True,
                                  seq_len=cfg.model.params.seq_len, pred_len=cfg.model.params.pred_len, training=False)
     else:

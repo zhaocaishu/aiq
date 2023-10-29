@@ -113,14 +113,8 @@ class TSStandardize(Processor):
             pickle.dump({'mean': self.mean, 'std': self.std}, f)
 
     def __call__(self, df: pd.DataFrame = None):
-        # remove symbols without mean and std data
-        symbols = []
-        for symbol in df.index.unique():
-            if symbol in self.mean.index.unique():
-                symbols.append(symbol)
-        df = df.loc[symbols]
-
         # standardize transform
+        symbols = df.index.unique().tolist()
         for symbol in symbols:
             df.loc[symbol, self.target_cols] = (df.loc[symbol, self.target_cols] - self.mean.loc[symbol]) / \
                                                self.std.loc[symbol]

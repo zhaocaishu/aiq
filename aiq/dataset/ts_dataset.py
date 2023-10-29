@@ -29,6 +29,7 @@ class TSDataset(Dataset):
         save_dir,
         start_time=None,
         end_time=None,
+        segment=None,
         feature_names=None,
         label_names=None,
         adjust_price=True,
@@ -53,6 +54,7 @@ class TSDataset(Dataset):
         self.symbols = DataLoader.load_symbols(data_dir, instruments, start_time=start_time, end_time=end_time)
 
         # process per symbol
+        symbols = []
         dfs = []
         for symbol, list_date in self.symbols:
             df = DataLoader.load_features(data_dir, symbol=symbol, start_time=start_time, end_time=end_time)
@@ -75,7 +77,7 @@ class TSDataset(Dataset):
             # check if symbol has enough trade days
             if df.shape[0] < min_trade_days: continue
 
-            # features and target
+            # features
             if adjust_price:
                 close = df['Adj_Close']
             else:
@@ -83,12 +85,14 @@ class TSDataset(Dataset):
 
             df['ADV20'] = Mean(df['Volume'], 20)
             df['Return'] = close / Ref(close, 1) - 1
-            df['Label'] = Ref(close, -5) / close - 1
+            df[self.feature_names_] = df[self.feature_names_].fillna(0)
 
-            # process na
-            df = df.dropna(subset=['Label'])
-            df = df.fillna(0)
+            # target
+            if self.label_names_ is not None:
+                df['Label'] = Ref(close, -5) / close - 1
+                df = df.dropna(subset=['Label'])
 
+            symbols.append(symbol)
             dfs.append(df)
 
         # concat dataframes and set index
@@ -103,31 +107,48 @@ class TSDataset(Dataset):
         else:
             self.df = ts_standardize(self.df)
 
-        symbols = self.df.index.unique().tolist()
-
         # build input and label data
-        self.data = []
+        if self.label_names_ is not None:
+            data = {'Symbol': [], 'Date': [], 'Close': [], 'Feature': [], 'Label': []}
+        else:
+            data = {'Symbol': [], 'Date': [], 'Close': [], 'Feature': []}
+
         for symbol in tqdm(symbols):
             s_df = self.df.loc[symbol]
-            s_trading_days = np.sort(s_df['Date'].unique())
+            s_trade_dates = np.sort(s_df['Date'].unique())
             s_df.set_index('Date', inplace=True)
 
-            if self.label_names is not None:
-                for i in range(seq_len, len(s_trading_days) - pred_len + 1):
-                    input_label_trade_days = s_trading_days[i - seq_len: i + pred_len]
-                    input_label_df = s_df.loc[input_label_trade_days]
-                    input = torch.FloatTensor(input_label_df[self.feature_names_].values[:self.seq_len, :])
-                    label = torch.FloatTensor(input_label_df[self.label_names_].values[self.seq_len:, :])
-                    self.data.append((input, label))
+            if self.label_names_ is not None:
+                for i in range(seq_len, len(s_trade_dates) - pred_len + 1):
+                    trade_date = s_trade_dates[i]
+                    if trade_date < segment[0] or trade_date > segment[1]:
+                        continue
+
+                    feature_label_trade_dates = s_trade_dates[i - seq_len: i + pred_len]
+                    feature_label_df = s_df.loc[feature_label_trade_dates]
+                    feature = feature_label_df[self.feature_names_].values[:self.seq_len, :]
+                    label = feature_label_df[self.label_names_].values[self.seq_len:, :]
+                    data['Symbol'].append(symbol)
+                    data['Date'].append(trade_date)
+                    data['Close'].append(s_df.loc[trade_date, 'Close'])
+                    data['Feature'].append(feature)
+                    data['Label'].append(label)
             else:
-                for i in range(seq_len, len(s_trading_days) + 1):
-                    input_trade_days = s_trading_days[i - seq_len: i + pred_len]
-                    input_df = s_df.loc[input_trade_days]
-                    input = torch.FloatTensor(input_df[self.feature_names_].values[:self.seq_len, :])
-                    self.data.append(input)
+                for i in range(seq_len, len(s_trade_dates)):
+                    trade_date = s_trade_dates[i]
+                    if trade_date < segment[0] or trade_date > segment[1]:
+                        continue
+
+                    feature_trade_dates = s_trade_dates[i - seq_len: i]
+                    feature_df = s_df.loc[feature_trade_dates]
+                    feature = torch.FloatTensor(feature_df[self.feature_names_].values[:self.seq_len, :])
+                    data['Symbol'].append(symbol)
+                    data['Date'].append(trade_date)
+                    data['Close'].append(s_df.loc[trade_date, 'Close'])
+                    data['Feature'].append(feature)
 
         # reset index
-        self.df.reset_index(inplace=True)
+        self.df = pd.DataFrame(data)
 
     @staticmethod
     def adjust_price(df):
@@ -143,11 +164,16 @@ class TSDataset(Dataset):
         return self.df
 
     def __getitem__(self, index):
-        item = self.data[index]
-        return item
+        if self.label_names_ is not None:
+            feature = self.df.iloc[index]['Feature']
+            label = self.df.iloc[index]['Label']
+            return feature, label
+        else:
+            feature = self.df.iloc[index]['Feature']
+            return feature
 
     def __len__(self):
-        return len(self.data)
+        return self.df.shape[0]
 
     @property
     def feature_names(self):
