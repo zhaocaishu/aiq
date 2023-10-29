@@ -148,9 +148,9 @@ class NLinearModel(BaseModel):
                 pred = outputs.detach().cpu().numpy()  # .squeeze()
                 preds.append(pred)
 
-        preds = np.array(preds)
-        preds = preds.reshape(-1, preds.shape[-2], preds.shape[-1])
-        return preds
+        preds = np.vstack(preds)
+        dataset.add_column('PREDICTION', preds)
+        return dataset
 
     def save(self, model_dir):
         if not os.path.exists(model_dir):

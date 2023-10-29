@@ -127,12 +127,18 @@ class TSDataset(Dataset):
                     input = torch.FloatTensor(input_df[self.feature_names_].values[:self.seq_len, :])
                     self.data.append(input)
 
+        # reset index
+        self.df.reset_index(inplace=True)
+
     @staticmethod
     def adjust_price(df):
         price_cols = ['Open', 'High', 'Low', 'Close']
         for col in price_cols:
             df['Adj_' + col] = df[col] * df['Adj_factor']
         return df
+
+    def add_column(self, name: str, data: np.array):
+        self.df[name] = data
 
     def to_dataframe(self):
         return self.df
