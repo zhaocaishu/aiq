@@ -68,24 +68,36 @@ if __name__ == '__main__':
 
     # dataset
     print(cfg.dataset.segments)
-    handlers = (Alpha158(test_mode=True), Alpha101(test_mode=True))
-    dataset = Dataset(args.data_dir,
-                      instruments=args.instruments,
-                      start_time=cfg.dataset.start_time,
-                      end_time=cfg.dataset.end_time,
-                      handlers=handlers)
-    test_dataset = ts_split(dataset, [cfg.dataset.segments['test']])[0]
+    if cfg.model.name in ['PatchTST', 'NLinear']:
+        test_dataset = TSDataset(data_dir=args.data_dir, save_dir=args.save_dir, instruments=args.instruments,
+                                 start_time=cfg.dataset.segments['test'][0],
+                                 end_time=cfg.dataset.segments['test'][1], feature_names=cfg.dataset.feature_names,
+                                 label_names=cfg.dataset.label_names, adjust_price=True,
+                                 seq_len=cfg.model.params.seq_len, pred_len=cfg.model.params.pred_len, training=False)
+    else:
+        handlers = (Alpha158(), Alpha101())
+        dataset = Dataset(args.data_dir,
+                          instruments=args.instruments,
+                          start_time=cfg.dataset.start_time,
+                          end_time=cfg.dataset.end_time,
+                          handlers=handlers)
+        test_dataset = ts_split(dataset, [cfg.dataset.segments['test']])[0]
     print('Loaded %d items to test dataset' % len(test_dataset))
 
-    # evaluation
+    # model
     if cfg.model.name == 'XGB':
         model = XGBModel()
     elif cfg.model.name == 'LGB':
         model = LGBModel()
     elif cfg.model.name == 'DoubleEnsemble':
         model = DEnsembleModel()
-
+    elif cfg.model.name == 'PatchTST':
+        model = PatchTSTModel(model_params=cfg.model.params)
+    elif cfg.model.name == 'NLinear':
+        model = NLinearModel(model_params=cfg.model.params)
     model.load(args.save_dir)
+
+    # prediction
     df_prediction = model.predict(test_dataset).to_dataframe()
 
     # 初始化策略
