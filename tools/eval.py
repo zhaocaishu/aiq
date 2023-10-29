@@ -1,6 +1,7 @@
 import argparse
 import os
 
+import torch
 import numpy as np
 from sklearn.metrics import mean_squared_error
 
@@ -61,11 +62,8 @@ def main():
     model.load(args.save_dir)
 
     # evaluation
-    df_prediction = model.predict(test_dataset).to_dataframe()
-
-    label_reg = df_prediction[dataset.label_names].values
-    prediction = df_prediction['PREDICTION'].values
-    print("RMSE:", np.sqrt(mean_squared_error(label_reg, prediction)))
+    mse = model.eval(test_dataset, criterion=torch.nn.MSELoss())
+    print("RMSE:", np.sqrt(mse))
 
 
 if __name__ == '__main__':
