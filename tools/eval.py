@@ -47,7 +47,7 @@ def main():
         test_dataset = ts_split(dataset, [cfg.dataset.segments['test']])[0]
     print('Loaded %d items to test dataset' % len(test_dataset))
 
-    # evaluation
+    # model
     if cfg.model.name == 'XGB':
         model = XGBModel()
     elif cfg.model.name == 'LGB':
@@ -59,9 +59,11 @@ def main():
     elif cfg.model.name == 'NLinear':
         model = NLinearModel(model_params=cfg.model.params)
     model.load(args.save_dir)
+
+    # evaluation
     df_prediction = model.predict(test_dataset).to_dataframe()
 
-    label_reg = df_prediction[dataset.label_name].values
+    label_reg = df_prediction[dataset.label_names].values
     prediction = df_prediction['PREDICTION'].values
     print("RMSE:", np.sqrt(mean_squared_error(label_reg, prediction)))
 
