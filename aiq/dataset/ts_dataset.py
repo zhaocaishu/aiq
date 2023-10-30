@@ -57,13 +57,12 @@ class TSDataset(Dataset):
         symbols = []
         dfs = []
         for symbol, list_date in self.symbols:
-            df = DataLoader.load_features(data_dir, symbol=symbol, start_time=start_time, end_time=end_time)
+            df = DataLoader.load_features(data_dir, symbol=symbol, start_time=start_time, end_time=end_time,
+                                          column_names=['Symbol', 'Date', 'Open', 'Close', 'High', 'Low', 'Volume',
+                                                        'Adj_factor'])
 
             # skip symbol of non-existed
             if df is None: continue
-
-            # append ticker symbol
-            df['Symbol'] = symbol
 
             # adjust price with factor
             if adjust_price:
@@ -126,8 +125,8 @@ class TSDataset(Dataset):
 
                     feature_label_trade_dates = s_trade_dates[i - seq_len: i + pred_len]
                     feature_label_df = s_df.loc[feature_label_trade_dates]
-                    feature = feature_label_df[self.feature_names_].values[:self.seq_len, :]
-                    label = feature_label_df[self.label_names_].values[self.seq_len:, :]
+                    feature = feature_label_df[self.feature_names_].values[:self.seq_len, :].astype(np.float32)
+                    label = feature_label_df[self.label_names_].values[self.seq_len:, :].astype(np.float32)
                     data['Symbol'].append(symbol)
                     data['Date'].append(trade_date)
                     data['Close'].append(s_df.loc[trade_date, 'Close'])
@@ -141,7 +140,7 @@ class TSDataset(Dataset):
 
                     feature_trade_dates = s_trade_dates[i - seq_len: i]
                     feature_df = s_df.loc[feature_trade_dates]
-                    feature = torch.FloatTensor(feature_df[self.feature_names_].values[:self.seq_len, :])
+                    feature = feature_df[self.feature_names_].values[:self.seq_len, :].astype(np.float32)
                     data['Symbol'].append(symbol)
                     data['Date'].append(trade_date)
                     data['Close'].append(s_df.loc[trade_date, 'Close'])
@@ -165,11 +164,11 @@ class TSDataset(Dataset):
 
     def __getitem__(self, index):
         if self.label_names_ is not None:
-            feature = self.df.iloc[index]['Feature']
-            label = self.df.iloc[index]['Label']
+            feature = torch.FloatTensor(self.df.iloc[index]['Feature'])
+            label = torch.FloatTensor(self.df.iloc[index]['Label'])
             return feature, label
         else:
-            feature = self.df.iloc[index]['Feature']
+            feature = torch.FloatTensor(self.df.iloc[index]['Feature'])
             return feature
 
     def __len__(self):

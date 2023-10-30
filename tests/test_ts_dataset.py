@@ -20,5 +20,5 @@ if __name__ == '__main__':
 
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=1024)
     for batch_idx, sample in enumerate(val_loader):
-        input, target = sample
+        input = sample
         print('Validation:', input, target)
