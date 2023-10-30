@@ -80,14 +80,14 @@ class TSDataset(Dataset):
                 close = df['Close']
 
             # features
-            df['ADV20'] = Mean(df['Volume'], 20)
-            df['Return'] = close / Ref(close, 1) - 1
+            df['Adv20'] = Mean(df['Volume'], 20)
+            df['Return1'] = close / Ref(close, 1) - 1
             df[self.feature_names_] = df[self.feature_names_].fillna(0)
 
             # target
             if self.label_names_ is not None:
-                df['Label'] = Ref(close, -5) / close - 1
-                df = df.dropna(subset=['Label'])
+                df['Return5'] = Ref(close, -5) / close - 1
+                df = df.dropna(subset=['Return5'])
 
             symbols.append(symbol)
             dfs.append(df)

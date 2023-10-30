@@ -6,8 +6,8 @@ dataset:
     'valid': [ '2022-01-01', '2022-11-31' ],
     'test': [ '2023-01-01', '2023-06-31' ]
   }
-  feature_names: ['Adj_Open', 'Adj_Close', 'Adj_High', 'Adj_Low', 'Volume', 'ADV20', 'Return']
-  label_names: ['Label']
+  feature_names: ['Adj_Open', 'Adj_Close', 'Adj_High', 'Adj_Low', 'Volume', 'Adv20', 'Return1']
+  label_names: ['Return5']
 
 model:
   name: 'NLinear'
@@ -18,7 +18,7 @@ model:
     'enc_in': 7,
     'individual': 0,
     'pct_start': 0.3,
-    'train_epochs': 10,
+    'train_epochs': 5,
     'batch_size': 2048,
     'learning_rate': 0.01,
   }
