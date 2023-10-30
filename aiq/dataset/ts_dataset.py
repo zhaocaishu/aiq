@@ -64,10 +64,6 @@ class TSDataset(Dataset):
             # skip symbol of non-existed
             if df is None: continue
 
-            # adjust price with factor
-            if adjust_price:
-                df = self.adjust_price(df)
-
             # keep data started from min_trade_days after list date
             cur_start_time = date_add(list_date, n_days=min_trade_days)
             if cur_start_time > start_time:
@@ -76,12 +72,14 @@ class TSDataset(Dataset):
             # check if symbol has enough trade days
             if df.shape[0] < min_trade_days: continue
 
-            # features
+            # adjust price with factor
             if adjust_price:
+                df = self.adjust_price(df)
                 close = df['Adj_Close']
             else:
                 close = df['Close']
 
+            # features
             df['ADV20'] = Mean(df['Volume'], 20)
             df['Return'] = close / Ref(close, 1) - 1
             df[self.feature_names_] = df[self.feature_names_].fillna(0)
