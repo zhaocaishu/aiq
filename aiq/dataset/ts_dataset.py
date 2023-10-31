@@ -59,7 +59,7 @@ class TSDataset(Dataset):
         for symbol, list_date in self.symbols:
             df = DataLoader.load_features(data_dir, symbol=symbol, start_time=start_time, end_time=end_time,
                                           column_names=['Symbol', 'Date', 'Open', 'Close', 'High', 'Low', 'Volume',
-                                                        'Adj_factor'])
+                                                        'AMount', 'Adj_factor'])
 
             # skip symbol of non-existed
             if df is None: continue
@@ -116,12 +116,12 @@ class TSDataset(Dataset):
             s_df.set_index('Date', inplace=True)
 
             if self.label_names_ is not None:
-                for i in range(seq_len, len(s_trade_dates) - pred_len + 1):
-                    trade_date = s_trade_dates[i]
+                for i in range(len(s_trade_dates) - pred_len - seq_len + 1):
+                    trade_date = s_trade_dates[i + seq_len - 1]
                     if trade_date < segment[0] or trade_date > segment[1]:
                         continue
 
-                    feature_label_trade_dates = s_trade_dates[i - seq_len: i + pred_len]
+                    feature_label_trade_dates = s_trade_dates[i: i + seq_len + pred_len]
                     feature_label_df = s_df.loc[feature_label_trade_dates]
                     feature = feature_label_df[self.feature_names_].values[:self.seq_len, :].astype(np.float32)
                     label = feature_label_df[self.label_names_].values[self.seq_len:, :].astype(np.float32)
@@ -131,12 +131,12 @@ class TSDataset(Dataset):
                     data['Feature'].append(feature)
                     data['Label'].append(label)
             else:
-                for i in range(seq_len, len(s_trade_dates)):
-                    trade_date = s_trade_dates[i]
+                for i in range(len(s_trade_dates) - seq_len + 1):
+                    trade_date = s_trade_dates[i + seq_len - 1]
                     if trade_date < segment[0] or trade_date > segment[1]:
                         continue
 
-                    feature_trade_dates = s_trade_dates[i - seq_len: i]
+                    feature_trade_dates = s_trade_dates[i: i + seq_len]
                     feature_df = s_df.loc[feature_trade_dates]
                     feature = feature_df[self.feature_names_].values[:self.seq_len, :].astype(np.float32)
                     data['Symbol'].append(symbol)

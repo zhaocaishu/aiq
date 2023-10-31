@@ -6,7 +6,7 @@ dataset:
     'valid': [ '2022-01-01', '2022-11-31' ],
     'test': [ '2023-01-01', '2023-06-31' ]
   }
-  feature_names: ['Adj_Open', 'Adj_Close', 'Adj_High', 'Adj_Low', 'Volume', 'Adv20', 'Return1']
+  feature_names: ['Adj_Open', 'Adj_Close', 'Adj_High', 'Adj_Low', 'Volume', 'AMount', 'Adv20', 'Return1']
   label_names: ['Return5']
 
 model:
@@ -15,7 +15,7 @@ model:
     'features': 'MS',
     'seq_len': 96,
     'pred_len': 1,
-    'enc_in': 7,
+    'enc_in': 8,
     'e_layers': 3,
     'n_heads': 4,
     'd_model': 16,
