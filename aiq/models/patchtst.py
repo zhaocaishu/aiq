@@ -13,6 +13,7 @@ from torch.optim import lr_scheduler
 from torch.utils.data import Dataset
 
 from aiq.layers import PatchTSTBackbone, SeriesDecompose
+from aiq.losses import ICLoss
 
 from .base import BaseModel
 
@@ -134,7 +135,7 @@ class PatchTSTModel(BaseModel):
         train_steps = len(train_loader)
 
         optimizer = optim.Adam(self.model.parameters(), lr=self.model_params.learning_rate)
-        criterion = nn.MSELoss()
+        criterion = ICLoss()
         scheduler = lr_scheduler.OneCycleLR(optimizer=optimizer,
                                             steps_per_epoch=train_steps,
                                             pct_start=self.model_params.pct_start,
