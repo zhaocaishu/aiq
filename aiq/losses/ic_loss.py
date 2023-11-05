@@ -13,7 +13,8 @@ class ICLoss(nn.Module):
         targets = targets - targets.mean()
         ic = torch.sum(preds * targets) / (
                     torch.sqrt(torch.sum(preds ** 2)) * torch.sqrt(torch.sum(targets ** 2)) + 1e-5)
-        return -1.0 * ic
+        ic = 1.0 - ic
+        return ic
 
 
 if __name__ == '__main__':
