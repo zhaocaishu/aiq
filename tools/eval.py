@@ -62,8 +62,8 @@ def main():
     model.load(args.save_dir)
 
     # evaluation
-    mse = model.eval(test_dataset, criterion=torch.nn.MSELoss())
-    print("RMSE:", np.sqrt(mse))
+    mse = model.eval(test_dataset)
+    print("Evaluation metric:", np.sqrt(mse))
 
 
 if __name__ == '__main__':

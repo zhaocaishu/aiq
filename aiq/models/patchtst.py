@@ -13,7 +13,7 @@ from torch.optim import lr_scheduler
 from torch.utils.data import Dataset
 
 from aiq.layers import PatchTSTBackbone, SeriesDecompose
-from aiq.losses import ICLoss
+from aiq.losses import ICLoss, CCCLoss
 
 from .base import BaseModel
 
@@ -126,6 +126,14 @@ class PatchTSTModel(BaseModel):
             self.device = 'cpu'
         self.model_params = model_params
         self.model = PatchTST(configs=self.model_params).to(self.device)
+        if self.model_params.criterion == 'IC':
+            self.criterion = ICLoss()
+        elif self.model_params.criterion == 'CCC':
+            self.criterion = CCCLoss()
+        elif self.model_params.criterion == 'MSE':
+            self.criterion = nn.MSELoss()
+        else:
+            raise NotImplementedError
 
     def fit(self, train_dataset: Dataset, val_dataset: Dataset = None):
         train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=self.model_params.batch_size, shuffle=True)
@@ -135,7 +143,6 @@ class PatchTSTModel(BaseModel):
         train_steps = len(train_loader)
 
         optimizer = optim.Adam(self.model.parameters(), lr=self.model_params.learning_rate)
-        criterion = ICLoss()
         scheduler = lr_scheduler.OneCycleLR(optimizer=optimizer,
                                             steps_per_epoch=train_steps,
                                             pct_start=self.model_params.pct_start,
@@ -158,7 +165,7 @@ class PatchTSTModel(BaseModel):
                 f_dim = -1 if self.model_params.features == 'MS' else 0
                 outputs = outputs[:, -self.model_params.pred_len:, f_dim:]
                 batch_y = batch_y[:, -self.model_params.pred_len:, f_dim:].to(self.device)
-                loss = criterion(outputs, batch_y)
+                loss = self.criterion(outputs, batch_y)
                 train_loss.append(loss.item())
 
                 if (i + 1) % 100 == 0:
@@ -175,12 +182,12 @@ class PatchTSTModel(BaseModel):
                 scheduler.step()
 
             train_loss = np.average(train_loss)
-            val_loss = self.eval(val_dataset, criterion)
+            val_loss = self.eval(val_dataset)
             print("Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Val Loss: {3:.7f}".format(
                 epoch + 1, train_steps, train_loss, val_loss))
             print("Epoch: {} cost time: {}".format(epoch + 1, time.time() - epoch_time))
 
-    def eval(self, dataset: Dataset, criterion):
+    def eval(self, dataset: Dataset):
         self.model.eval()
 
         total_loss = []
@@ -198,7 +205,7 @@ class PatchTSTModel(BaseModel):
 
                 pred = outputs.detach().cpu()
                 true = batch_y.detach().cpu()
-                loss = criterion(pred, true)
+                loss = self.criterion(pred, true)
                 total_loss.append(loss)
         total_loss = np.average(total_loss)
         self.model.train()

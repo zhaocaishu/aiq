@@ -21,4 +21,5 @@ model:
     'train_epochs': 5,
     'batch_size': 2048,
     'learning_rate': 0.01,
+    'criterion': 'IC'
   }
