@@ -62,8 +62,8 @@ def main():
     model.load(args.save_dir)
 
     # evaluation
-    mse = model.eval(test_dataset)
-    print("Evaluation metric:", np.sqrt(mse))
+    result = model.eval(test_dataset)
+    print("Evaluation metric result:", result)
 
 
 if __name__ == '__main__':
