@@ -6,7 +6,7 @@ dataset:
     'valid': [ '2022-01-01', '2022-11-31' ],
     'test': [ '2023-01-01', '2023-06-31' ]
   }
-  feature_names: ['Adj_Open', 'Adj_Close', 'Adj_High', 'Adj_Low', 'Volume', 'AMount', 'Adv20', 'Return1']
+  feature_names: ['Adj_Open', 'Adj_Close', 'Adj_High', 'Adj_Low', 'Volume', 'AMount']
   label_names: ['Return5']
 
 model:
