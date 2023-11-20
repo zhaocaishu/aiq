@@ -15,7 +15,7 @@ model:
     'features': 'MS',
     'seq_len': 96,
     'pred_len': 1,
-    'enc_in': 8,
+    'enc_in': 6,
     'e_layers': 3,
     'n_heads': 4,
     'd_model': 16,
@@ -35,6 +35,6 @@ model:
     'pct_start': 0.3,
     'train_epochs': 5,
     'batch_size': 2048,
-    'learning_rate': 0.01,
+    'learning_rate': 0.001,
     'criterion': 'IC'
   }
