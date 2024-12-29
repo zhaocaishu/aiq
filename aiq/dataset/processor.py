@@ -89,3 +89,33 @@ class CSZScore(Processor):
     def __call__(self, df):
         df[self.target_cols] = df[self.target_cols].groupby('Date', group_keys=False).apply(self.norm_func)
         return df
+
+
+class TSStandardize(Processor):
+    def __init__(self, target_cols=None, save_dir=None):
+        self.target_cols = target_cols
+        self.save_dir = save_dir
+
+        if os.path.exists(os.path.join(self.save_dir, 'standardize.pkl')):
+            with open(os.path.join(self.save_dir, 'standardize.pkl'), 'rb') as f:
+                data = pickle.load(f)
+                self.mean = data['mean']
+                self.std = data['std']
+        else:
+            self.mean = None
+            self.std = None
+
+    def fit(self, df: pd.DataFrame = None):
+        self.mean = df[self.target_cols].groupby('Symbol', group_keys=False).mean()
+        self.std = df[self.target_cols].groupby('Symbol', group_keys=False).std()
+
+        with open(os.path.join(self.save_dir, 'standardize.pkl'), 'wb') as f:
+            pickle.dump({'mean': self.mean, 'std': self.std}, f)
+
+    def __call__(self, df: pd.DataFrame = None):
+        # standardize transform
+        symbols = df.index.unique().tolist()
+        for symbol in symbols:
+            df.loc[symbol, self.target_cols] = (df.loc[symbol, self.target_cols] - self.mean.loc[symbol]) / \
+                                               self.std.loc[symbol]
+        return df

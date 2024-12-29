@@ -1,0 +1,40 @@
+dataset:
+  start_time: '2008-01-01'
+  end_time: '2023-06-31'
+  segments: {
+    'train': [ '2008-01-01', '2021-11-31' ],
+    'valid': [ '2022-01-01', '2022-11-31' ],
+    'test': [ '2023-01-01', '2023-06-31' ]
+  }
+  feature_names: ['Adj_Open', 'Adj_Close', 'Adj_High', 'Adj_Low', 'Volume', 'AMount']
+  label_names: ['Return5']
+
+model:
+  name: 'PatchTST'
+  params: {
+    'features': 'MS',
+    'seq_len': 96,
+    'pred_len': 1,
+    'enc_in': 6,
+    'e_layers': 3,
+    'n_heads': 4,
+    'd_model': 16,
+    'd_ff': 128,
+    'dropout': 0.3,
+    'fc_dropout': 0.3,
+    'head_dropout': 0,
+    'patch_len': 4,
+    'stride': 2,
+    'individual': 0,
+    'padding_patch': 'end',
+    'revin': 1,
+    'affine': 0,
+    'subtract_last': 0,
+    'decomposition': 0,
+    'kernel_size': 25,
+    'pct_start': 0.3,
+    'train_epochs': 5,
+    'batch_size': 2048,
+    'learning_rate': 0.001,
+    'criterion': 'IC'
+  }

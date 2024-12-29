@@ -5,6 +5,7 @@ from datetime import timedelta, datetime
 
 import numpy as np
 import pandas as pd
+from torch.utils.data import Dataset
 
 from aiq.utils.date import date_add
 
@@ -16,7 +17,7 @@ from .processor import CSFillna, CSNeutralize, CSFilter, CSZScore
 pd.options.mode.copy_on_write = True
 
 
-class Dataset(abc.ABC):
+class Dataset(Dataset):
     """
     Preparing data for model training and inference.
     """
@@ -29,8 +30,7 @@ class Dataset(abc.ABC):
         end_time=None,
         handlers=None,
         adjust_price=True,
-        cutoff_trade_days=90,
-        min_trade_days=90
+        min_trade_days=63
     ):
         # feature and label names
         self.feature_names_ = None
@@ -45,7 +45,7 @@ class Dataset(abc.ABC):
         for symbol, list_date in self.symbols:
             df = DataLoader.load_features(data_dir, symbol=symbol, start_time=start_time, end_time=end_time)
 
-            # skip ticker of non-existed
+            # skip symbol of non-existed
             if df is None: continue
 
             # append ticker symbol
@@ -59,8 +59,8 @@ class Dataset(abc.ABC):
             if ts_handler is not None:
                 df = ts_handler.fetch(df)
 
-            # keep data started from cutoff_trade_days after list date
-            cur_start_time = date_add(list_date, n_days=cutoff_trade_days)
+            # keep data started from min_trade_days after list date
+            cur_start_time = date_add(list_date, n_days=min_trade_days)
             if cur_start_time > start_time:
                 df = df[(df['Date'] >= cur_start_time)]
 

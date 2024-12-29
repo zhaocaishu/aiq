@@ -1,6 +1,6 @@
 import abc
 
-from aiq.dataset import Dataset
+from torch.utils.data import Dataset
 
 
 class BaseModel(abc.ABC):
@@ -14,7 +14,7 @@ class BaseModel(abc.ABC):
 
         self.model = None
 
-    def fit(self, train_dataset: Dataset, val_dataset: Dataset=None):
+    def fit(self, train_dataset: Dataset, val_dataset: Dataset = None):
         """
         Learn model from the base model
 
@@ -27,7 +27,6 @@ class BaseModel(abc.ABC):
         """
         raise NotImplementedError()
 
-    @abc.abstractmethod
     def predict(self, dataset: Dataset) -> object:
         """
         Give prediction given Dataset

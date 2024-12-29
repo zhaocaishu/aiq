@@ -1,4 +1,6 @@
+import pandas as pd
 from aiq.dataset import Dataset, Alpha158, Alpha101, ts_split
+
 
 if __name__ == '__main__':
     dataset = Dataset('./data', instruments='csi1000', handlers=(Alpha158(), Alpha101()),
