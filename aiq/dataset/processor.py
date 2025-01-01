@@ -1,12 +1,9 @@
-import os
 import abc
-import pickle
-from typing import Union, Text
 
 import pandas as pd
 import numpy as np
 
-from aiq.utils.data import mad_filter, neutralize, zscore
+from aiq.utils.data import robust_zscore, zscore
 
 
 class Processor(abc.ABC):
@@ -33,89 +30,51 @@ class Processor(abc.ABC):
         """
 
 
-class CSFilter(Processor):
-    """Outlier filter"""
-
-    def __init__(self, target_cols=None, method="mad"):
-        self.target_cols = target_cols
-        if method == "mad":
-            self.filter_func = mad_filter
-        else:
-            raise NotImplementedError(f"This type of method is not supported")
-
-    def __call__(self, df):
-        df[self.target_cols] = df[self.target_cols].groupby('Date', group_keys=False).apply(self.filter_func)
-        return df
-
-
-class CSNeutralize(Processor):
-    """Factor neutralize by industry and market value"""
-
-    def __init__(self, industry_num, industry_col=None, market_cap_col=None, target_cols=None):
-        self.industry_num = industry_num
-        self.industry_col = industry_col
-        self.market_cap_col = market_cap_col
-        self.target_cols = target_cols
-        self.neutralize_func = neutralize
-
-    def __call__(self, df):
-        df = df.groupby('Date', group_keys=False).apply(self.neutralize_func,
-                                                        industry_num=self.industry_num,
-                                                        industry_col=self.industry_col,
-                                                        market_cap_col=self.market_cap_col,
-                                                        target_cols=self.target_cols)
-        return df
-
-
-class CSFillna(Processor):
-    """Cross Sectional Fill Nan"""
-
+class DropnaProcessor(Processor):
     def __init__(self, target_cols=None):
         self.target_cols = target_cols
 
     def __call__(self, df):
-        df[self.target_cols] = df[self.target_cols].groupby('Date', group_keys=False).apply(
-            lambda x: x.fillna(x.mean()))
-        return df
+        return df.dropna(subset=self.target_cols)
 
 
-class CSZScore(Processor):
-    """ZScore Normalization"""
+class Fillna(Processor):
+    """Process NaN"""
 
-    def __init__(self, target_cols=None):
+    def __init__(self, target_cols=None, fill_value=0):
         self.target_cols = target_cols
-        self.norm_func = zscore
+        self.fill_value = fill_value
 
     def __call__(self, df):
-        df[self.target_cols] = df[self.target_cols].groupby('Date', group_keys=False).apply(self.norm_func)
+        if self.target_cols is None:
+            df.fillna(self.fill_value, inplace=True)
+        else:
+            # So we use numpy to accelerate filling values
+            nan_select = np.isnan(df.values)
+            nan_select[:, ~df.columns.isin(self.target_cols)] = False
+
+            # FIXME: For pandas==2.0.3, the following code will not set the nan value to be self.fill_value
+            # df.values[nan_select] = self.fill_value
+
+            # lqa's method
+            value_tmp = df.values
+            value_tmp[nan_select] = self.fill_value
+            df = pd.DataFrame(value_tmp, columns=df.columns, index=df.index)
         return df
 
 
-class TSStandardize(Processor):
-    def __init__(self, target_cols=None, save_dir=None):
+class CSZScoreNorm(Processor):
+    """Cross Sectional ZScore Normalization"""
+
+    def __init__(self, target_cols=None, method="zscore"):
         self.target_cols = target_cols
-        self.save_dir = save_dir
-
-        if os.path.exists(os.path.join(self.save_dir, 'standardize.pkl')):
-            with open(os.path.join(self.save_dir, 'standardize.pkl'), 'rb') as f:
-                data = pickle.load(f)
-                self.mean = data['mean']
-                self.std = data['std']
+        if method == "zscore":
+            self.zscore_func = zscore
+        elif method == "robust":
+            self.zscore_func = robust_zscore
         else:
-            self.mean = None
-            self.std = None
+            raise NotImplementedError(f"This type of input is not supported")
 
-    def fit(self, df: pd.DataFrame = None):
-        self.mean = df[self.target_cols].groupby('Symbol', group_keys=False).mean()
-        self.std = df[self.target_cols].groupby('Symbol', group_keys=False).std()
-
-        with open(os.path.join(self.save_dir, 'standardize.pkl'), 'wb') as f:
-            pickle.dump({'mean': self.mean, 'std': self.std}, f)
-
-    def __call__(self, df: pd.DataFrame = None):
-        # standardize transform
-        symbols = df.index.unique().tolist()
-        for symbol in symbols:
-            df.loc[symbol, self.target_cols] = (df.loc[symbol, self.target_cols] - self.mean.loc[symbol]) / \
-                                               self.std.loc[symbol]
+    def __call__(self, df):
+        df[self.target_cols] = df[self.target_cols].groupby("Date", group_keys=False).apply(self.zscore_func)
         return df
