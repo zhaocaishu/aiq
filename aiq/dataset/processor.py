@@ -76,5 +76,9 @@ class CSZScoreNorm(Processor):
             raise NotImplementedError(f"This type of input is not supported")
 
     def __call__(self, df):
-        df[self.target_cols] = df[self.target_cols].groupby("Date", group_keys=False).apply(self.zscore_func)
+        df[self.target_cols] = (
+            df[self.target_cols]
+            .groupby("Date", group_keys=False)
+            .apply(self.zscore_func)
+        )
         return df
