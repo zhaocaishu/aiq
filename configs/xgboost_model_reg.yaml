@@ -1,11 +1,25 @@
 dataset:
-  start_time: '2008-01-01'
-  end_time: '2023-05-01'
-  segments: {
-    'train': [ '2008-07-01', '2021-11-31' ],
-    'valid': [ '2022-01-01', '2022-11-31' ],
-    'test': [ '2023-01-01', '2023-05-01' ]
-  }
+  class: Dataset
+  module_path: aiq.dataset.dataset
+  kwargs:
+      handler:
+        class: Alpha158
+        module_path: aiq.dataset.handler
+        kwargs:
+          processors:
+            - class: Dropna
+              module_path: aiq.dataset.processor
+              kwargs:
+                target_cols: ['LABEL']
+            - class: CSZScoreNorm
+              module_path: aiq.dataset.processor
+              kwargs:
+                target_cols: ['LABEL']
+      segments:
+        train: ['2008-07-01', '2021-12-31']
+        valid: ['2022-01-01', '2022-12-31']
+        test: ['2023-01-01', '2023-05-01']
+
 
 model:
   name: 'XGB'

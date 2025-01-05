@@ -6,6 +6,11 @@ import numpy as np
 from aiq.utils.data import robust_zscore, zscore
 
 
+def get_columns(df: pd.DataFrame = None, target_cols=[]):
+    columns = df.columns[df.columns.isin(target_cols)]
+    return columns
+
+
 class Processor(abc.ABC):
     def fit(self, df: pd.DataFrame = None):
         """
@@ -30,12 +35,12 @@ class Processor(abc.ABC):
         """
 
 
-class DropnaProcessor(Processor):
+class Dropna(Processor):
     def __init__(self, target_cols=None):
         self.target_cols = target_cols
 
     def __call__(self, df):
-        return df.dropna(subset=self.target_cols)
+        return df.dropna(subset=get_columns(df, self.target_cols))
 
 
 class Fillna(Processor):
@@ -76,9 +81,6 @@ class CSZScoreNorm(Processor):
             raise NotImplementedError(f"This type of input is not supported")
 
     def __call__(self, df):
-        df[self.target_cols] = (
-            df[self.target_cols]
-            .groupby("Date", group_keys=False)
-            .apply(self.zscore_func)
-        )
+        cols = get_columns(df, self.target_cols)
+        df[cols] = df[cols].groupby("Date", group_keys=False).apply(self.zscore_func)
         return df

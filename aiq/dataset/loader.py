@@ -1,11 +1,8 @@
 import abc
 import os
-from datetime import datetime
 from typing import List
 
 import pandas as pd
-
-from aiq.utils.date import now_date, date_diff
 
 
 class DataLoader(abc.ABC):
@@ -14,38 +11,42 @@ class DataLoader(abc.ABC):
     """
 
     @staticmethod
-    def load_symbols(data_dir, instruments, start_time=None, end_time=None):
+    def load_instruments(data_dir, market, start_time=None, end_time=None):
         """
         Args:
             data_dir (str): dataset directory
-            instruments (str): index names separated by ','
+            market (str): market names
             start_time (str): start time
             end_time (str): end_time
 
         Returns:
-            List[Tuple[str]]: list of symbol's name and list date
+            List[Tuple[str]]: list of instrument's name and list date
         """
-        symbols = set()
-        instrument_names = instruments.split(',')
-        for instrument_name in instrument_names:
-            file_path = os.path.join(data_dir, 'instruments', instrument_name + '.csv')
-            df = pd.read_csv(file_path)
-            if start_time is not None:
-                df = df[df['Date'] >= start_time]
-            if end_time is not None:
-                df = df[df['Date'] <= end_time]
-            for index, row in df.iterrows():
-                symbols.add((row['Symbol'], row['List_date']))
+        instruments = set()
+        file_path = os.path.join(data_dir, "instruments", market + ".csv")
+        df = pd.read_csv(file_path)
+        if start_time is not None:
+            df = df[df["Date"] >= start_time]
+        if end_time is not None:
+            df = df[df["Date"] <= end_time]
+        for _, row in df.iterrows():
+            instruments.add((row["Instrument"], row["List_date"]))
 
-        return list(symbols)
+        return list(instruments)
 
     @staticmethod
-    def load_features(data_dir, symbol, timestamp_col='Date', start_time=None, end_time=None,
-                      column_names=None) -> pd.DataFrame:
+    def load_features(
+        data_dir,
+        instrument,
+        timestamp_col="Date",
+        start_time=None,
+        end_time=None,
+        column_names=None,
+    ) -> pd.DataFrame:
         """
         Args:
             data_dir (str): dataset directory
-            symbol (str):  ticker symbol
+            instrument (str):  instrument's name
             timestamp_col (str): column name of timestamp
             start_time (str): start of the time range.
             end_time (str): end of the time range.
@@ -54,7 +55,7 @@ class DataLoader(abc.ABC):
         Returns:
             pd.DataFrame: dataset load from the files
         """
-        file_path = os.path.join(data_dir, 'features', symbol + '.csv')
+        file_path = os.path.join(data_dir, "features", instrument + ".csv")
         if not os.path.exists(file_path):
             return None
         df = pd.read_csv(file_path)
@@ -68,7 +69,9 @@ class DataLoader(abc.ABC):
         return df
 
     @staticmethod
-    def load_calendars(data_dir, timestamp_col='Trade_date', start_time=None, end_time=None) -> List[str]:
+    def load_calendars(
+        data_dir, timestamp_col="Trade_date", start_time=None, end_time=None
+    ) -> List[str]:
         """
 
         Args:
@@ -80,7 +83,7 @@ class DataLoader(abc.ABC):
         Returns:
 
         """
-        file_path = os.path.join(data_dir, 'calendars', 'days.csv')
+        file_path = os.path.join(data_dir, "calendars", "sh.csv")
         if not os.path.exists(file_path):
             return None
         df = pd.read_csv(file_path)
@@ -89,5 +92,5 @@ class DataLoader(abc.ABC):
         if end_time is not None:
             df = df[(df[timestamp_col] <= end_time)]
 
-        trade_dates = df[df['Exchange'] == 'SZ']['Trade_date'].tolist()
+        trade_dates = df["Trade_date"].tolist()
         return trade_dates

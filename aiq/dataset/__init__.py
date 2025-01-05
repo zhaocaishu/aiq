@@ -1,3 +1,4 @@
-from .processor import DropnaProcessor, Fillna, CSZScoreNorm
+from .dataset import Dataset
+from .processor import Dropna, Fillna, CSZScoreNorm
 
-__all__ = ["DropnaProcessor", "Fillna", "CSZScoreNorm"]
+__all__ = ["Dataset", "Dropna", "Fillna", "CSZScoreNorm"]
