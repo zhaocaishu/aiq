@@ -47,7 +47,7 @@ class Alpha158(DataHandler):
             module = importlib.import_module(module_path)
             processor = getattr(module, class_name)(**args)
             self.processors.append(processor)
-        
+
         self.feature_names_ = None
         self.label_name_ = None
 
@@ -388,3 +388,13 @@ class Alpha158(DataHandler):
     @property
     def label_name(self):
         return self.label_name_
+
+
+def inst_data_handler(data_handler_config):
+    module_path = data_handler_config["module_path"]
+    class_name = data_handler_config["class"]
+    args = data_handler_config["kwargs"]
+
+    module = importlib.import_module(module_path)
+    data_handler = getattr(module, class_name)(**args)
+    return data_handler

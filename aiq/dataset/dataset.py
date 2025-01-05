@@ -1,4 +1,4 @@
-import importlib
+import numpy as np
 
 import pandas as pd
 from torch.utils.data import Dataset
@@ -14,17 +14,14 @@ class Dataset(Dataset):
     """
 
     def __init__(
-        self, data_dir, instruments, start_time=None, end_time=None, training=False
+        self,
+        data_dir,
+        instruments,
+        start_time=None,
+        end_time=None,
+        data_handler=None,
+        training=False,
     ):
-        # setup data handler
-        data_handler_config = cfg["dataset"]["kwargs"]["handler"]
-        module_path = data_handler_config["module_path"]
-        class_name = data_handler_config["class"]
-        args = data_handler_config["kwargs"]
-
-        module = importlib.import_module(module_path)
-        data_handler = getattr(module, class_name)(**args)
-
         # process instrument
         dfs = []
         for instrument in instruments:
@@ -52,11 +49,14 @@ class Dataset(Dataset):
         self.df = data_handler.process(self.df, training=training)
 
         # feature and label names
-        self.feature_names_ = None
-        self.label_name_ = None
+        self.feature_names_ = data_handler.feature_names
+        self.label_name_ = data_handler.label_name
 
     def to_dataframe(self):
         return self.df
+
+    def add_column(self, name: str, data: np.array):
+        self.df[name] = data
 
     @property
     def feature_names(self):

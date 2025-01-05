@@ -1,34 +1,58 @@
-from aiq.dataset import Dataset, Alpha158, Alpha101, ts_split
-from aiq.models import XGBModel, LGBModel
+from aiq.dataset import inst_data_handler, Dataset
+from aiq.models import LGBModel
+from aiq.utils.config import config as cfg
 
-if __name__ == '__main__':
-    handlers = (Alpha158(), Alpha101())
-    dataset = Dataset('./data', instruments='csi1000', start_time='2021-08-30', end_time='2022-08-26',
-                      handlers=handlers, adjust_price=False)
-    train_dataset, val_dataset = ts_split(dataset=dataset,
-                                          segments=[['2021-08-30', '2022-04-28'], ['2022-04-29', '2022-08-26']])
+if __name__ == "__main__":
+    cfg.from_file("./configs/lightgbm_model_reg.yaml")
+
+    # setup data handler
+    data_handler_config = cfg["data_handler"]
+    data_handler = inst_data_handler(data_handler_config)
+
+    # datasets
+    train_dataset = Dataset(
+        "./data",
+        instruments=["000951.SZ", "601099.SH", "688366.SH"],
+        start_time="2012-01-01",
+        end_time="2021-04-30",
+        data_handler=data_handler,
+        training=True,
+    )
+
+    val_dataset = Dataset(
+        "./data",
+        instruments=["000951.SZ", "601099.SH", "688366.SH"],
+        start_time="2021-05-01",
+        end_time="2023-12-31",
+        data_handler=data_handler,
+        training=True,
+    )
 
     model_params = {
-        'objective': 'mse',
-        'learning_rate': 0.2,
-        'colsample_bytree': 0.8879,
-        'max_depth': 8,
-        'num_leaves': 210,
-        'subsample': 0.8789,
-        'lambda_l1': 205.6999,
-        'lambda_l2': 580.9768,
-        'metric': 'rmse',
-        'nthread': 4
+        "objective": "mse",
+        "learning_rate": 0.2,
+        "colsample_bytree": 0.8879,
+        "max_depth": 8,
+        "num_leaves": 210,
+        "subsample": 0.8789,
+        "lambda_l1": 205.6999,
+        "lambda_l2": 580.9768,
+        "metric": "rmse",
+        "nthread": 4,
     }
 
+    print(train_dataset.feature_names, train_dataset.label_name)
+
     # train stage
-    model = LGBModel(feature_cols=train_dataset.feature_names,
-                     label_col=[train_dataset.label_name],
-                     model_params=model_params)
+    model = LGBModel(
+        feature_cols=train_dataset.feature_names,
+        label_col=[train_dataset.label_name],
+        model_params=model_params,
+    )
     model.fit(train_dataset=train_dataset, val_dataset=val_dataset)
-    model.save(model_dir='./temp')
+    model.save(model_dir="./temp")
 
     # predict stage
     model_eval = LGBModel()
-    model_eval.load(model_dir='./temp')
+    model_eval.load(model_dir="./temp")
     model_eval.predict(dataset=val_dataset)
