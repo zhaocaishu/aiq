@@ -83,7 +83,7 @@ class DataLoader(abc.ABC):
         Returns:
 
         """
-        file_path = os.path.join(data_dir, "calendars", "sh.csv")
+        file_path = os.path.join(data_dir, "calendars", "calendar.csv")
         if not os.path.exists(file_path):
             return None
         df = pd.read_csv(file_path)
@@ -92,5 +92,5 @@ class DataLoader(abc.ABC):
         if end_time is not None:
             df = df[(df[timestamp_col] <= end_time)]
 
-        trade_dates = df["Trade_date"].tolist()
+        trade_dates = df[df["Exchange"] == "SSE"]["Trade_date"].tolist()
         return trade_dates
