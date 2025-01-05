@@ -11,9 +11,9 @@ if __name__ == "__main__":
     # dataset
     train_dataset = Dataset(
         "./data",
-        instruments=["000951.SZ", "601099.SH", "688366.SH"],
-        start_time="2012-01-01",
-        end_time="2023-05-01",
+        instruments=["002750.SZ", "002811.SZ", "600490.SH"],
+        start_time="2024-01-01",
+        end_time="2024-04-30",
         data_handler=data_handler,
         training=True,
     )

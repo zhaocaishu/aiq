@@ -36,9 +36,6 @@ class Dataset(Dataset):
             if df is None:
                 continue
 
-            # append instrument column
-            df["Instrument"] = instrument
-
             dfs.append(df)
 
         # concat dataframes and set multi-index
