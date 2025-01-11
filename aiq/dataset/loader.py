@@ -30,7 +30,7 @@ class DataLoader(abc.ABC):
         if end_time is not None:
             df = df[df["Date"] <= end_time]
         for _, row in df.iterrows():
-            instruments.add((row["Instrument"], row["List_date"]))
+            instruments.add(row["Instrument"])
 
         return list(instruments)
 

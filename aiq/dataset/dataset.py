@@ -20,8 +20,14 @@ class Dataset(Dataset):
         start_time=None,
         end_time=None,
         data_handler=None,
-        training=False,
+        mode="train",
     ):
+        # load instruments from market
+        if isinstance(instruments, str):
+            instruments = DataLoader.load_instruments(
+                data_dir, instruments, start_time, end_time
+            )
+
         # process instrument
         dfs = []
         for instrument in instruments:
@@ -43,7 +49,7 @@ class Dataset(Dataset):
         self.df = self.df.set_index(["Date", "Instrument"])
 
         # preprocess
-        self.df = data_handler.process(self.df, training=training)
+        self.df = data_handler.process(self.df, mode=mode)
 
         # feature and label names
         self.feature_names_ = data_handler.feature_names

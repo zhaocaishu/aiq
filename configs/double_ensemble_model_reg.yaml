@@ -1,12 +1,24 @@
+market: "csi300"
+data_handler:
+  class: Alpha158
+  module_path: aiq.dataset.handler
+  kwargs:
+    processors:
+      - class: Dropna
+        module_path: aiq.dataset.processor
+        kwargs:
+          target_cols: ['LABEL']
+      - class: CSZScoreNorm
+        module_path: aiq.dataset.processor
+        kwargs:
+          target_cols: ['LABEL']
 dataset:
-  start_time: '2021-08-30'
-  end_time: '2022-08-26'
-  segments: {
-    'train': ['2021-08-30', '2022-02-28'],
-    'valid': ['2022-02-29', '2022-05-31'],
-    'test': ['2022-06-01', '2022-08-26']
-  }
-
+  class: Dataset
+  module_path: aiq.dataset.dataset
+  segments:
+    train: ['2008-07-01', '2024-12-31']
+    valid: ['2022-01-01', '2024-12-31']
+    test: ['2023-01-01', '2024-05-01']
 model:
   name: 'DoubleEnsemble'
   params: {

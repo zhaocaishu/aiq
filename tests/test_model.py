@@ -16,7 +16,7 @@ if __name__ == "__main__":
         start_time="2024-01-01",
         end_time="2024-04-30",
         data_handler=data_handler,
-        training=True,
+        mode="train",
     )
 
     val_dataset = Dataset(
@@ -25,7 +25,7 @@ if __name__ == "__main__":
         start_time="2024-05-01",
         end_time="2024-09-30",
         data_handler=data_handler,
-        training=True,
+        mode="valid",
     )
 
     model_params = {

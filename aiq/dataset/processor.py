@@ -84,3 +84,38 @@ class CSZScoreNorm(Processor):
         cols = get_columns(df, self.target_cols)
         df[cols] = df[cols].groupby("Date", group_keys=False).apply(self.zscore_func)
         return df
+
+
+class RobustZScoreNorm(Processor):
+    """Robust ZScore Normalization
+
+    Use robust statistics for Z-Score normalization:
+        mean(x) = median(x)
+        std(x) = MAD(x) * 1.4826
+
+    Reference:
+        https://en.wikipedia.org/wiki/Median_absolute_deviation.
+    """
+
+    def __init__(
+        self, target_cols=None, clip_outlier=True
+    ):
+        self.target_cols = target_cols
+        self.clip_outlier = clip_outlier
+
+    def fit(self, df: pd.DataFrame = None):
+        self.cols = get_columns(df, self.target_cols)
+        X = df[self.cols].values
+        self.mean_train = np.nanmedian(X, axis=0)
+        self.std_train = np.nanmedian(np.abs(X - self.mean_train), axis=0)
+        self.std_train += 1e-12
+        self.std_train *= 1.4826
+
+    def __call__(self, df):
+        X = df[self.cols]
+        X -= self.mean_train
+        X /= self.std_train
+        if self.clip_outlier:
+            X = np.clip(X, -3, 3)
+        df[self.cols] = X
+        return df

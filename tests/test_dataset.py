@@ -15,6 +15,16 @@ if __name__ == "__main__":
         start_time="2024-01-01",
         end_time="2024-04-30",
         data_handler=data_handler,
-        training=True,
+        mode="train",
     )
-    print(train_dataset.to_dataframe())
+    
+    # dataset
+    val_dataset = Dataset(
+        "./data",
+        instruments=["002750.SZ", "002811.SZ", "600490.SH"],
+        start_time="2024-01-01",
+        end_time="2024-04-30",
+        data_handler=data_handler,
+        mode="valid",
+    )
+    print(val_dataset.to_dataframe().equals(train_dataset.to_dataframe()))

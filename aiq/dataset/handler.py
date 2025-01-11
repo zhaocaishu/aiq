@@ -51,7 +51,7 @@ class Alpha158(DataHandler):
         self.feature_names_ = None
         self.label_name_ = None
 
-    def process(self, df: pd.DataFrame = None, training=False) -> pd.DataFrame:
+    def process(self, df: pd.DataFrame = None, mode="train") -> pd.DataFrame:
         open = df["Open"]
         close = df["Close"]
         high = df["High"]
@@ -353,7 +353,7 @@ class Alpha158(DataHandler):
         self.feature_names_ = names.copy()
 
         # labels
-        if training:
+        if mode in ["train", "valid"]:
             # learning target
             self.label_name_ = "LABEL"
             features.append(Ref(close, -5) / Ref(close, -1) - 1)
@@ -371,7 +371,7 @@ class Alpha158(DataHandler):
         )
 
         # data preprocessor
-        if training:
+        if mode == "train":
             for processor in self.processors:
                 processor.fit(df)
                 df = processor(df)
