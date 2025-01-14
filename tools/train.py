@@ -35,7 +35,7 @@ def main():
     # dataset
     train_dataset = Dataset(
         args.data_dir,
-        instruments=cfg.market,
+        instruments=cfg.dataset.market,
         start_time=cfg.dataset.segments["train"][0],
         end_time=cfg.dataset.segments["train"][1],
         data_handler=data_handler,

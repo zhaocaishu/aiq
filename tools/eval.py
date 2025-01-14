@@ -36,7 +36,7 @@ def main():
     # dataset
     val_dataset = Dataset(
         args.data_dir,
-        instruments=cfg.market,
+        instruments=cfg.dataset.market,
         start_time=cfg.dataset.segments["valid"][0],
         end_time=cfg.dataset.segments["valid"][1],
         data_handler=data_handler,
