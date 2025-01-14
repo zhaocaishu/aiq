@@ -3,6 +3,8 @@ import importlib
 
 import pandas as pd
 
+from aiq.utils.config import config as cfg
+
 from aiq.ops import (
     Greater,
     Less,
@@ -351,13 +353,15 @@ class Alpha158(DataHandler):
 
         # features
         self.feature_names_ = names.copy()
+        cfg["data_handler"]["feature"] = self.feature_names_
 
         # labels
         if mode in ["train", "valid"]:
-            # learning target
+            # target
             self.label_name_ = "LABEL"
             features.append(Ref(close, -5) / Ref(close, -1) - 1)
             names.append(self.label_name_)
+            cfg["data_handler"]["label"] = self.label_name_
 
         # concat all features and labels
         df = pd.concat(

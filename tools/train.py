@@ -28,8 +28,7 @@ def main():
     cfg.from_file(args.cfg_file)
     print(cfg)
 
-    # dataset
-    print(cfg.dataset.segments)
+    # data handler
     data_handler_config = cfg["data_handler"]
     data_handler = inst_data_handler(data_handler_config)
 
@@ -45,7 +44,7 @@ def main():
 
     val_dataset = Dataset(
         args.data_dir,
-        instruments=cfg.market,
+        instruments=cfg.dataset.market,
         start_time=cfg.dataset.segments["valid"][0],
         end_time=cfg.dataset.segments["valid"][1],
         data_handler=data_handler,
@@ -82,9 +81,12 @@ def main():
     model.fit(train_dataset=train_dataset, val_dataset=val_dataset)
 
     # save data hanlder and model
-    with open(os.path.join(args.save_dir, 'data_handler.pkl'), 'wb') as f:
+    if not os.path.exists(args.save_dir):
+        os.makedirs(args.save_dir)
+
+    with open(os.path.join(args.save_dir, "data_handler.pkl"), "wb") as f:
         pickle.dump(data_handler, f)
-        
+
     model.save(model_dir=args.save_dir)
 
     print("Model training has been finished successfully!")

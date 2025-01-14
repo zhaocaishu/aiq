@@ -1,4 +1,3 @@
-market: "csi300"
 data_handler:
   class: Alpha158
   module_path: aiq.dataset.handler
@@ -7,18 +6,19 @@ data_handler:
       - class: RobustZScoreNorm
         module_path: aiq.dataset.processor
         kwargs:
-          target_cols: ['Open', 'Close', 'High', 'Low', 'Pre_Close']
+          fields_group: 'feature'
       - class: Dropna
         module_path: aiq.dataset.processor
         kwargs:
-          target_cols: ['LABEL']
+          fields_group: 'label'
       - class: CSZScoreNorm
         module_path: aiq.dataset.processor
         kwargs:
-          target_cols: ['LABEL']
+          fields_group: 'label'
 dataset:
   class: Dataset
   module_path: aiq.dataset.dataset
+  market: "csi300"
   segments:
     train: ['2008-07-01', '2024-12-31']
     valid: ['2022-01-01', '2024-12-31']

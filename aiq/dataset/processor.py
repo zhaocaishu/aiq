@@ -4,11 +4,16 @@ import pandas as pd
 import numpy as np
 
 from aiq.utils.data import robust_zscore, zscore
+from aiq.utils.config import config as cfg
 
 
-def get_columns(df: pd.DataFrame = None, target_cols=[]):
-    columns = df.columns[df.columns.isin(target_cols)]
-    return columns
+def get_group_columns(df: pd.DataFrame = None, group=None):
+    if group is None:
+        return df.columns
+    
+    group_columns = cfg["data_handler"].get(group, [])
+    group_columns = [group_columns] if isinstance(group_columns, str) else group_columns
+    return df.columns[df.columns.isin(group_columns)]
 
 
 class Processor(abc.ABC):
@@ -36,27 +41,29 @@ class Processor(abc.ABC):
 
 
 class Dropna(Processor):
-    def __init__(self, target_cols=None):
-        self.target_cols = target_cols
+    def __init__(self, fields_group=None):
+        self.fields_group = fields_group
 
     def __call__(self, df):
-        return df.dropna(subset=get_columns(df, self.target_cols))
+        return df.dropna(subset=get_group_columns(df, self.fields_group))
 
 
 class Fillna(Processor):
     """Process NaN"""
 
-    def __init__(self, target_cols=None, fill_value=0):
-        self.target_cols = target_cols
+    def __init__(self, fields_group=None, fill_value=0):
+        self.fields_group = fields_group
         self.fill_value = fill_value
 
     def __call__(self, df):
-        if self.target_cols is None:
+        if self.fields_group is None:
             df.fillna(self.fill_value, inplace=True)
         else:
             # So we use numpy to accelerate filling values
             nan_select = np.isnan(df.values)
-            nan_select[:, ~df.columns.isin(self.target_cols)] = False
+            nan_select[:, ~df.columns.isin(cfg["data_handler"][self.fields_group])] = (
+                False
+            )
 
             # FIXME: For pandas==2.0.3, the following code will not set the nan value to be self.fill_value
             # df.values[nan_select] = self.fill_value
@@ -71,8 +78,8 @@ class Fillna(Processor):
 class CSZScoreNorm(Processor):
     """Cross Sectional ZScore Normalization"""
 
-    def __init__(self, target_cols=None, method="zscore"):
-        self.target_cols = target_cols
+    def __init__(self, fields_group=None, method="zscore"):
+        self.fields_group = fields_group
         if method == "zscore":
             self.zscore_func = zscore
         elif method == "robust":
@@ -81,7 +88,7 @@ class CSZScoreNorm(Processor):
             raise NotImplementedError(f"This type of input is not supported")
 
     def __call__(self, df):
-        cols = get_columns(df, self.target_cols)
+        cols = get_group_columns(df, self.fields_group)
         df[cols] = df[cols].groupby("Date", group_keys=False).apply(self.zscore_func)
         return df
 
@@ -97,14 +104,12 @@ class RobustZScoreNorm(Processor):
         https://en.wikipedia.org/wiki/Median_absolute_deviation.
     """
 
-    def __init__(
-        self, target_cols=None, clip_outlier=True
-    ):
-        self.target_cols = target_cols
+    def __init__(self, fields_group=None, clip_outlier=True):
+        self.fields_group = fields_group
         self.clip_outlier = clip_outlier
 
     def fit(self, df: pd.DataFrame = None):
-        self.cols = get_columns(df, self.target_cols)
+        self.cols = get_group_columns(df, self.fields_group)
         X = df[self.cols].values
         self.mean_train = np.nanmedian(X, axis=0)
         self.std_train = np.nanmedian(np.abs(X - self.mean_train), axis=0)

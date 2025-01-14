@@ -1,4 +1,4 @@
-from .ic import IC
+from .evaluator import Evaluator
 
 
-__all__ = ['IC']
+__all__ = ['Evaluator']

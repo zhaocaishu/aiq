@@ -2,9 +2,10 @@ import os
 import argparse
 import pickle
 
-from aiq.dataset import inst_data_handler, Dataset
-from aiq.models import XGBModel, LGBModel, DEnsembleModel, PatchTSTModel, NLinearModel
 from aiq.utils.config import config as cfg
+from aiq.dataset import Dataset
+from aiq.models import XGBModel, LGBModel, DEnsembleModel, PatchTSTModel, NLinearModel
+from aiq.evaluation import Evaluator
 
 
 def parse_args():
@@ -28,8 +29,7 @@ def main():
     cfg.from_file(args.cfg_file)
     print(cfg)
 
-    # load data handler
-    print(cfg.dataset.segments)
+    # data handler
     with open(os.path.join(args.save_dir, "data_handler.pkl"), "rb") as f:
         data_handler = pickle.load(f)
 
@@ -42,24 +42,26 @@ def main():
         data_handler=data_handler,
         mode="valid",
     )
-    print("Loaded %d items to test dataset" % len(val_dataset))
+    print("Loaded %d items to validation dataset" % len(val_dataset))
 
-    # model
+    # load model
     if cfg.model.name == "XGB":
         model = XGBModel()
     elif cfg.model.name == "LGB":
         model = LGBModel()
     elif cfg.model.name == "DoubleEnsemble":
         model = DEnsembleModel()
-    elif cfg.model.name == "PatchTST":
-        model = PatchTSTModel(model_params=cfg.model.params)
-    elif cfg.model.name == "NLinear":
-        model = NLinearModel(model_params=cfg.model.params)
+    else:
+        raise ValueError(f"Unsupported model name: {cfg.model.name}")
     model.load(args.save_dir)
 
+    # prediction
+    pred_df = model.predict(val_dataset).to_dataframe()
+
     # evaluation
-    result = model.eval(val_dataset)
-    print("Evaluation metric result:", result)
+    evaluator = Evaluator()
+    results = evaluator.evaluate(pred_df)
+    print("Evaluation result:", results)
 
 
 if __name__ == "__main__":

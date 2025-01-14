@@ -3,8 +3,6 @@ import numpy as np
 import pandas as pd
 from torch.utils.data import Dataset
 
-from aiq.utils.config import config as cfg
-
 from .loader import DataLoader
 
 
