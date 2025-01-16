@@ -1,5 +1,4 @@
 pandas
-backtrader
 easydict
 PyYAML
 scikit-learn
