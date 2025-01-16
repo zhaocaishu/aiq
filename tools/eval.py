@@ -3,8 +3,7 @@ import argparse
 import pickle
 
 from aiq.utils.config import config as cfg
-from aiq.dataset import Dataset
-from aiq.models import XGBModel, LGBModel, DEnsembleModel, PatchTSTModel, NLinearModel
+from aiq.utils.module import init_instance_by_config
 from aiq.evaluation import Evaluator
 
 
@@ -34,25 +33,20 @@ def main():
         data_handler = pickle.load(f)
 
     # dataset
-    val_dataset = Dataset(
-        args.data_dir,
-        instruments=cfg.dataset.market,
-        start_time=cfg.dataset.segments["valid"][0],
-        end_time=cfg.dataset.segments["valid"][1],
+    val_dataset = init_instance_by_config(
+        cfg.dataset,
+        data_dir=args.data_dir,
         data_handler=data_handler,
         mode="valid",
     )
     print("Loaded %d items to validation dataset" % len(val_dataset))
 
     # load model
-    if cfg.model.name == "XGB":
-        model = XGBModel()
-    elif cfg.model.name == "LGB":
-        model = LGBModel()
-    elif cfg.model.name == "DoubleEnsemble":
-        model = DEnsembleModel()
-    else:
-        raise ValueError(f"Unsupported model name: {cfg.model.name}")
+    model = init_instance_by_config(
+        cfg.model,
+        feature_cols=val_dataset.feature_names,
+        label_col=[val_dataset.label_name],
+    )
     model.load(args.save_dir)
 
     # prediction

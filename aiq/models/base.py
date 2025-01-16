@@ -1,4 +1,5 @@
 import abc
+import copy
 
 from torch.utils.data import Dataset
 
@@ -10,7 +11,10 @@ class BaseModel(abc.ABC):
         self.feature_cols_ = feature_cols
         self.label_col_ = label_col
 
-        self.model_params = model_params
+        if model_params is not None:
+            self.model_params = copy.deepcopy(dict(model_params))
+        else:
+            self.model_params = {}
 
         self.model = None
 

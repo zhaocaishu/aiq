@@ -2,9 +2,8 @@ import os
 import argparse
 import pickle
 
-from aiq.dataset import inst_data_handler, Dataset
-from aiq.models import XGBModel, LGBModel, DEnsembleModel
 from aiq.utils.config import config as cfg
+from aiq.utils.module import init_instance_by_config
 
 
 def parse_args():
@@ -29,24 +28,19 @@ def main():
     print(cfg)
 
     # data handler
-    data_handler_config = cfg["data_handler"]
-    data_handler = inst_data_handler(data_handler_config)
+    data_handler = init_instance_by_config(cfg.data_handler)
 
     # dataset
-    train_dataset = Dataset(
-        args.data_dir,
-        instruments=cfg.dataset.market,
-        start_time=cfg.dataset.segments["train"][0],
-        end_time=cfg.dataset.segments["train"][1],
+    train_dataset = init_instance_by_config(
+        cfg.dataset,
+        data_dir=args.data_dir,
         data_handler=data_handler,
         mode="train",
     )
 
-    val_dataset = Dataset(
-        args.data_dir,
-        instruments=cfg.dataset.market,
-        start_time=cfg.dataset.segments["valid"][0],
-        end_time=cfg.dataset.segments["valid"][1],
+    val_dataset = init_instance_by_config(
+        cfg.dataset,
+        data_dir=args.data_dir,
         data_handler=data_handler,
         mode="valid",
     )
@@ -57,26 +51,11 @@ def main():
     )
 
     # train model
-    if cfg.model.name == "XGB":
-        model = XGBModel(
-            feature_cols=train_dataset.feature_names,
-            label_col=train_dataset.label_name,
-            model_params=cfg.model.params,
-        )
-    elif cfg.model.name == "LGB":
-        model = LGBModel(
-            feature_cols=train_dataset.feature_names,
-            label_col=train_dataset.label_name,
-            model_params=dict(cfg.model.params),
-        )
-    elif cfg.model.name == "DoubleEnsemble":
-        model = DEnsembleModel(
-            feature_cols=train_dataset.feature_names,
-            label_col=[train_dataset.label_name],
-            **dict(cfg.model.params),
-        )
-    else:
-        raise ValueError(f"Unsupported model name: {cfg.model.name}")
+    model = init_instance_by_config(
+        cfg.model,
+        feature_cols=train_dataset.feature_names,
+        label_col=[train_dataset.label_name],
+    )
 
     model.fit(train_dataset=train_dataset, val_dataset=val_dataset)
 

@@ -4,16 +4,23 @@ import pandas as pd
 import numpy as np
 
 from aiq.utils.data import robust_zscore, zscore
-from aiq.utils.config import config as cfg
 
 
-def get_group_columns(df: pd.DataFrame = None, group=None):
+def get_group_columns(df: pd.DataFrame, group: str = None):
+    """
+    get a group of columns from multi-index columns DataFrame
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        with multi of columns.
+    group : str
+        the name of the feature group, i.e. the first level value of the group index.
+    """
     if group is None:
         return df.columns
-    
-    group_columns = cfg["data_handler"].get(group, [])
-    group_columns = [group_columns] if isinstance(group_columns, str) else group_columns
-    return df.columns[df.columns.isin(group_columns)]
+    else:
+        return df.columns[df.columns.get_loc(group)]
 
 
 class Processor(abc.ABC):
@@ -59,11 +66,11 @@ class Fillna(Processor):
         if self.fields_group is None:
             df.fillna(self.fill_value, inplace=True)
         else:
+            cols = get_group_columns(df, self.fields_group)
+
             # So we use numpy to accelerate filling values
             nan_select = np.isnan(df.values)
-            nan_select[:, ~df.columns.isin(cfg["data_handler"][self.fields_group])] = (
-                False
-            )
+            nan_select[:, ~df.columns.isin(cols)] = False
 
             # FIXME: For pandas==2.0.3, the following code will not set the nan value to be self.fill_value
             # df.values[nan_select] = self.fill_value

@@ -1,29 +1,26 @@
-from aiq.dataset import inst_data_handler, Dataset
 from aiq.utils.config import config as cfg
+from aiq.utils.module import init_instance_by_config
+
 
 if __name__ == "__main__":
+    # config
     cfg.from_file("./configs/xgboost_model_reg.yaml")
 
-    # setup data handler
-    data_handler_config = cfg["data_handler"]
-    data_handler = inst_data_handler(data_handler_config)
+    # data handler
+    data_handler = init_instance_by_config(cfg.data_handler)
 
-    # dataset
-    train_dataset = Dataset(
-        "./data",
-        instruments=["002750.SZ", "002811.SZ", "600490.SH"],
-        start_time="2024-01-01",
-        end_time="2024-04-30",
+    # train dataset
+    train_dataset = init_instance_by_config(
+        cfg.dataset,
+        data_dir="./data",
         data_handler=data_handler,
         mode="train",
     )
-    
-    # dataset
-    val_dataset = Dataset(
-        "./data",
-        instruments=["002750.SZ", "002811.SZ", "600490.SH"],
-        start_time="2024-01-01",
-        end_time="2024-04-30",
+
+    # validation dataset
+    val_dataset = init_instance_by_config(
+        cfg.dataset,
+        data_dir="./data",
         data_handler=data_handler,
         mode="valid",
     )

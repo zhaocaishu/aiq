@@ -1,54 +1,39 @@
-from aiq.dataset import inst_data_handler, Dataset
-from aiq.models import LGBModel
+from aiq.models.lightgbm import LGBModel
 from aiq.utils.config import config as cfg
+from aiq.utils.module import init_instance_by_config
+
 
 if __name__ == "__main__":
+    # config
     cfg.from_file("./configs/lightgbm_model_reg.yaml")
 
-    # setup data handler
-    data_handler_config = cfg["data_handler"]
-    data_handler = inst_data_handler(data_handler_config)
+    # data handler
+    data_handler = init_instance_by_config(cfg.data_handler)
 
-    # datasets
-    train_dataset = Dataset(
-        "./data",
-        instruments=["002750.SZ", "002811.SZ", "600490.SH"],
-        start_time="2024-01-01",
-        end_time="2024-04-30",
+    # train and validation dataset
+    train_dataset = init_instance_by_config(
+        cfg.dataset,
+        data_dir="./data",
         data_handler=data_handler,
         mode="train",
     )
 
-    val_dataset = Dataset(
-        "./data",
-        instruments=["002750.SZ", "002811.SZ", "600490.SH"],
-        start_time="2024-05-01",
-        end_time="2024-09-30",
+    val_dataset = init_instance_by_config(
+        cfg.dataset,
+        data_dir="./data",
         data_handler=data_handler,
         mode="valid",
     )
 
-    model_params = {
-        "objective": "mse",
-        "learning_rate": 0.2,
-        "colsample_bytree": 0.8879,
-        "max_depth": 8,
-        "num_leaves": 210,
-        "subsample": 0.8789,
-        "lambda_l1": 205.6999,
-        "lambda_l2": 580.9768,
-        "metric": "rmse",
-        "nthread": 4,
-    }
-
     print(train_dataset.feature_names, train_dataset.label_name)
 
     # train stage
-    model = LGBModel(
+    model = init_instance_by_config(
+        cfg.model,
         feature_cols=train_dataset.feature_names,
         label_col=[train_dataset.label_name],
-        model_params=model_params,
     )
+
     model.fit(train_dataset=train_dataset, val_dataset=val_dataset)
     model.save(model_dir="./temp")
 

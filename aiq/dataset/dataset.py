@@ -15,11 +15,13 @@ class Dataset(Dataset):
         self,
         data_dir,
         instruments,
-        start_time=None,
-        end_time=None,
+        segments,
         data_handler=None,
         mode="train",
     ):
+        # start and end time
+        start_time, end_time = segments[mode]
+
         # load instruments from market
         if isinstance(instruments, str):
             instruments = DataLoader.load_instruments(

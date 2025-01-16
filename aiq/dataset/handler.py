@@ -353,28 +353,26 @@ class Alpha158(DataHandler):
 
         # features
         self.feature_names_ = names.copy()
-        cfg["data_handler"]["feature"] = self.feature_names_
 
         # labels
         if mode in ["train", "valid"]:
-            # target
             self.label_name_ = "LABEL"
             features.append(Ref(close, -5) / Ref(close, -1) - 1)
             names.append(self.label_name_)
-            cfg["data_handler"]["label"] = self.label_name_
+        else:
+            self.label_name_ = None
 
         # concat all features and labels
         df = pd.concat(
-            [
-                df,
-                pd.concat(
-                    [features[i].rename(names[i]) for i in range(len(names))], axis=1
-                ).astype("float32"),
-            ],
-            axis=1,
-        )
+            [features[i].rename(names[i]) for i in range(len(names))], axis=1
+        ).astype("float32")
 
         # data preprocessor
+        fields_group = [("feature", name) for name in self.feature_names_]
+        if self.label_name_:
+            fields_group.append(("label", self.label_name_))
+        df.columns = pd.MultiIndex.from_tuples(fields_group)
+
         if mode == "train":
             for processor in self.processors:
                 processor.fit(df)
@@ -382,6 +380,8 @@ class Alpha158(DataHandler):
         else:
             for processor in self.processors:
                 df = processor(df)
+
+        df.columns = df.columns.droplevel()
 
         return df
 
@@ -392,13 +392,3 @@ class Alpha158(DataHandler):
     @property
     def label_name(self):
         return self.label_name_
-
-
-def inst_data_handler(data_handler_config):
-    module_path = data_handler_config["module_path"]
-    class_name = data_handler_config["class"]
-    args = data_handler_config["kwargs"]
-
-    module = importlib.import_module(module_path)
-    data_handler = getattr(module, class_name)(**args)
-    return data_handler
