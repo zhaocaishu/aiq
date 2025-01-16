@@ -3,10 +3,6 @@ data_handler:
   module_path: aiq.dataset.handler
   kwargs:
     processors:
-      - class: RobustZScoreNorm
-        module_path: aiq.dataset.processor
-        kwargs:
-          fields_group: 'feature'
       - class: Dropna
         module_path: aiq.dataset.processor
         kwargs:
