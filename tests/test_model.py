@@ -1,34 +1,43 @@
-from aiq.dataset import Dataset, Alpha158, Alpha101, ts_split
-from aiq.models import XGBModel, LGBModel
+from aiq.models.lightgbm import LGBModel
+from aiq.utils.config import config as cfg
+from aiq.utils.module import init_instance_by_config
 
-if __name__ == '__main__':
-    handlers = (Alpha158(), Alpha101())
-    dataset = Dataset('./data', instruments='csi1000', start_time='2021-08-30', end_time='2022-08-26',
-                      handlers=handlers, adjust_price=False)
-    train_dataset, val_dataset = ts_split(dataset=dataset,
-                                          segments=[['2021-08-30', '2022-04-28'], ['2022-04-29', '2022-08-26']])
 
-    model_params = {
-        'objective': 'mse',
-        'learning_rate': 0.2,
-        'colsample_bytree': 0.8879,
-        'max_depth': 8,
-        'num_leaves': 210,
-        'subsample': 0.8789,
-        'lambda_l1': 205.6999,
-        'lambda_l2': 580.9768,
-        'metric': 'rmse',
-        'nthread': 4
-    }
+if __name__ == "__main__":
+    # config
+    cfg.from_file("./configs/lightgbm_model_reg.yaml")
+
+    # data handler
+    data_handler = init_instance_by_config(cfg.data_handler)
+
+    # train and validation dataset
+    train_dataset = init_instance_by_config(
+        cfg.dataset,
+        data_dir="./data",
+        data_handler=data_handler,
+        mode="train",
+    )
+
+    val_dataset = init_instance_by_config(
+        cfg.dataset,
+        data_dir="./data",
+        data_handler=data_handler,
+        mode="valid",
+    )
+
+    print(train_dataset.feature_names, train_dataset.label_name)
 
     # train stage
-    model = LGBModel(feature_cols=train_dataset.feature_names,
-                     label_col=[train_dataset.label_name],
-                     model_params=model_params)
+    model = init_instance_by_config(
+        cfg.model,
+        feature_cols=train_dataset.feature_names,
+        label_col=[train_dataset.label_name],
+    )
+
     model.fit(train_dataset=train_dataset, val_dataset=val_dataset)
-    model.save(model_dir='./temp')
+    model.save(model_dir="./temp")
 
     # predict stage
     model_eval = LGBModel()
-    model_eval.load(model_dir='./temp')
+    model_eval.load(model_dir="./temp")
     model_eval.predict(dataset=val_dataset)

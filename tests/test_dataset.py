@@ -1,9 +1,27 @@
-import pandas as pd
-from aiq.dataset import Dataset, Alpha158, Alpha101, ts_split
+from aiq.utils.config import config as cfg
+from aiq.utils.module import init_instance_by_config
 
 
-if __name__ == '__main__':
-    dataset = Dataset('./data', instruments='csi1000', handlers=(Alpha158(), Alpha101()),
-                      start_time='2012-01-01', end_time='2023-05-01', adjust_price=False)
-    train_dataset, val_dataset = ts_split(dataset, [('2012-07-01', '2021-12-31'), ('2022-01-01', '2022-11-31')])
-    print(dataset.to_dataframe().shape, train_dataset.to_dataframe().shape, val_dataset.to_dataframe().shape)
+if __name__ == "__main__":
+    # config
+    cfg.from_file("./configs/xgboost_model_reg.yaml")
+
+    # data handler
+    data_handler = init_instance_by_config(cfg.data_handler)
+
+    # train dataset
+    train_dataset = init_instance_by_config(
+        cfg.dataset,
+        data_dir="./data",
+        data_handler=data_handler,
+        mode="train",
+    )
+
+    # validation dataset
+    val_dataset = init_instance_by_config(
+        cfg.dataset,
+        data_dir="./data",
+        data_handler=data_handler,
+        mode="valid",
+    )
+    print(val_dataset.to_dataframe().equals(train_dataset.to_dataframe()))

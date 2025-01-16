@@ -1,6 +1,6 @@
 pandas
-backtrader
 easydict
 PyYAML
 scikit-learn
 lightgbm
+xgboost

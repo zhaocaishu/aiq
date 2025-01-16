@@ -1,12 +1,26 @@
-import os
 import abc
-import pickle
-from typing import Union, Text
 
 import pandas as pd
 import numpy as np
 
-from aiq.utils.data import mad_filter, neutralize, zscore
+from aiq.utils.data import robust_zscore, zscore
+
+
+def get_group_columns(df: pd.DataFrame, group: str = None):
+    """
+    get a group of columns from multi-index columns DataFrame
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        with multi of columns.
+    group : str
+        the name of the feature group, i.e. the first level value of the group index.
+    """
+    if group is None:
+        return df.columns
+    else:
+        return df.columns[df.columns.get_loc(group)]
 
 
 class Processor(abc.ABC):
@@ -33,89 +47,87 @@ class Processor(abc.ABC):
         """
 
 
-class CSFilter(Processor):
-    """Outlier filter"""
+class Dropna(Processor):
+    def __init__(self, fields_group=None):
+        self.fields_group = fields_group
 
-    def __init__(self, target_cols=None, method="mad"):
-        self.target_cols = target_cols
-        if method == "mad":
-            self.filter_func = mad_filter
+    def __call__(self, df):
+        return df.dropna(subset=get_group_columns(df, self.fields_group))
+
+
+class Fillna(Processor):
+    """Process NaN"""
+
+    def __init__(self, fields_group=None, fill_value=0):
+        self.fields_group = fields_group
+        self.fill_value = fill_value
+
+    def __call__(self, df):
+        if self.fields_group is None:
+            df.fillna(self.fill_value, inplace=True)
         else:
-            raise NotImplementedError(f"This type of method is not supported")
+            cols = get_group_columns(df, self.fields_group)
 
-    def __call__(self, df):
-        df[self.target_cols] = df[self.target_cols].groupby('Date', group_keys=False).apply(self.filter_func)
+            # So we use numpy to accelerate filling values
+            nan_select = np.isnan(df.values)
+            nan_select[:, ~df.columns.isin(cols)] = False
+
+            # FIXME: For pandas==2.0.3, the following code will not set the nan value to be self.fill_value
+            # df.values[nan_select] = self.fill_value
+
+            # lqa's method
+            value_tmp = df.values
+            value_tmp[nan_select] = self.fill_value
+            df = pd.DataFrame(value_tmp, columns=df.columns, index=df.index)
         return df
 
 
-class CSNeutralize(Processor):
-    """Factor neutralize by industry and market value"""
+class CSZScoreNorm(Processor):
+    """Cross Sectional ZScore Normalization"""
 
-    def __init__(self, industry_num, industry_col=None, market_cap_col=None, target_cols=None):
-        self.industry_num = industry_num
-        self.industry_col = industry_col
-        self.market_cap_col = market_cap_col
-        self.target_cols = target_cols
-        self.neutralize_func = neutralize
-
-    def __call__(self, df):
-        df = df.groupby('Date', group_keys=False).apply(self.neutralize_func,
-                                                        industry_num=self.industry_num,
-                                                        industry_col=self.industry_col,
-                                                        market_cap_col=self.market_cap_col,
-                                                        target_cols=self.target_cols)
-        return df
-
-
-class CSFillna(Processor):
-    """Cross Sectional Fill Nan"""
-
-    def __init__(self, target_cols=None):
-        self.target_cols = target_cols
-
-    def __call__(self, df):
-        df[self.target_cols] = df[self.target_cols].groupby('Date', group_keys=False).apply(
-            lambda x: x.fillna(x.mean()))
-        return df
-
-
-class CSZScore(Processor):
-    """ZScore Normalization"""
-
-    def __init__(self, target_cols=None):
-        self.target_cols = target_cols
-        self.norm_func = zscore
-
-    def __call__(self, df):
-        df[self.target_cols] = df[self.target_cols].groupby('Date', group_keys=False).apply(self.norm_func)
-        return df
-
-
-class TSStandardize(Processor):
-    def __init__(self, target_cols=None, save_dir=None):
-        self.target_cols = target_cols
-        self.save_dir = save_dir
-
-        if os.path.exists(os.path.join(self.save_dir, 'standardize.pkl')):
-            with open(os.path.join(self.save_dir, 'standardize.pkl'), 'rb') as f:
-                data = pickle.load(f)
-                self.mean = data['mean']
-                self.std = data['std']
+    def __init__(self, fields_group=None, method="zscore"):
+        self.fields_group = fields_group
+        if method == "zscore":
+            self.zscore_func = zscore
+        elif method == "robust":
+            self.zscore_func = robust_zscore
         else:
-            self.mean = None
-            self.std = None
+            raise NotImplementedError(f"This type of input is not supported")
+
+    def __call__(self, df):
+        cols = get_group_columns(df, self.fields_group)
+        df[cols] = df[cols].groupby("Date", group_keys=False).apply(self.zscore_func)
+        return df
+
+
+class RobustZScoreNorm(Processor):
+    """Robust ZScore Normalization
+
+    Use robust statistics for Z-Score normalization:
+        mean(x) = median(x)
+        std(x) = MAD(x) * 1.4826
+
+    Reference:
+        https://en.wikipedia.org/wiki/Median_absolute_deviation.
+    """
+
+    def __init__(self, fields_group=None, clip_outlier=True):
+        self.fields_group = fields_group
+        self.clip_outlier = clip_outlier
 
     def fit(self, df: pd.DataFrame = None):
-        self.mean = df[self.target_cols].groupby('Symbol', group_keys=False).mean()
-        self.std = df[self.target_cols].groupby('Symbol', group_keys=False).std()
+        self.cols = get_group_columns(df, self.fields_group)
+        X = df[self.cols].values
+        self.mean_train = np.nanmedian(X, axis=0)
+        self.std_train = np.nanmedian(np.abs(X - self.mean_train), axis=0)
+        self.std_train += 1e-12
+        self.std_train *= 1.4826
 
-        with open(os.path.join(self.save_dir, 'standardize.pkl'), 'wb') as f:
-            pickle.dump({'mean': self.mean, 'std': self.std}, f)
-
-    def __call__(self, df: pd.DataFrame = None):
-        # standardize transform
-        symbols = df.index.unique().tolist()
-        for symbol in symbols:
-            df.loc[symbol, self.target_cols] = (df.loc[symbol, self.target_cols] - self.mean.loc[symbol]) / \
-                                               self.std.loc[symbol]
+    def __call__(self, df):
+        X = df[self.cols]
+        X -= self.mean_train
+        X /= self.std_train
+        if self.clip_outlier:
+            X = np.clip(X, -3, 3)
+        df[self.cols] = X
         return df

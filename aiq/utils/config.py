@@ -35,7 +35,7 @@ class Config(edict):
 
     def from_file(self, filename):
         """Load a config file and merge it into the default options."""
-        with open(filename, 'r') as f:
+        with open(filename, "r") as f:
             try:
                 cfg = yaml.safe_load(f, Loader=yaml.FullLoader)
             except:
@@ -46,23 +46,13 @@ class Config(edict):
         return self
 
     def from_config(self, cfg):
-        assert isinstance(cfg, (Config, edict)), 'can only update dictionary or Config objects.'
+        assert isinstance(
+            cfg, (Config, edict)
+        ), "can only update dictionary or Config objects."
         for k, v in cfg.items():
             self._add_item(k, v)
         return self
 
 
 # global config
-config = Config(
-    edict(
-        dataset=edict(
-            start_time=None,
-            end_time=None,
-            segments=None
-        ),
-        model=edict(
-            name=None,
-            params=None
-        )
-    )
-)
+config = Config()
