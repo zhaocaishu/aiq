@@ -54,10 +54,11 @@ class Alpha158(DataHandler):
         self.label_name_ = None
 
     def process(self, df: pd.DataFrame = None, mode="train") -> pd.DataFrame:
-        open = df["Open"]
-        close = df["Close"]
-        high = df["High"]
-        low = df["Low"]
+        adjusted_factor = df["Adj_factor"]
+        open = df["Open"] * adjusted_factor
+        close = df["Close"] * adjusted_factor
+        high = df["High"] * adjusted_factor
+        low = df["Low"] * adjusted_factor
         volume = df["Volume"]
 
         # kbar

@@ -4,4 +4,3 @@ PyYAML
 scikit-learn
 lightgbm
 xgboost
-cython

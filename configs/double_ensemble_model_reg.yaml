@@ -17,9 +17,9 @@ dataset:
   kwargs:
     instruments: "csi300"
     segments:
-      train: ['2008-07-01', '2024-12-31']
-      valid: ['2022-01-01', '2024-12-31']
-      test: ['2023-01-01', '2024-05-01']
+      train: ['2008-01-01', '2020-03-31']
+      valid: ['2020-04-01', '2020-06-30']
+      test: ['2020-07-01', '2023-12-31']
 model:
   class: DEnsembleModel
   module_path: aiq.models.double_ensemble
