@@ -18,7 +18,7 @@ pip3 install .
 
 1. **准备输入数据**
 
-    利用https://github.com/zhaocaishu/aiq-datasets项目里的脚本完成数据准备。
+    利用 https://github.com/zhaocaishu/aiq-datasets 项目里的脚本完成数据准备。
 
 2. **训练**
     ```
