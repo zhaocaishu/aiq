@@ -3,8 +3,6 @@ import importlib
 
 import pandas as pd
 
-from aiq.utils.config import config as cfg
-
 from aiq.ops import (
     Greater,
     Less,
@@ -28,6 +26,7 @@ from aiq.ops import (
     Cov,
     CSRank,
 )
+from aiq.utils.module import init_instance_by_config
 
 
 class DataHandler(abc.ABC):
@@ -42,12 +41,7 @@ class Alpha158(DataHandler):
     def __init__(self, processors=[]):
         self.processors = []
         for processor_config in processors:
-            module_path = processor_config["module_path"]
-            class_name = processor_config["class"]
-            args = processor_config["kwargs"]
-
-            module = importlib.import_module(module_path)
-            processor = getattr(module, class_name)(**args)
+            processor = init_instance_by_config(processor_config)
             self.processors.append(processor)
 
         self.feature_names_ = None
