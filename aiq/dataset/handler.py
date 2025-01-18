@@ -54,11 +54,17 @@ class Alpha158(DataHandler):
         self.label_name_ = None
 
     def process(self, df: pd.DataFrame = None, mode="train") -> pd.DataFrame:
+        # post-adjusted prices
         adjusted_factor = df["Adj_factor"]
-        open = df["Open"] * adjusted_factor
-        close = df["Close"] * adjusted_factor
-        high = df["High"] * adjusted_factor
-        low = df["Low"] * adjusted_factor
+        df["Open"] = df["Open"] * adjusted_factor
+        df["Close"] = df["Close"] * adjusted_factor
+        df["High"] = df["High"] * adjusted_factor
+        df["Low"] = df["Low"] * adjusted_factor
+
+        open = df["Open"]
+        close = df["Close"]
+        high = df["High"]
+        low = df["Low"]
         volume = df["Volume"]
 
         # kbar
@@ -105,7 +111,7 @@ class Alpha158(DataHandler):
         # rolling
         windows = [5, 10, 20, 30, 60]
         include = None
-        exclude = ["ILLIQ", "TURN"]
+        exclude = ["VALUE", "ILLIQ", "TURN"]
 
         def use(x):
             return x not in exclude and (include is None or x in include)
@@ -333,24 +339,6 @@ class Alpha158(DataHandler):
                     / (Sum(Abs(volume - Ref(volume, 1)), d) + 1e-12)
                 )
                 names.append("VSUMD%d" % d)
-
-        if use("ILLIQ"):
-            features.append(Mean(Abs(df["Change"]) / df["AMount"], 10))
-            names.append("ILLIQ")
-
-        if use("VALUE"):
-            features.append(1.0 / df["Pb"])
-            features.append(1.0 / df["Pe_ttm"])
-            features.append(Mean(df["Dv_ttm"], 252))
-            names.append("BPLF")
-            names.append("EPTTM")
-            names.append("DVTTM")
-
-        if use("TURN"):
-            features.append(Mean(df["Turnover_rate"], 21))
-            features.append(Std(df["Turnover_rate"], 21))
-            names.append("TURN1M")
-            names.append("STDTURN1M")
 
         # features
         self.feature_names_ = names.copy()

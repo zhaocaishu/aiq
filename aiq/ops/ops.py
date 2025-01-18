@@ -67,10 +67,11 @@ class Rolling(abc.ABC):
     def __init__(self, func):
         self.func = func
 
-    def __call__(self, series: pd.Series, N):
+    def __call__(self, feature: pd.Series, N):
         # NOTE: remove all null check,
         # now it's user's responsibility to decide whether use features in null days
         # isnull = series.isnull() # NOTE: isnull = NaN, inf is not null
+        series = feature.copy(deep=True)
         if isinstance(N, int) and N == 0:
             series = getattr(series.expanding(min_periods=1), self.func)()
         elif isinstance(N, float) and 0 < N < 1:
@@ -84,12 +85,13 @@ class Ref(Rolling):
     def __init__(self):
         super(Ref, self).__init__("ref")
 
-    def __call__(self, series: pd.Series, N):
+    def __call__(self, feature: pd.Series, N):
         """
         Args:
             N (int):  N = 0, retrieve the first data; N > 0, retrieve data of N periods ago; N < 0, future data
         """
         # N = 0, return first day
+        series = feature.copy(deep=True)
         if series.empty:
             return series  # Pandas bug, see: https://github.com/pandas-dev/pandas/issues/21049
         elif N == 0:
@@ -154,7 +156,8 @@ class IdxMax(Rolling):
     def __init__(self):
         super(IdxMax, self).__init__("idxmax")
 
-    def __call__(self, series: pd.Series, N):
+    def __call__(self, feature: pd.Series, N):
+        series = feature.copy(deep=True)
         if N == 0:
             series = series.expanding(min_periods=1).apply(lambda x: x.argmax() + 1, raw=True)
         else:
@@ -175,7 +178,8 @@ class IdxMin(Rolling):
     def __init__(self):
         super(IdxMin, self).__init__("idxmin")
 
-    def __call__(self, series, N):
+    def __call__(self, feature, N):
+        series = feature.copy(deep=True)
         if N == 0:
             series = series.expanding(min_periods=1).apply(lambda x: x.argmin() + 1, raw=True)
         else:
@@ -189,7 +193,8 @@ class Quantile(Rolling):
     def __init__(self):
         super(Quantile, self).__init__("quantile")
 
-    def __call__(self, series: pd.Series, N, qscore):
+    def __call__(self, feature: pd.Series, N, qscore):
+        series = feature.copy(deep=True)
         if N == 0:
             series = series.expanding(min_periods=1).quantile(qscore)
         else:
@@ -210,11 +215,12 @@ class Mad(Rolling):
     def __init__(self):
         super(Mad, self).__init__("mad")
 
-    def __call__(self, series: pd.Series, N):
+    def __call__(self, feature: pd.Series, N):
         def mad(x):
             x1 = x[~np.isnan(x)]
             return np.mean(np.abs(x1 - x1.mean()))
 
+        series = feature.copy(deep=True)
         if N == 0:
             series = series.expanding(min_periods=1).apply(mad, raw=True)
         else:
@@ -229,7 +235,8 @@ class Rank(Rolling):
         super(Rank, self).__init__("rank")
 
     # for compatiblity of python 3.7, which doesn't support pandas 1.4.0+ which implements Rolling.rank
-    def __call__(self, series: pd.Series, N):
+    def __call__(self, feature: pd.Series, N):
+        series = feature.copy(deep=True)
         rolling_or_expending = series.expanding(min_periods=1) if N == 0 else series.rolling(N, min_periods=1)
         return rolling_or_expending.rank(pct=True)
 
@@ -247,7 +254,8 @@ class Delta(Rolling):
     def __init__(self):
         super(Delta, self).__init__("delta")
 
-    def __call__(self, series: pd.Series, N):
+    def __call__(self, feature: pd.Series, N):
+        series = feature.copy(deep=True)
         if N == 0:
             series = series - series.iloc[0]
         else:
@@ -263,7 +271,8 @@ class Slope(Rolling):
     def __init__(self):
         super(Slope, self).__init__("slope")
 
-    def __call__(self, series: pd.Series, N):
+    def __call__(self, feature: pd.Series, N):
+        series = feature.copy(deep=True)
         if N == 0:
             series = pd.Series(expanding_slope(series.values), index=series.index)
         else:
@@ -277,12 +286,13 @@ class Rsquare(Rolling):
     def __init__(self):
         super(Rsquare, self).__init__("rsquare")
 
-    def __call__(self, _series: pd.Series, N):
+    def __call__(self, feature: pd.Series, N):
+        series = feature.copy(deep=True)
         if N == 0:
-            series = pd.Series(expanding_rsquare(_series.values), index=_series.index)
+            series = pd.Series(expanding_rsquare(series.values), index=series.index)
         else:
-            series = pd.Series(rolling_rsquare(_series.values, N), index=_series.index)
-            series.loc[np.isclose(_series.rolling(N, min_periods=1).std(), 0, atol=2e-05)] = np.nan
+            series = pd.Series(rolling_rsquare(series.values, N), index=series.index)
+            series.loc[np.isclose(series.rolling(N, min_periods=1).std(), 0, atol=2e-05)] = np.nan
         return series
 
 
@@ -292,7 +302,8 @@ class Resi(Rolling):
     def __init__(self):
         super(Resi, self).__init__("resi")
 
-    def __call__(self, series: pd.Series, N):
+    def __call__(self, feature: pd.Series, N):
+        series = feature.copy(deep=True)
         if N == 0:
             series = pd.Series(expanding_resi(series.values), index=series.index)
         else:
@@ -306,12 +317,13 @@ class WMA(Rolling):
     def __init__(self):
         super(WMA, self).__init__("wma")
 
-    def __call__(self, series: pd.Series, N):
+    def __call__(self, feature: pd.Series, N):
         def weighted_mean(x):
             w = np.arange(len(x)) + 1
             w = w / w.sum()
             return np.nanmean(w * x)
 
+        series = feature.copy(deep=True)
         if N == 0:
             series = series.expanding(min_periods=1).apply(weighted_mean, raw=True)
         else:
@@ -325,13 +337,14 @@ class EMA(Rolling):
     def __init__(self):
         super(EMA, self).__init__("ema")
 
-    def __call__(self, series: pd.Series, N):
+    def __call__(self, feature: pd.Series, N):
         def exp_weighted_mean(x):
             a = 1 - 2 / (1 + len(x))
             w = a ** np.arange(len(x))[::-1]
             w /= w.sum()
             return np.nansum(w * x)
 
+        series = feature.copy(deep=True)
         if N == 0:
             series = series.expanding(min_periods=1).apply(exp_weighted_mean, raw=True)
         elif 0 < N < 1:
