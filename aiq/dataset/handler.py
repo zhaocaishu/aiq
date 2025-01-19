@@ -1,5 +1,5 @@
 import abc
-import importlib
+from typing import List
 
 import pandas as pd
 
@@ -30,25 +30,21 @@ from aiq.utils.module import init_instance_by_config
 
 
 class DataHandler(abc.ABC):
-    def __init__(self, processors=[]):
+    def __init__(self, processors: List = []):
         pass
 
-    def process(self, df: pd.DataFrame = None, training=False) -> pd.DataFrame:
+    def process(self, df: pd.DataFrame = None, mode: str = "train") -> pd.DataFrame:
         pass
 
 
 class Alpha158(DataHandler):
-    def __init__(self, processors=[]):
-        self.processors = []
-        for processor_config in processors:
-            processor = init_instance_by_config(processor_config)
-            self.processors.append(processor)
-
+    def __init__(self, processors: List = []):
         self.feature_names_ = None
         self.label_name_ = None
+        self.processors = [init_instance_by_config(proc) for proc in processors]
 
-    def process(self, df: pd.DataFrame = None, mode="train") -> pd.DataFrame:
-        # post-adjusted prices
+    def extract_feature(self, df: pd.DataFrame = None, mode: str = "train"):
+        # adjusted prices
         adjusted_factor = df["Adj_factor"]
         df["Open"] = df["Open"] * adjusted_factor
         df["Close"] = df["Close"] * adjusted_factor
@@ -346,15 +342,32 @@ class Alpha158(DataHandler):
             self.label_name_ = None
 
         # concat all features and labels
-        df = pd.concat(
-            [features[i].rename(names[i]) for i in range(len(names))], axis=1
-        ).astype("float32")
+        feature = pd.concat(
+            [
+                df[["Date", "Instrument"]],
+                pd.concat(
+                    [features[i].rename(names[i]) for i in range(len(names))], axis=1
+                ).astype("float32"),
+            ],
+            axis=1,
+        )
+
+        return feature
+
+    def process(
+        self, dfs: List[pd.DataFrame] = [], mode: str = "train"
+    ) -> pd.DataFrame:
+        # extract feature from data
+        features = [self.extract_feature(df, mode) for df in dfs]
+
+        # concat features and set multi-index
+        df = pd.concat(features, ignore_index=True).set_index(["Date", "Instrument"])
 
         # data preprocessor
-        fields_group = [("feature", name) for name in self.feature_names_]
+        column_tuples = [("feature", name) for name in self.feature_names_]
         if self.label_name_:
-            fields_group.append(("label", self.label_name_))
-        df.columns = pd.MultiIndex.from_tuples(fields_group)
+            column_tuples.append(("label", self.label_name_))
+        df.columns = pd.MultiIndex.from_tuples(column_tuples)
 
         if mode == "train":
             for processor in self.processors:

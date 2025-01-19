@@ -44,12 +44,8 @@ class Dataset(Dataset):
 
             dfs.append(df)
 
-        # concat dataframes and set multi-index
-        self.df = pd.concat(dfs, ignore_index=True)
-        self.df = self.df.set_index(["Date", "Instrument"])
-
         # preprocess
-        self.df = data_handler.process(self.df, mode=mode)
+        self.df = data_handler.process(dfs, mode=mode)
 
         # feature and label names
         self.feature_names_ = data_handler.feature_names

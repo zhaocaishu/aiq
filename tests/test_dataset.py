@@ -9,7 +9,7 @@ if __name__ == "__main__":
     # data handler
     data_handler = init_instance_by_config(cfg.data_handler)
 
-    # train dataset
+    # train and validation dataset
     train_dataset = init_instance_by_config(
         cfg.dataset,
         data_dir="./data",
@@ -17,11 +17,11 @@ if __name__ == "__main__":
         mode="train",
     )
 
-    # validation dataset
     val_dataset = init_instance_by_config(
         cfg.dataset,
         data_dir="./data",
         data_handler=data_handler,
         mode="valid",
     )
-    print(val_dataset.to_dataframe().equals(train_dataset.to_dataframe()))
+
+    print(train_dataset.to_dataframe().shape, val_dataset.to_dataframe().shape)
