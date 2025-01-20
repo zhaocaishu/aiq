@@ -82,6 +82,27 @@ class Fillna(Processor):
         return df
 
 
+class DropExtremeLabel(Processor):
+    def __init__(self, fields_group="label", percentile: float = 0.975):
+        super().__init__()
+        self.fields_group = fields_group
+        assert 0 < percentile < 1, "percentile not allowed"
+        self.percentile = percentile
+
+    def forward(self, df):
+        rank_pct = df["label"].groupby(level="Date").rank(pct=True)
+        df.loc[:, "rank_pct"] = rank_pct
+        trimmed_df = df[
+            df["rank_pct"].between(
+                1 - self.percentile, self.percentile, inclusive="both"
+            )
+        ]
+        return trimmed_df.drop(columns=["rank_pct"])
+
+    def __call__(self, df):
+        return self.forward(df)
+
+
 class CSZScoreNorm(Processor):
     """Cross Sectional ZScore Normalization"""
 
