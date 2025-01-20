@@ -178,7 +178,7 @@ cdef class Rsquare(Rolling):
         cdef int N = self.window - self.na_count
         cdef double rvalue
         rvalue = (N*self.xy_sum - self.x_sum*self.y_sum) / \
-            sqrt((N*self.x2_sum - self.x_sum*self.x_sum) * (N*self.y2_sum - self.y_sum*self.y_sum))
+            (sqrt((N*self.x2_sum - self.x_sum*self.x_sum) * (N*self.y2_sum - self.y_sum*self.y_sum)) + 1e-10)
         return rvalue * rvalue
 
 
