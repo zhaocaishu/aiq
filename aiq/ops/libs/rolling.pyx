@@ -85,7 +85,7 @@ cdef class Slope(Rolling):
             self.xy_sum += self.window * val
         cdef int N = self.window - self.na_count
         return (N*self.xy_sum - self.x_sum*self.y_sum) / \
-            ((N*self.x2_sum - self.x_sum*self.x_sum) + 1e-10)
+            (N*self.x2_sum - self.x_sum*self.x_sum + 1e-10)
 
 
 cdef class Resi(Rolling):
@@ -127,7 +127,7 @@ cdef class Resi(Rolling):
             self.xy_sum += self.window * val
         cdef int N = self.window - self.na_count
         slope = (N*self.xy_sum - self.x_sum*self.y_sum) / \
-                ((N*self.x2_sum - self.x_sum*self.x_sum) + 1e-10)
+                (N*self.x2_sum - self.x_sum*self.x_sum + 1e-10)
         x_mean = self.x_sum / N
         y_mean = self.y_sum / N
         interp = y_mean - slope*x_mean
