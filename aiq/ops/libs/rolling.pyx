@@ -40,7 +40,6 @@ cdef class Mean(Rolling):
         self.barv.pop_front()
         if isnan(val):
             self.na_count += 1
-            # return NAN
         else:
             self.vsum += val
         return self.vsum / (self.window - self.na_count + 1e-10)
@@ -76,7 +75,6 @@ cdef class Slope(Rolling):
         self.barv.pop_front()
         if isnan(val):
             self.na_count += 1
-            # return NAN
         else:
             self.i_sum  += 1
             self.x_sum  += self.window
@@ -118,7 +116,6 @@ cdef class Resi(Rolling):
         self.barv.pop_front()
         if isnan(val):
             self.na_count += 1
-            # return NAN
         else:
             self.i_sum  += 1
             self.x_sum  += self.window
@@ -167,7 +164,6 @@ cdef class Rsquare(Rolling):
         self.barv.pop_front()
         if isnan(val):
             self.na_count += 1
-            # return NAN
         else:
             self.i_sum  += 1
             self.x_sum  += self.window
