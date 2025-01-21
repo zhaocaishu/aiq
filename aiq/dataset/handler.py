@@ -43,7 +43,7 @@ class Alpha158(DataHandler):
         self.label_name_ = None
         self.processors = [init_instance_by_config(proc) for proc in processors]
 
-    def extract_feature(self, df: pd.DataFrame = None, mode: str = "train"):
+    def extract_feature_labels(self, df: pd.DataFrame = None, mode: str = "train"):
         # adjusted prices
         adjusted_factor = df["Adj_factor"]
         df["Open"] = df["Open"] * adjusted_factor
@@ -69,7 +69,7 @@ class Alpha158(DataHandler):
             (2 * close - high - low) / open,
             (2 * close - high - low) / (high - low + 1e-12),
         ]
-        names = [
+        feature_names = [
             "KMID",
             "KLEN",
             "KMID2",
@@ -88,7 +88,7 @@ class Alpha158(DataHandler):
                     features.append(Ref(df[field], d) / close)
                 else:
                     features.append(df[field] / close)
-                names.append(field.upper() + str(d))
+                feature_names.append(field.upper() + str(d))
 
         # volume
         for d in range(5):
@@ -96,7 +96,7 @@ class Alpha158(DataHandler):
                 features.append(Ref(volume, d) / (volume + 1e-12))
             else:
                 features.append(volume / (volume + 1e-12))
-            names.append("VOLUME%d" % d)
+            feature_names.append("VOLUME%d" % d)
 
         # rolling
         windows = [5, 10, 20, 30, 60]
@@ -111,71 +111,71 @@ class Alpha158(DataHandler):
             # Rate of change, the price change in the past d days, divided by latest close price to remove unit
             for d in windows:
                 features.append(Ref(close, d) / close)
-                names.append("ROC%d" % d)
+                feature_names.append("ROC%d" % d)
 
         if use("MA"):
             # https://www.investopedia.com/ask/answers/071414/whats-difference-between-moving-average-and-weighted-moving-average.asp
             # Simple Moving Average, the simple moving average in the past d days, divided by latest close price to remove unit
             for d in windows:
                 features.append(Mean(close, d) / close)
-                names.append("MA%d" % d)
+                feature_names.append("MA%d" % d)
 
         if use("STD"):
             # The standard diviation of close price for the past d days, divided by latest close price to remove unit
             for d in windows:
                 features.append(Std(close, d) / close)
-                names.append("STD%d" % d)
+                feature_names.append("STD%d" % d)
 
         if use("BETA"):
             # The rate of close price change in the past d days, divided by latest close price to remove unit
             # For example, price increase 10 dollar per day in the past d days, then Slope will be 10.
             for d in windows:
                 features.append(Slope(close, d) / close)
-                names.append("BETA%d" % d)
+                feature_names.append("BETA%d" % d)
 
         if use("RSQR"):
             # The R-sqaure value of linear regression for the past d days, represent the trend linear
             for d in windows:
                 features.append(Rsquare(close, d))
-                names.append("RSQR%d" % d)
+                feature_names.append("RSQR%d" % d)
 
         if use("RESI"):
             # The redisdual for linear regression for the past d days, represent the trend linearity for past d days.
             for d in windows:
                 features.append(Resi(close, d) / close)
-                names.append("RESI%d" % d)
+                feature_names.append("RESI%d" % d)
 
         if use("MAX"):
             # The max price for past d days, divided by latest close price to remove unit
             for d in windows:
                 features.append(Max(high, d) / close)
-                names.append("MAX%d" % d)
+                feature_names.append("MAX%d" % d)
 
         if use("LOW"):
             # The low price for past d days, divided by latest close price to remove unit
             for d in windows:
                 features.append(Min(low, d) / close)
-                names.append("MIN%d" % d)
+                feature_names.append("MIN%d" % d)
 
         if use("QTLU"):
             # The 80% quantile of past d day's close price, divided by latest close price to remove unit
             # Used with MIN and MAX
             for d in windows:
                 features.append(Quantile(close, d, 0.8) / close)
-                names.append("QTLU%d" % d)
+                feature_names.append("QTLU%d" % d)
 
         if use("QTLD"):
             # The 20% quantile of past d day's close price, divided by latest close price to remove unit
             for d in windows:
                 features.append(Quantile(close, d, 0.2) / close)
-                names.append("QTLD%d" % d)
+                feature_names.append("QTLD%d" % d)
 
         if use("RANK"):
             # Get the percentile of current close price in past d day's close price.
             # Represent the current price level comparing to past N days, add additional information to moving average.
             for d in windows:
                 features.append(Rank(close, d))
-                names.append("RANK%d" % d)
+                feature_names.append("RANK%d" % d)
 
         if use("RSV"):
             # Represent the price position between upper and lower resistent price for past d days.
@@ -183,7 +183,7 @@ class Alpha158(DataHandler):
                 features.append(
                     (close - Min(low, d)) / (Max(high, d) - Min(low, d) + 1e-12)
                 )
-                names.append("RSV%d" % d)
+                feature_names.append("RSV%d" % d)
 
         if use("IMAX"):
             # The number of days between current date and previous highest price date.
@@ -192,7 +192,7 @@ class Alpha158(DataHandler):
             # The idea is that strong uptrends will regularly see new highs, and strong downtrends will regularly see new lows.
             for d in windows:
                 features.append(IdxMax(high, d) / d)
-                names.append("IMAX%d" % d)
+                feature_names.append("IMAX%d" % d)
 
         if use("IMIN"):
             # The number of days between current date and previous lowest price date.
@@ -201,20 +201,20 @@ class Alpha158(DataHandler):
             # The idea is that strong uptrends will regularly see new highs, and strong downtrends will regularly see new lows.
             for d in windows:
                 features.append(IdxMin(low, d) / d)
-                names.append("IMIN%d" % d)
+                feature_names.append("IMIN%d" % d)
 
         if use("IMXD"):
             # The time period between previous lowest-price date occur after highest price date.
             # Large value suggest downward momemtum.
             for d in windows:
                 features.append((IdxMax(high, d) - IdxMin(low, d)) / d)
-                names.append("IMXD%d" % d)
+                feature_names.append("IMXD%d" % d)
 
         if use("CORR"):
             # The correlation between absolute close price and log scaled trading volume
             for d in windows:
                 features.append(Corr(close, Log(volume + 1), d))
-                names.append("CORR%d" % d)
+                feature_names.append("CORR%d" % d)
 
         if use("CORD"):
             # The correlation between price change ratio and volume change ratio
@@ -222,19 +222,19 @@ class Alpha158(DataHandler):
                 features.append(
                     Corr(close / Ref(close, 1), Log(volume / Ref(volume, 1) + 1), d)
                 )
-                names.append("CORD%d" % d)
+                feature_names.append("CORD%d" % d)
 
         if use("CNTP"):
             # The percentage of days in past d days that price go up.
             for d in windows:
                 features.append(Mean(close > Ref(close, 1), d))
-                names.append("CNTP%d" % d)
+                feature_names.append("CNTP%d" % d)
 
         if use("CNTN"):
             # The percentage of days in past d days that price go down.
             for d in windows:
                 features.append(Mean(close < Ref(close, 1), d))
-                names.append("CNTN%d" % d)
+                feature_names.append("CNTN%d" % d)
 
         if use("CNTD"):
             # The diff between past up day and past down day
@@ -242,7 +242,7 @@ class Alpha158(DataHandler):
                 features.append(
                     Mean(close > Ref(close, 1), d) - Mean(close < Ref(close, 1), d)
                 )
-                names.append("CNTD%d" % d)
+                feature_names.append("CNTD%d" % d)
 
         if use("SUMP"):
             # The total gain / the absolute total price changed
@@ -252,7 +252,7 @@ class Alpha158(DataHandler):
                     Sum(Greater(close - Ref(close, 1), 0), d)
                     / (Sum(Abs(close - Ref(close, 1)), d) + 1e-12)
                 )
-                names.append("SUMP%d" % d)
+                feature_names.append("SUMP%d" % d)
 
         if use("SUMN"):
             # The total lose / the absolute total price changed
@@ -263,7 +263,7 @@ class Alpha158(DataHandler):
                     Sum(Greater(Ref(close, 1) - close, 0), d)
                     / (Sum(Abs(close - Ref(close, 1)), d) + 1e-12)
                 )
-                names.append("SUMN%d" % d)
+                feature_names.append("SUMN%d" % d)
 
         if use("SUMD"):
             # The diff ratio between total gain and total lose
@@ -276,19 +276,19 @@ class Alpha158(DataHandler):
                     )
                     / (Sum(Abs(close - Ref(close, 1)), d) + 1e-12)
                 )
-                names.append("SUMD%d" % d)
+                feature_names.append("SUMD%d" % d)
 
         if use("VMA"):
             # Simple Volume Moving average: https://www.barchart.com/education/technical-indicators/volume_moving_average
             for d in windows:
                 features.append(Mean(volume, d) / (volume + 1e-12))
-                names.append("VMA%d" % d)
+                feature_names.append("VMA%d" % d)
 
         if use("VSTD"):
             # The standard deviation for volume in past d days.
             for d in windows:
                 features.append(Std(volume, d) / (volume + 1e-12))
-                names.append("VSTD%d" % d)
+                feature_names.append("VSTD%d" % d)
 
         if use("WVMA"):
             # The volume weighted price change volatility
@@ -297,7 +297,7 @@ class Alpha158(DataHandler):
                     Std(Abs(close / Ref(close, 1) - 1) * volume, d)
                     / (Mean(Abs(close / Ref(close, 1) - 1) * volume, d) + 1e-12)
                 )
-                names.append("WVMA%d" % d)
+                feature_names.append("WVMA%d" % d)
 
         if use("VSUMP"):
             # The total volume increase / the absolute total volume changed
@@ -306,7 +306,7 @@ class Alpha158(DataHandler):
                     Sum(Greater(volume - Ref(volume, 1), 0), d)
                     / (Sum(Abs(volume - Ref(volume, 1)), d) + 1e-12)
                 )
-                names.append("VSUMP%d" % d)
+                feature_names.append("VSUMP%d" % d)
 
         if use("VSUMN"):
             # The total volume increase / the absolute total volume changed
@@ -315,7 +315,7 @@ class Alpha158(DataHandler):
                     Sum(Greater(Ref(volume, 1) - volume, 0), d)
                     / (Sum(Abs(volume - Ref(volume, 1)), d) + 1e-12)
                 )
-                names.append("VSUMN%d" % d)
+                feature_names.append("VSUMN%d" % d)
 
         if use("VSUMD"):
             # The diff ratio between total volume increase and total volume decrease
@@ -328,43 +328,55 @@ class Alpha158(DataHandler):
                     )
                     / (Sum(Abs(volume - Ref(volume, 1)), d) + 1e-12)
                 )
-                names.append("VSUMD%d" % d)
+                feature_names.append("VSUMD%d" % d)
 
-        # features
-        self.feature_names_ = names.copy()
-
-        # labels
-        if mode in ["train", "valid"]:
-            self.label_name_ = "LABEL"
-            features.append(Ref(close, -5) / Ref(close, -1) - 1)
-            names.append(self.label_name_)
-        else:
-            self.label_name_ = None
-
-        # concat all features and labels
-        feature = pd.concat(
+        # concat features
+        self.feature_names_ = feature_names.copy()
+        features_df = pd.concat(
             [
                 df[["Date", "Instrument"]],
                 pd.concat(
-                    [features[i].rename(names[i]) for i in range(len(names))], axis=1
+                    [
+                        features[i].rename(feature_names[i])
+                        for i in range(len(feature_names))
+                    ],
+                    axis=1,
                 ).astype("float32"),
             ],
             axis=1,
         )
 
-        return feature
+        # labels
+        if mode in ["train", "valid"]:
+            self.label_name_ = "LABEL"
+            label = (Ref(close, -5) / Ref(close, -1) - 1).rename(self.label_name_)
+        else:
+            self.label_name_ = None
+            label = None
+
+        # if there is a label, concatenate it with the features
+        if label is not None:
+            features_labels = pd.concat([features_df, label], axis=1)
+        else:
+            features_labels = features_df
+
+        return features_labels
 
     def process(
         self, dfs: List[pd.DataFrame] = [], mode: str = "train"
     ) -> pd.DataFrame:
         # extract feature from data
-        features = [self.extract_feature(df, mode) for df in dfs]
+        feature_labels = [self.extract_feature_labels(df, mode) for df in dfs]
 
         # concat features and set multi-index
-        df = pd.concat(features, ignore_index=True).set_index(["Date", "Instrument"])
+        df = pd.concat(feature_labels, ignore_index=True).set_index(
+            ["Date", "Instrument"]
+        )
 
         # data preprocessor
-        column_tuples = [("feature", name) for name in self.feature_names_]
+        column_tuples = [
+            ("feature", feature_name) for feature_name in self.feature_names_
+        ]
         if self.label_name_:
             column_tuples.append(("label", self.label_name_))
         df.columns = pd.MultiIndex.from_tuples(column_tuples)
