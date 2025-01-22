@@ -372,6 +372,7 @@ class Alpha158(DataHandler):
         df = pd.concat(feature_labels, ignore_index=True).set_index(
             ["Date", "Instrument"]
         )
+        df.sort_index(inplace=True)
 
         # data preprocessor
         column_tuples = [
