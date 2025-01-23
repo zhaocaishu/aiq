@@ -1,24 +1,20 @@
-import torch
+from aiq.utils.config import config as cfg
+from aiq.utils.module import init_instance_by_config
 
-from aiq.dataset import TSDataset
 
+if __name__ == "__main__":
+    # config
+    cfg.from_file("./configs/nlinear_model_reg.yaml")
 
-if __name__ == '__main__':
-    train_dataset = TSDataset(data_dir='./data', save_dir='./temp', instruments='csi1000', start_time='2020-01-01',
-                              end_time='2022-11-31', segment=['2020-01-01', '2022-11-31'], adjust_price=True,
-                              training=True, feature_names=['Adj_Open', 'Adj_Close', 'Adj_High', 'Adj_Low', 'Volume'],
-                              label_names=['Return5'])
+    # data handler
+    data_handler = init_instance_by_config(cfg.data_handler)
 
-    val_dataset = TSDataset(data_dir='./data', save_dir='./temp', instruments='csi1000', start_time='2023-01-01',
-                            end_time='2023-05-31', segment=['2023-01-01', '2023-05-31'], adjust_price=True,
-                            training=False, feature_names=['Adj_Open', 'Adj_Close', 'Adj_High', 'Adj_Low', 'Volume'])
+    # train and validation dataset
+    train_dataset = init_instance_by_config(
+        cfg.dataset,
+        data_dir="./data",
+        data_handler=data_handler,
+        mode="train",
+    )
 
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=1024)
-    for batch_idx, sample in enumerate(train_loader):
-        input, target = sample
-        print('Train:', input, target)
-
-    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=1024)
-    for batch_idx, sample in enumerate(val_loader):
-        input = sample
-        print('Validation:', input)
+    print(train_dataset)
