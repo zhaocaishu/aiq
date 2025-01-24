@@ -4,7 +4,6 @@ import json
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
-from typing import Text, Union
 
 from aiq.dataset import Dataset
 from aiq.utils.logging import get_logger
@@ -67,7 +66,7 @@ class DEnsembleModel(BaseModel):
         self.early_stopping_rounds = early_stopping_rounds
 
     def fit(self, train_dataset: Dataset, val_dataset: Dataset = None):
-        df_train, df_valid = train_dataset.to_dataframe(), val_dataset.to_dataframe()
+        df_train, df_valid = train_dataset.data, val_dataset.data
         if df_train.empty or df_valid.empty:
             raise ValueError("Empty data from dataset, please check your dataset config.")
         x_train, y_train = df_train[self._feature_cols], df_train[self._label_col]
@@ -248,7 +247,7 @@ class DEnsembleModel(BaseModel):
     def predict(self, dataset: Dataset):
         if self.ensemble is None:
             raise ValueError("model is not fitted yet!")
-        x_test = dataset.to_dataframe()
+        x_test = dataset.data
         pred = pd.Series(np.zeros(x_test.shape[0]), index=x_test.index)
         for i_sub, submodel in enumerate(self.ensemble):
             feat_sub = self.sub_features[i_sub]

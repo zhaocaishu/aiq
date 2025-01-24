@@ -21,13 +21,13 @@ class LGBModel(BaseModel):
         verbose_eval=20,
         eval_results=dict()
     ):
-        train_df = train_dataset.to_dataframe()
+        train_df = train_dataset.data
         x_train, y_train = train_df[self.feature_cols_].values, train_df[self.label_col_].values
         dtrain = lgb.Dataset(x_train, label=y_train)
         evals = [dtrain]
 
         if val_dataset is not None:
-            valid_df = val_dataset.to_dataframe()
+            valid_df = val_dataset.data
             x_valid, y_valid = valid_df[self.feature_cols_].values, valid_df[self.label_col_].values
             dvalid = lgb.Dataset(x_valid, label=y_valid)
             evals.append(dvalid)
@@ -51,7 +51,7 @@ class LGBModel(BaseModel):
     def predict(self, dataset: Dataset):
         if self.model is None:
             raise ValueError("model is not fitted yet!")
-        x_test = dataset.to_dataframe()[self.feature_cols_].values
+        x_test = dataset.data[self.feature_cols_].values
         predict_result = self.model.predict(x_test)
         dataset.add_column('PREDICTION', predict_result)
         return dataset

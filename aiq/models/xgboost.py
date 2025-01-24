@@ -1,11 +1,8 @@
 import os
 import json
-from typing import Tuple
 
-import numpy as np
 import xgboost as xgb
 import pandas as pd
-from scipy.stats import pearsonr
 
 from aiq.dataset import Dataset
 
@@ -24,13 +21,13 @@ class XGBModel(BaseModel):
         verbose_eval=20,
         eval_results=dict()
     ):
-        train_df = train_dataset.to_dataframe()
+        train_df = train_dataset.data
         x_train, y_train = train_df[self.feature_cols_].values, train_df[self.label_col_].values
         dtrain = xgb.DMatrix(x_train, label=y_train)
         evals = [(dtrain, "train")]
 
         if val_dataset is not None:
-            valid_df = val_dataset.to_dataframe()
+            valid_df = val_dataset.data
             x_valid, y_valid = valid_df[self.feature_cols_].values, valid_df[self.label_col_].values
             dvalid = xgb.DMatrix(x_valid, label=y_valid)
             evals.append((dvalid, "valid"))
@@ -51,7 +48,7 @@ class XGBModel(BaseModel):
     def predict(self, dataset: Dataset):
         if self.model is None:
             raise ValueError("model is not fitted yet!")
-        test_df = dataset.to_dataframe()[self.feature_cols_]
+        test_df = dataset.data[self.feature_cols_]
         dtest = xgb.DMatrix(test_df.values)
         predict_result = self.model.predict(dtest)
         dataset.add_column('PREDICTION', predict_result)

@@ -2,6 +2,7 @@ import abc
 from typing import List
 
 import pandas as pd
+import numpy as np
 
 from aiq.ops import (
     Greater,
