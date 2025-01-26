@@ -114,7 +114,12 @@ class MATCCModel(BaseModel):
                     left_time = speed * ((self.epochs - epoch) * train_steps_epoch - i)
                     print(
                         "Epoch: {0}, step: {1}, lr: {2:.5f} train loss: {3:.7f}, speed: {4:.4f}s/iter, left time: {5:.4f}s".format(
-                            epoch + 1, i + 1, lr_scheduler.get_last_lr()[0], loss.item(), speed, left_time
+                            epoch + 1,
+                            i + 1,
+                            lr_scheduler.get_last_lr()[0],
+                            loss.item(),
+                            speed,
+                            left_time,
                         )
                     )
                     iter_count = 0
@@ -134,9 +139,9 @@ class MATCCModel(BaseModel):
                 )
             )
 
-    def eval(self, dataset: Dataset):
+    def eval(self, val_dataset: Dataset):
         self.model.eval()
-        val_loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=False)
+        val_loader = DataLoader(val_dataset, batch_size=self.batch_size, shuffle=False)
 
         total_loss = []
         with torch.no_grad():
@@ -151,20 +156,22 @@ class MATCCModel(BaseModel):
         total_loss = np.average(total_loss)
         return total_loss
 
-    def predict(self, dataset: Dataset) -> object:
+    def predict(self, test_dataset: Dataset) -> object:
         self.model.eval()
-        pred_loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
+        test_loader = DataLoader(
+            test_dataset, batch_size=self.batch_size, shuffle=False
+        )
 
-        preds = np.zeros(dataset.data.shape[0])
+        preds = np.zeros(test_dataset.data.shape[0])
         with torch.no_grad():
-            for i, (index, batch_x, batch_y) in enumerate(pred_loader):
+            for i, (index, batch_x, batch_y) in enumerate(test_loader):
                 batch_x = batch_x.squeeze(0).float().to(self.device)
                 outputs = self.model(batch_x)
                 pred = outputs.detach().cpu().numpy()  # .squeeze()
                 preds[index] = pred
 
-        dataset.insert("PREDICTION", preds)
-        return dataset
+        test_dataset.insert("PREDICTION", preds)
+        return test_dataset
 
     def save(self, model_dir):
         if not os.path.exists(model_dir):
