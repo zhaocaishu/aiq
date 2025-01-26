@@ -113,7 +113,7 @@ class MATCCModel(BaseModel):
                     speed = (time.time() - time_now) / iter_count
                     left_time = speed * ((self.epochs - epoch) * train_steps_epoch - i)
                     print(
-                        "Epoch: {0}, step: {1}, lr: {2:.5f} train loss: {3:.7f}, speed: {4:.4f}s/iter, left time: {4:.4f}s".format(
+                        "Epoch: {0}, step: {1}, lr: {2:.5f} train loss: {3:.7f}, speed: {4:.4f}s/iter, left time: {5:.4f}s".format(
                             epoch + 1, i + 1, lr_scheduler.get_last_lr()[0], loss.item(), speed, left_time
                         )
                     )
@@ -129,7 +129,7 @@ class MATCCModel(BaseModel):
             train_loss = np.average(train_loss)
             val_loss = self.eval(val_dataset)
             print(
-                "Epoch: {0}, cost time: {1}, train loss: {2:.7f}, val loss: {3:.7f}".format(
+                "Epoch: {0}, cost time: {1:.4f}s, train loss: {2:.7f}, val loss: {3:.7f}".format(
                     epoch + 1, time.time() - epoch_time, train_loss, val_loss
                 )
             )
