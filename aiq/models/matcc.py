@@ -92,6 +92,8 @@ class MATCCModel(BaseModel):
             num_training_steps=num_training_steps,
         )
         for epoch in range(self.epochs):
+            print("========== Epoch {} ==========".format(epoch + 1))
+
             iter_count = 0
             train_loss = []
 
@@ -111,8 +113,8 @@ class MATCCModel(BaseModel):
                     speed = (time.time() - time_now) / iter_count
                     left_time = speed * ((self.epochs - epoch) * train_steps_epoch - i)
                     print(
-                        "Epoch: {0}, iters: {1}, lr: {2} train loss: {3:.7f}, speed: {4:.4f}s/iter, left time: {4:.4f}s".format(
-                            epoch + 1, i + 1, lr_scheduler.get_last_lr(), loss.item(), speed, left_time
+                        "Epoch: {0}, step: {1}, lr: {2:.5f} train loss: {3:.7f}, speed: {4:.4f}s/iter, left time: {4:.4f}s".format(
+                            epoch + 1, i + 1, lr_scheduler.get_last_lr()[0], loss.item(), speed, left_time
                         )
                     )
                     iter_count = 0
@@ -122,8 +124,7 @@ class MATCCModel(BaseModel):
                 loss.backward()
                 torch.nn.utils.clip_grad_value_(self.model.parameters(), 3.0)
                 optimizer.step()
-
-            lr_scheduler.step()
+                lr_scheduler.step()
 
             train_loss = np.average(train_loss)
             val_loss = self.eval(val_dataset)
