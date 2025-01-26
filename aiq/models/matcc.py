@@ -84,7 +84,12 @@ class MATCCModel(BaseModel):
 
         time_now = time.time()
 
-        optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        optimizer = optim.Adam(
+            self.model.parameters(),
+            lr=self.learning_rate,
+            betas=(0.9, 0.999),
+            weight_decay=0.001,
+        )
         lr_scheduler = get_scheduler(
             name=self.lr_scheduler_type,
             optimizer=optimizer,
