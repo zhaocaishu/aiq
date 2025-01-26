@@ -5,7 +5,7 @@ from aiq.dataset.dataset import TSDataset
 
 if __name__ == "__main__":
     # config
-    cfg.from_file("./configs/xgboost_model_reg.yaml")
+    cfg.from_file("./configs/nlinear_model_reg.yaml")
 
     # data handler
     data_handler = init_instance_by_config(cfg.data_handler)
@@ -22,5 +22,5 @@ if __name__ == "__main__":
     )
 
     for i in range(len(train_dataset)):
-        date, feature, label = train_dataset[i]
-        print(date, feature.shape, label.shape)
+        index, feature, label = train_dataset[i]
+        print(index, feature.shape, label.shape)

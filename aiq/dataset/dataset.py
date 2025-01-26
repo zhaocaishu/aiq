@@ -48,8 +48,8 @@ class Dataset(Dataset):
         self.df = data_handler.process(dfs, mode=mode)
 
         # feature and label names
-        self.feature_names_ = data_handler.feature_names
-        self.label_name_ = data_handler.label_name
+        self._feature_names = data_handler.feature_names
+        self._label_name = data_handler.label_name
 
     def __getitem__(self, index):
         return self.df.iloc[[index]]
@@ -66,11 +66,11 @@ class Dataset(Dataset):
 
     @property
     def feature_names(self):
-        return self.feature_names_
+        return self._feature_names
 
     @property
     def label_name(self):
-        return self.label_name_
+        return self._label_name
 
 
 class TSDataset(Dataset):
@@ -122,18 +122,18 @@ class TSDataset(Dataset):
         self.df = data_handler.process(dfs, mode=mode)
 
         # feature and label names
-        self.feature_names_ = data_handler.feature_names
-        self.label_name_ = data_handler.label_name
+        self._feature_names = data_handler.feature_names
+        self._label_name = data_handler.label_name
 
         # change index to <code, date>
         self.df.index = self.df.index.swaplevel()
         self.df.sort_index(inplace=True)
 
         # data and index
-        self._feature = self.df[self.feature_names_].values.astype("float32")
+        self._feature = self.df[self._feature_names].values.astype("float32")
         self._label = (
-            self.df[self.label_name_].values.astype("float32")
-            if self.label_name_ is not None
+            self.df[self._label_name].values.astype("float32")
+            if self._label_name is not None
             else None
         )
         self._index = self.df.index
@@ -144,7 +144,7 @@ class TSDataset(Dataset):
         }  # sorted by date
         self._batch_slices = self._create_ts_slices(self._index, self.seq_len)
         for i, (code, date) in enumerate(self._index):
-            daily_slices[date].append(self._batch_slices[i])
+            daily_slices[date].append((self._batch_slices[i], i))
         self._daily_slices = list(daily_slices.values())
         self._daily_index = list(
             daily_slices.keys()
@@ -198,12 +198,13 @@ class TSDataset(Dataset):
             return data
 
     def __getitem__(self, i):
-        index = self._daily_index[i]
+        # index
+        index = np.array([slice[1] for slice in self._daily_slices[i]])
 
         # feature
         feature = np.array(
             [
-                self.padding_zeros(self._feature[slice], self.seq_len)
+                self.padding_zeros(self._feature[slice[0]], self.seq_len)
                 for slice in self._daily_slices[i]
             ]
         )
@@ -212,7 +213,7 @@ class TSDataset(Dataset):
         # label
         if self._label is not None:
             label = np.array(
-                [self._label[slice.stop - 1] for slice in self._daily_slices[i]]
+                [self._label[slice[0].stop - 1] for slice in self._daily_slices[i]]
             )
             return index, feature, label
         else:
@@ -227,8 +228,8 @@ class TSDataset(Dataset):
 
     @property
     def feature_names(self):
-        return self.feature_names_
+        return self._feature_names
 
     @property
     def label_name(self):
-        return self.label_name_
+        return self._label_name

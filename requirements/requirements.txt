@@ -5,3 +5,4 @@ scikit-learn
 lightgbm
 xgboost
 torch
+transformers
