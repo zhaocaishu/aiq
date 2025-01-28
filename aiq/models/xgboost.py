@@ -51,7 +51,7 @@ class XGBModel(BaseModel):
         test_df = dataset.data[self._feature_cols]
         dtest = xgb.DMatrix(test_df.values)
         predict_result = self.model.predict(dtest)
-        dataset.add_column('PREDICTION', predict_result)
+        dataset.insert('PREDICTION', predict_result)
         return dataset
 
     def get_feature_importance(self, *args, **kwargs) -> pd.Series:

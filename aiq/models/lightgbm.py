@@ -53,7 +53,7 @@ class LGBModel(BaseModel):
             raise ValueError("model is not fitted yet!")
         x_test = dataset.data[self._feature_cols].values
         predict_result = self.model.predict(x_test)
-        dataset.add_column('PREDICTION', predict_result)
+        dataset.insert('PREDICTION', predict_result)
         return dataset
 
     def get_feature_importance(self, *args, **kwargs) -> pd.Series:
