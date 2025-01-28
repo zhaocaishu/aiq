@@ -144,6 +144,14 @@ class MATCCModel(BaseModel):
                 )
             )
 
+            # save checkpoints
+            checkpoints_dir = "./checkpoints"
+            os.makedirs(checkpoints_dir, exist_ok=True)
+            model_file = os.path.join(
+                checkpoints_dir, "model_epoch{}.pth".format(epoch + 1)
+            )
+            torch.save(self.model, model_file)
+
     def eval(self, val_dataset: Dataset):
         self.model.eval()
         val_loader = DataLoader(val_dataset, batch_size=self.batch_size, shuffle=False)
@@ -168,12 +176,12 @@ class MATCCModel(BaseModel):
         )
 
         preds = np.zeros(test_dataset.data.shape[0])
-        with torch.no_grad():
-            for i, (index, batch_x, batch_y) in enumerate(test_loader):
-                batch_x = batch_x.squeeze(0).float().to(self.device)
+        for i, (index, batch_x, batch_y) in enumerate(test_loader):
+            batch_x = batch_x.squeeze(0).float().to(self.device)
+            with torch.no_grad():
                 outputs = self.model(batch_x)
-                pred = outputs.detach().cpu().numpy()  # .squeeze()
-                preds[index] = pred
+            pred = outputs.detach().cpu().numpy()  # .squeeze()
+            preds[index] = pred
 
         test_dataset.insert("PREDICTION", preds)
         return test_dataset
