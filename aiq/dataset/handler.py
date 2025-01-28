@@ -389,7 +389,8 @@ class Alpha158(DataHandler):
                 df = processor(df)
         else:
             for processor in self.processors:
-                df = processor(df)
+                if processor.is_for_infer():
+                    df = processor(df)
 
         df.columns = df.columns.droplevel()
 

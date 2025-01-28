@@ -3,15 +3,6 @@ data_handler:
   module_path: aiq.dataset.handler
   kwargs:
     processors:
-      - class: Dropna
-        module_path: aiq.dataset.processor
-        kwargs:
-          fields_group: 'label'
-      - class: DropExtremeLabel
-        module_path: aiq.dataset.processor
-        kwargs:
-          fields_group: 'label'
-          percentile: 0.975
       - class: RobustZScoreNorm
         module_path: aiq.dataset.processor
         kwargs:
@@ -21,6 +12,15 @@ data_handler:
         module_path: aiq.dataset.processor
         kwargs:
           fields_group: 'feature'
+      - class: Dropna
+        module_path: aiq.dataset.processor
+        kwargs:
+          fields_group: 'label'
+      - class: DropExtremeLabel
+        module_path: aiq.dataset.processor
+        kwargs:
+          fields_group: 'label'
+          percentile: 0.975
       - class: CSZScoreNorm
         module_path: aiq.dataset.processor
         kwargs:
