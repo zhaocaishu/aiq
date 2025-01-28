@@ -22,7 +22,7 @@ class XGBModel(BaseModel):
         eval_results=dict()
     ):
         train_df = train_dataset.data
-        x_train, y_train = train_df[self._feature_cols].values, train_df[self.label_col_].values
+        x_train, y_train = train_df[self._feature_cols].values, train_df[self._label_col].values
         dtrain = xgb.DMatrix(x_train, label=y_train)
         evals = [(dtrain, "train")]
 
