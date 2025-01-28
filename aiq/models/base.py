@@ -45,8 +45,8 @@ class BaseModel(abc.ABC):
 
     @property
     def feature_cols(self):
-        return self.feature_cols_
+        return self._feature_cols
 
     @property
     def label_col(self):
-        return self.label_col_
+        return self._label_col
