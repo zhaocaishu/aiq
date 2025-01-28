@@ -127,30 +127,6 @@ class RobustZScoreNorm(Processor):
         return df
 
 
-class DropExtremeLabel(Processor):
-    def __init__(self, fields_group="label", percentile: float = 0.975):
-        super().__init__()
-        self.fields_group = fields_group
-        assert 0 < percentile < 1, "percentile not allowed"
-        self.percentile = percentile
-
-    def forward(self, df):
-        rank_pct = df["label"].groupby(level="Date").rank(pct=True)
-        df.loc[:, "rank_pct"] = rank_pct
-        trimmed_df = df[
-            df["rank_pct"].between(
-                1 - self.percentile, self.percentile, inclusive="both"
-            )
-        ]
-        return trimmed_df.drop(columns=["rank_pct"])
-
-    def __call__(self, df):
-        return self.forward(df)
-
-    def is_for_infer(self):
-        return False
-
-
 class CSZScoreNorm(Processor):
     """Cross Sectional ZScore Normalization"""
 
@@ -167,9 +143,6 @@ class CSZScoreNorm(Processor):
         cols = get_group_columns(df, self.fields_group)
         df[cols] = df[cols].groupby("Date", group_keys=False).apply(self.zscore_func)
         return df
-
-    def is_for_infer(self):
-        return False
 
 
 class CSRankNorm(Processor):
@@ -206,6 +179,27 @@ class CSRankNorm(Processor):
         t *= 3.46  # NOTE: towards unit std
         df[cols] = t
         return df
+
+
+class DropExtremeLabel(Processor):
+    def __init__(self, fields_group="label", percentile: float = 0.975):
+        super().__init__()
+        self.fields_group = fields_group
+        assert 0 < percentile < 1, "percentile not allowed"
+        self.percentile = percentile
+
+    def forward(self, df):
+        rank_pct = df["label"].groupby(level="Date").rank(pct=True)
+        df.loc[:, "rank_pct"] = rank_pct
+        trimmed_df = df[
+            df["rank_pct"].between(
+                1 - self.percentile, self.percentile, inclusive="both"
+            )
+        ]
+        return trimmed_df.drop(columns=["rank_pct"])
+
+    def __call__(self, df):
+        return self.forward(df)
 
     def is_for_infer(self):
         return False
