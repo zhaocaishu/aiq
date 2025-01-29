@@ -1,11 +1,8 @@
 import os
 import json
-from typing import Tuple
 
-import numpy as np
 import xgboost as xgb
 import pandas as pd
-from scipy.stats import pearsonr
 
 from aiq.dataset import Dataset
 
@@ -24,14 +21,14 @@ class XGBModel(BaseModel):
         verbose_eval=20,
         eval_results=dict()
     ):
-        train_df = train_dataset.to_dataframe()
-        x_train, y_train = train_df[self.feature_cols_].values, train_df[self.label_col_].values
+        train_df = train_dataset.data
+        x_train, y_train = train_df[self._feature_cols].values, train_df[self._label_col].values
         dtrain = xgb.DMatrix(x_train, label=y_train)
         evals = [(dtrain, "train")]
 
         if val_dataset is not None:
-            valid_df = val_dataset.to_dataframe()
-            x_valid, y_valid = valid_df[self.feature_cols_].values, valid_df[self.label_col_].values
+            valid_df = val_dataset.data
+            x_valid, y_valid = valid_df[self._feature_cols].values, valid_df[self._label_col].values
             dvalid = xgb.DMatrix(x_valid, label=y_valid)
             evals.append((dvalid, "valid"))
 
@@ -51,10 +48,10 @@ class XGBModel(BaseModel):
     def predict(self, dataset: Dataset):
         if self.model is None:
             raise ValueError("model is not fitted yet!")
-        test_df = dataset.to_dataframe()[self.feature_cols_]
+        test_df = dataset.data[self._feature_cols]
         dtest = xgb.DMatrix(test_df.values)
         predict_result = self.model.predict(dtest)
-        dataset.add_column('PREDICTION', predict_result)
+        dataset.insert('PREDICTION', predict_result)
         return dataset
 
     def get_feature_importance(self, *args, **kwargs) -> pd.Series:
@@ -74,8 +71,8 @@ class XGBModel(BaseModel):
         self.model.save_model(model_file)
 
         model_params = {
-            'feature_cols': self.feature_cols_,
-            'label_col': self.label_col_,
+            'feature_cols': self._feature_cols,
+            'label_col': self._label_col,
             'model_params': self.model_params
         }
         with open(os.path.join(model_dir, 'model.params'), 'w') as f:
@@ -85,6 +82,6 @@ class XGBModel(BaseModel):
         self.model = xgb.Booster(model_file=os.path.join(model_dir, 'model.json'))
         with open(os.path.join(model_dir, 'model.params'), 'r') as f:
             model_params = json.load(f)
-            self.feature_cols_ = model_params['feature_cols']
-            self.label_col_ = model_params['label_col']
+            self._feature_cols = model_params['feature_cols']
+            self._label_col = model_params['label_col']
             self.model_params = model_params['model_params']

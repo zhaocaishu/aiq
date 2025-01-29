@@ -1,11 +1,11 @@
-from aiq.models.lightgbm import LGBModel
+from aiq.models import LGBModel, MATCCModel
 from aiq.utils.config import config as cfg
 from aiq.utils.module import init_instance_by_config
 
 
 if __name__ == "__main__":
     # config
-    cfg.from_file("./configs/lightgbm_model_reg.yaml")
+    cfg.from_file("./configs/matcc_model_reg.yaml")
 
     # data handler
     data_handler = init_instance_by_config(cfg.data_handler)
@@ -38,6 +38,6 @@ if __name__ == "__main__":
     model.save(model_dir="./temp")
 
     # predict stage
-    model_eval = LGBModel()
+    model_eval = MATCCModel()
     model_eval.load(model_dir="./temp")
     model_eval.predict(dataset=val_dataset)

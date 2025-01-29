@@ -2,6 +2,7 @@ import abc
 from typing import List
 
 import pandas as pd
+import numpy as np
 
 from aiq.ops import (
     Greater,
@@ -39,8 +40,8 @@ class DataHandler(abc.ABC):
 
 class Alpha158(DataHandler):
     def __init__(self, processors: List = []):
-        self.feature_names_ = None
-        self.label_name_ = None
+        self._feature_names = None
+        self._label_name = None
         self.processors = [init_instance_by_config(proc) for proc in processors]
 
     def extract_feature_labels(self, df: pd.DataFrame = None, mode: str = "train"):
@@ -331,7 +332,7 @@ class Alpha158(DataHandler):
                 feature_names.append("VSUMD%d" % d)
 
         # concat features
-        self.feature_names_ = feature_names.copy()
+        self._feature_names = feature_names.copy()
         features_df = pd.concat(
             [
                 df[["Date", "Instrument"]],
@@ -348,10 +349,10 @@ class Alpha158(DataHandler):
 
         # labels
         if mode in ["train", "valid"]:
-            self.label_name_ = "LABEL"
-            label = (Ref(close, -5) / Ref(close, -1) - 1).rename(self.label_name_)
+            self._label_name = "LABEL"
+            label = (Ref(close, -5) / Ref(close, -1) - 1).rename(self._label_name)
         else:
-            self.label_name_ = None
+            self._label_name = None
             label = None
 
         # if there is a label, concatenate it with the features
@@ -376,10 +377,10 @@ class Alpha158(DataHandler):
 
         # data preprocessor
         column_tuples = [
-            ("feature", feature_name) for feature_name in self.feature_names_
+            ("feature", feature_name) for feature_name in self._feature_names
         ]
-        if self.label_name_:
-            column_tuples.append(("label", self.label_name_))
+        if self._label_name:
+            column_tuples.append(("label", self._label_name))
         df.columns = pd.MultiIndex.from_tuples(column_tuples)
 
         if mode == "train":
@@ -388,7 +389,8 @@ class Alpha158(DataHandler):
                 df = processor(df)
         else:
             for processor in self.processors:
-                df = processor(df)
+                if processor.is_for_infer():
+                    df = processor(df)
 
         df.columns = df.columns.droplevel()
 
@@ -396,8 +398,8 @@ class Alpha158(DataHandler):
 
     @property
     def feature_names(self):
-        return self.feature_names_
+        return self._feature_names
 
     @property
     def label_name(self):
-        return self.label_name_
+        return self._label_name

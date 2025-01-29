@@ -50,7 +50,7 @@ def main():
     model.load(args.save_dir)
 
     # prediction
-    pred_df = model.predict(val_dataset).to_dataframe()
+    pred_df = model.predict(val_dataset).data
 
     # evaluation
     evaluator = Evaluator()

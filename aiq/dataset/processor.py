@@ -46,6 +46,18 @@ class Processor(abc.ABC):
             The raw_df of handler or result from previous processor.
         """
 
+    def is_for_infer(self) -> bool:
+        """
+        Is this processor usable for inference
+        Some processors are not usable for inference.
+
+        Returns
+        -------
+        bool:
+            if it is usable for infenrece.
+        """
+        return True
+
 
 class Dropna(Processor):
     def __init__(self, fields_group=None):
@@ -82,45 +94,6 @@ class Fillna(Processor):
         return df
 
 
-class DropExtremeLabel(Processor):
-    def __init__(self, fields_group="label", percentile: float = 0.975):
-        super().__init__()
-        self.fields_group = fields_group
-        assert 0 < percentile < 1, "percentile not allowed"
-        self.percentile = percentile
-
-    def forward(self, df):
-        rank_pct = df["label"].groupby(level="Date").rank(pct=True)
-        df.loc[:, "rank_pct"] = rank_pct
-        trimmed_df = df[
-            df["rank_pct"].between(
-                1 - self.percentile, self.percentile, inclusive="both"
-            )
-        ]
-        return trimmed_df.drop(columns=["rank_pct"])
-
-    def __call__(self, df):
-        return self.forward(df)
-
-
-class CSZScoreNorm(Processor):
-    """Cross Sectional ZScore Normalization"""
-
-    def __init__(self, fields_group=None, method="zscore"):
-        self.fields_group = fields_group
-        if method == "zscore":
-            self.zscore_func = zscore
-        elif method == "robust":
-            self.zscore_func = robust_zscore
-        else:
-            raise NotImplementedError(f"This type of input is not supported")
-
-    def __call__(self, df):
-        cols = get_group_columns(df, self.fields_group)
-        df[cols] = df[cols].groupby("Date", group_keys=False).apply(self.zscore_func)
-        return df
-
-
 class RobustZScoreNorm(Processor):
     """Robust ZScore Normalization
 
@@ -152,3 +125,81 @@ class RobustZScoreNorm(Processor):
             X = np.clip(X, -3, 3)
         df[self.cols] = X
         return df
+
+
+class CSZScoreNorm(Processor):
+    """Cross Sectional ZScore Normalization"""
+
+    def __init__(self, fields_group=None, method="zscore"):
+        self.fields_group = fields_group
+        if method == "zscore":
+            self.zscore_func = zscore
+        elif method == "robust":
+            self.zscore_func = robust_zscore
+        else:
+            raise NotImplementedError(f"This type of input is not supported")
+
+    def __call__(self, df):
+        cols = get_group_columns(df, self.fields_group)
+        df[cols] = df[cols].groupby("Date", group_keys=False).apply(self.zscore_func)
+        return df
+
+
+class CSRankNorm(Processor):
+    """
+    Cross Sectional Rank Normalization.
+    "Cross Sectional" is often used to describe data operations.
+    The operations across different stocks are often called Cross Sectional Operation.
+
+    For example, CSRankNorm is an operation that grouping the data by each day and rank `across` all the stocks in each day.
+
+    Explanation about 3.46 & 0.5
+
+    .. code-block:: python
+
+        import numpy as np
+        import pandas as pd
+        x = np.random.random(10000)  # for any variable
+        x_rank = pd.Series(x).rank(pct=True)  # if it is converted to rank, it will be a uniform distributed
+        x_rank_norm = (x_rank - x_rank.mean()) / x_rank.std()  # Normally, we will normalize it to make it like normal distribution
+
+        x_rank.mean()   # accounts for 0.5
+        1 / x_rank.std()  # accounts for 3.46
+
+    """
+
+    def __init__(self, fields_group=None):
+        self.fields_group = fields_group
+
+    def __call__(self, df):
+        # try not modify original dataframe
+        cols = get_group_columns(df, self.fields_group)
+        t = df[cols].groupby("Date").rank(pct=True)
+        t -= 0.5
+        t *= 3.46  # NOTE: towards unit std
+        df[cols] = t
+        return df
+
+
+class DropExtremeLabel(Processor):
+    def __init__(self, fields_group="label", percentile: float = 0.975):
+        super().__init__()
+        self.fields_group = fields_group
+        assert 0 < percentile < 1, "percentile not allowed"
+        self.percentile = percentile
+
+    def forward(self, df):
+        rank_pct = df["label"].groupby(level="Date").rank(pct=True)
+        df.loc[:, "rank_pct"] = rank_pct
+        trimmed_df = df[
+            df["rank_pct"].between(
+                1 - self.percentile, self.percentile, inclusive="both"
+            )
+        ]
+        return trimmed_df.drop(columns=["rank_pct"])
+
+    def __call__(self, df):
+        return self.forward(df)
+
+    def is_for_infer(self):
+        return False
