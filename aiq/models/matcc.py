@@ -106,7 +106,7 @@ class MATCCModel(BaseModel):
             num_training_steps=num_training_steps,
         )
         for epoch in range(self.epochs):
-            self.logger.info("========== Epoch {} ==========".format(epoch + 1))
+            self.logger.info("=" * 20 + " Epoch {} ".format(epoch + 1) + "=" * 20)
 
             iter_count = 0
             train_loss = []
