@@ -30,7 +30,7 @@ def main():
 
     # logger
     logger = get_logger("EVAL")
-    
+
     logger.info(cfg)
 
     # data handler
@@ -51,7 +51,7 @@ def main():
         cfg.model,
         feature_cols=val_dataset.feature_names,
         label_col=[val_dataset.label_name],
-        logger=logger
+        logger=logger,
     )
     model.load(args.save_dir)
 
@@ -61,7 +61,7 @@ def main():
     # evaluation
     evaluator = Evaluator()
     results = evaluator.evaluate(pred_df)
-    logger.info("Evaluation result:", results)
+    logger.info("Evaluation result: %s" % str(results))
 
 
 if __name__ == "__main__":
