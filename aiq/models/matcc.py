@@ -27,6 +27,8 @@ class MATCCModel(BaseModel):
         seq_len=8,
         pred_len=1,
         dropout=0.5,
+        gate_input_start_index=158,
+        gate_input_end_index=221,
         epochs=5,
         batch_size=1,
         warmup_ratio=0.1,
@@ -45,6 +47,8 @@ class MATCCModel(BaseModel):
         self.seq_len = seq_len
         self.pred_len = pred_len
         self.dropout = dropout
+        self.gate_input_start_index = gate_input_start_index
+        self.gate_input_end_index = gate_input_end_index
         self.epochs = epochs
         self.batch_size = batch_size
         self.warmup_ratio = warmup_ratio
@@ -63,6 +67,8 @@ class MATCCModel(BaseModel):
             s_nhead=self.s_nhead,
             seq_len=self.seq_len,
             dropout=self.dropout,
+            gate_input_start_index=self.gate_input_start_index,
+            gate_input_end_index=self.gate_input_end_index,
         ).to(self.device)
         if self.criterion_name == "IC":
             self.criterion = ICLoss()
@@ -204,6 +210,8 @@ class MATCCModel(BaseModel):
             "seq_len": self.seq_len,
             "pred_len": self.pred_len,
             "batch_size": self.batch_size,
+            "gate_input_start_index": self.gate_input_start_index,
+            "gate_input_end_index": self.gate_input_end_index,
         }
 
         with open(os.path.join(model_dir, "model.params"), "w") as f:
@@ -224,3 +232,5 @@ class MATCCModel(BaseModel):
             self.seq_len = model_params["seq_len"]
             self.pred_len = model_params["pred_len"]
             self.batch_size = model_params["batch_size"]
+            self.gate_input_start_index = model_params["gate_input_start_index"]
+            self.gate_input_end_index = model_params["gate_input_end_index"]

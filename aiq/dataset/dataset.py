@@ -233,3 +233,92 @@ class TSDataset(Dataset):
     @property
     def label_name(self):
         return self._label_name
+
+
+class MarketTSDataset(TSDataset):
+    """
+    Time series dataset.
+    """
+
+    def __init__(
+        self,
+        data_dir,
+        instruments,
+        segments,
+        seq_len,
+        pred_len,
+        data_handler=None,
+        mode="train",
+    ):
+        # sequence length and prediction length
+        self.seq_len = seq_len
+        self.pred_len = pred_len
+        self.mode = mode
+
+        # start and end time
+        start_time, end_time = segments[self.mode]
+
+        # load instruments from market
+        if isinstance(instruments, str):
+            instruments = DataLoader.load_instruments(
+                data_dir, instruments, start_time, end_time
+            )
+
+        # process instrument
+        dfs = []
+        for instrument in instruments:
+            df = DataLoader.load_features(
+                data_dir,
+                instrument=instrument,
+                start_time=start_time,
+                end_time=end_time,
+            )
+
+            # skip instrument of non-existed
+            if df is None:
+                continue
+
+            dfs.append(df)
+
+        # market data
+        market_dfs = []
+        for instrument in ["000300.SH", "000903.SH", "000905.SH"]:
+            df = DataLoader.load_features(
+                data_dir,
+                instrument=instrument,
+                start_time=start_time,
+                end_time=end_time,
+            )
+            market_dfs.append(df)
+
+        # preprocess
+        self.df = data_handler.process(dfs, market_dfs=market_dfs, mode=mode)
+
+        # feature and label names
+        self._feature_names = data_handler.feature_names
+        self._label_name = data_handler.label_name
+
+        # change index to <code, date>
+        self.df.index = self.df.index.swaplevel()
+        self.df.sort_index(inplace=True)
+
+        # data and index
+        self._feature = self.df[self._feature_names].values.astype("float32")
+        self._label = (
+            self.df[self._label_name].values.astype("float32")
+            if self._label_name is not None
+            else None
+        )
+        self._index = self.df.index
+
+        # create daily slices
+        daily_slices = {
+            date: [] for date in sorted(self._index.unique(level=1))
+        }  # sorted by date
+        self._batch_slices = self._create_ts_slices(self._index, self.seq_len)
+        for i, (code, date) in enumerate(self._index):
+            daily_slices[date].append((self._batch_slices[i], i))
+        self._daily_slices = list(daily_slices.values())
+        self._daily_index = list(
+            daily_slices.keys()
+        )  # index is the original date index

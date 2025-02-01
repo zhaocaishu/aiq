@@ -1,5 +1,5 @@
 data_handler:
-  class: Alpha158
+  class: MarketAlpha158
   module_path: aiq.dataset.handler
   kwargs:
     processors:
@@ -25,8 +25,18 @@ data_handler:
         module_path: aiq.dataset.processor
         kwargs:
           fields_group: 'label'
+    market_processors:
+      - class: RobustZScoreNorm
+        module_path: aiq.dataset.processor
+        kwargs:
+          fields_group: 'feature'
+          clip_outlier: true
+      - class: Fillna
+        module_path: aiq.dataset.processor
+        kwargs:
+          fields_group: 'feature'
 dataset:
-  class: TSDataset
+  class: MarketTSDataset
   module_path: aiq.dataset.dataset
   kwargs:
     instruments: "csi300"
@@ -47,7 +57,9 @@ model:
     seq_len: 8
     pred_len: 1
     dropout: 0.5
-    epochs: 5
+    gate_input_start_index: 179
+    gate_input_end_index: 242
+    epochs: 30
     batch_size: 1
-    learning_rate: 0.01
+    learning_rate: 0.0003
     criterion_name: 'MSE'

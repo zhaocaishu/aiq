@@ -6,8 +6,8 @@ from torch.nn.modules.linear import Linear
 from torch.nn.modules.dropout import Dropout
 from torch.nn.modules.normalization import LayerNorm
 
-from .dlinear import DLinear, DLinear_Init
-from .rwkv import Block, RWKV_Init
+from aiq.layers.dlinear import DLinear, DLinear_Init
+from aiq.layers.rwkv import Block, RWKV_Init
 
 
 class SAttention(nn.Module):
@@ -74,6 +74,32 @@ class SAttention(nn.Module):
         return att_output
 
 
+class Filter(nn.Module):
+    def __init__(self, d_input, d_output, seq_len, kernel=5, stride=5):
+        super().__init__()
+        self.d_input = d_input
+        self.d_output = d_output
+        self.seq_len = seq_len
+
+        self.trans = nn.Linear(d_input, d_output)
+
+        self.aggregate = nn.Conv1d(
+            d_output, d_output, kernel_size=kernel, stride=stride, groups=d_output
+        )
+
+        # 输入是[N, T, d_feat]
+        conv_feat = math.floor((self.seq_len - kernel) / stride + 1)
+
+        self.proj_out = nn.Linear(conv_feat, 1)
+
+    def forward(self, x):
+        x = self.trans.forward(x)  # [N, T, d_feat]
+        x_trans = x.transpose(-1, -2)  # [N, d_feat, T]
+        x_agg = self.aggregate.forward(x_trans)  # [N, d_feat, conv_feat]
+        out = self.proj_out.forward(x_agg)  # [N, d_feat, 1]
+        return out.transpose(-1, -2)  # [N, 1, d_feat]
+
+
 class TemporalAttention(nn.Module):
     def __init__(self, d_model):
         super().__init__()
@@ -92,12 +118,14 @@ class TemporalAttention(nn.Module):
 class MATCC(nn.Module):
     def __init__(
         self,
-        d_feat=128,
+        d_feat=158,
         d_model=256,
         t_nhead=4,
         s_nhead=2,
         seq_len=8,
         dropout=0.5,
+        gate_input_start_index=158,
+        gate_input_end_index=221,
     ):
         super().__init__()
 
@@ -105,6 +133,12 @@ class MATCC(nn.Module):
         self.d_model = d_model
         self.n_attn = d_model
         self.n_head = t_nhead
+
+        # market
+        self.gate_input_start_index = gate_input_start_index
+        self.gate_input_end_index = gate_input_end_index
+        self.d_gate_input = gate_input_end_index - gate_input_start_index  # F'
+        self.feature_gate = Filter(self.d_gate_input, self.d_feat, seq_len)
 
         self.rwkv = Block(
             layer_id=0,
@@ -131,25 +165,26 @@ class MATCC(nn.Module):
         self.layers = nn.Sequential(
             # feature layer
             nn.Linear(d_feat, d_model),
-            self.dlinear,  # 【N,T,D】
-            self.rwkv,  # 【N,T,D】
-            SAttention(
-                d_model=d_model, nhead=s_nhead, dropout=dropout
-            ),  # [T,N,D]
+            self.dlinear,  # [N,T,D]
+            self.rwkv,  # [N,T,D]
+            SAttention(d_model=d_model, nhead=s_nhead, dropout=dropout),  # [T,N,D]
             TemporalAttention(d_model=d_model),
             # decoder
             nn.Linear(d_model, 1),
         )
 
     def forward(self, x):
-        # x: [Batch, Input length, Channel]
-        output = self.layers(x).squeeze(-1)
+        src = x[:, :, : self.gate_input_start_index]  # N, T, D
+        gate_input = x[:, :, self.gate_input_start_index : self.gate_input_end_index]
+        src = src + self.feature_gate.forward(gate_input)
+
+        output = self.layers(src).squeeze(-1)
 
         return output
 
 
 if __name__ == "__main__":
+    x_sample = torch.randn((256, 8, 221))
     model = MATCC()
-    x_sample = torch.randn((2, 8, 158))
     y = model.forward(x_sample)
-    print(y)
+    print(y.shape)
