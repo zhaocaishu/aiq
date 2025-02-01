@@ -25,8 +25,6 @@ from aiq.ops import (
 )
 from aiq.utils.module import init_instance_by_config
 
-from .loader import DataLoader
-
 
 class DataHandler(abc.ABC):
     def __init__(self, processors: List = []):
