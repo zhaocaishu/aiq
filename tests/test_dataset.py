@@ -24,4 +24,4 @@ if __name__ == "__main__":
         mode="valid",
     )
 
-    print(train_dataset.to_dataframe().shape, val_dataset.to_dataframe().shape)
+    print(train_dataset.data.shape, val_dataset.data.shape)

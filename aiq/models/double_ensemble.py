@@ -6,11 +6,8 @@ import numpy as np
 import pandas as pd
 
 from aiq.dataset import Dataset
-from aiq.utils.logging import get_logger
 
 from .base import BaseModel
-
-logger = get_logger('Double Ensemble')
 
 
 class DEnsembleModel(BaseModel):
@@ -33,6 +30,7 @@ class DEnsembleModel(BaseModel):
         sub_weights=None,
         num_boost_round=200,
         early_stopping_rounds=50,
+        logger=None,
         **kwargs
     ):
         self._feature_cols = feature_cols
@@ -64,6 +62,7 @@ class DEnsembleModel(BaseModel):
         self.params.update(kwargs)
         self.loss = loss
         self.early_stopping_rounds = early_stopping_rounds
+        self.logger = logger
 
     def fit(self, train_dataset: Dataset, val_dataset: Dataset = None):
         df_train, df_valid = train_dataset.data, val_dataset.data
@@ -79,14 +78,14 @@ class DEnsembleModel(BaseModel):
         # train sub-models
         for k in range(self.num_models):
             self.sub_features.append(features)
-            logger.info("Training sub-model: ({}/{})".format(k + 1, self.num_models))
+            self.logger.info("Training sub-model: ({}/{})".format(k + 1, self.num_models))
             model_k = self.train_submodel(df_train, df_valid, weights, features)
             self.ensemble.append(model_k)
             # no further sample re-weight and feature selection needed for the last sub-model
             if k + 1 == self.num_models:
                 break
 
-            logger.info("Retrieving loss curve and loss values...")
+            self.logger.info("Retrieving loss curve and loss values...")
             loss_curve = self.retrieve_loss_curve(model_k, df_train, features)
             pred_k = self.predict_sub(model_k, df_train, features)
             pred_sub.iloc[:, k] = pred_k
@@ -96,11 +95,11 @@ class DEnsembleModel(BaseModel):
             loss_values = pd.Series(self.get_loss(y_train.values.squeeze(), pred_ensemble.values))
 
             if self.enable_sr:
-                logger.info("Sample re-weighting...")
+                self.logger.info("Sample re-weighting...")
                 weights = self.sample_reweight(loss_curve, loss_values, k + 1)
 
             if self.enable_fs:
-                logger.info("Feature selection...")
+                self.logger.info("Feature selection...")
                 features = self.feature_selection(df_train, loss_values)
 
     def train_submodel(self, df_train, df_valid, weights, features):
@@ -110,7 +109,7 @@ class DEnsembleModel(BaseModel):
         callbacks = [lgb.log_evaluation(20), lgb.record_evaluation(evals_result)]
         if self.early_stopping_rounds:
             callbacks.append(lgb.early_stopping(self.early_stopping_rounds))
-            logger.info("Training with early_stopping...")
+            self.logger.info("Training with early_stopping...")
 
         model = lgb.train(
             self.params,

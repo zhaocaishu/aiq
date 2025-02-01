@@ -7,7 +7,9 @@ from torch.utils.data import Dataset
 class BaseModel(abc.ABC):
     """Learnable Models"""
 
-    def __init__(self, feature_cols=None, label_col=None, model_params=None):
+    def __init__(
+        self, feature_cols=None, label_col=None, model_params=None, logger=None
+    ):
         self._feature_cols = feature_cols
         self._label_col = label_col
 
@@ -17,6 +19,8 @@ class BaseModel(abc.ABC):
             self.model_params = {}
 
         self.model = None
+
+        self.logger = logger
 
     def fit(self, train_dataset: Dataset, val_dataset: Dataset = None):
         """
