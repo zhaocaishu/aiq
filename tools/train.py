@@ -60,6 +60,7 @@ def main():
         cfg.model,
         feature_cols=train_dataset.feature_names,
         label_col=[train_dataset.label_name],
+        logger=logger
     )
 
     model.fit(train_dataset=train_dataset, val_dataset=val_dataset)
