@@ -517,7 +517,7 @@ class MarketAlpha158(Alpha158):
                     feature_df = processor(feature_df)
 
         feature_df.columns = feature_df.columns.droplevel()
-        feature_df.reset_index(inplace=True)
+        feature_df = feature_df.reset_index()
 
         # extract and rename features for different markets ("000300.SH", "000903.SH", "000905.SH"), then merge them into a new DataFrame
         market_feature_df = pd.concat(
