@@ -1,5 +1,4 @@
 import os
-import json
 
 import xgboost as xgb
 import pandas as pd
@@ -19,16 +18,22 @@ class XGBModel(BaseModel):
         num_boost_round=1000,
         early_stopping_rounds=50,
         verbose_eval=20,
-        eval_results=dict()
+        eval_results=dict(),
     ):
         train_df = train_dataset.data
-        x_train, y_train = train_df[self._feature_cols].values, train_df[self._label_col].values
+        x_train, y_train = (
+            train_df[self._feature_cols].values,
+            train_df[self._label_col].values,
+        )
         dtrain = xgb.DMatrix(x_train, label=y_train)
         evals = [(dtrain, "train")]
 
         if val_dataset is not None:
             valid_df = val_dataset.data
-            x_valid, y_valid = valid_df[self._feature_cols].values, valid_df[self._label_col].values
+            x_valid, y_valid = (
+                valid_df[self._feature_cols].values,
+                valid_df[self._label_col].values,
+            )
             dvalid = xgb.DMatrix(x_valid, label=y_valid)
             evals.append((dvalid, "valid"))
 
@@ -39,7 +44,7 @@ class XGBModel(BaseModel):
             evals=evals,
             early_stopping_rounds=early_stopping_rounds,
             verbose_eval=verbose_eval,
-            evals_result=eval_results
+            evals_result=eval_results,
         )
         eval_results["train"] = list(eval_results["train"].values())[0]
         if val_dataset is not None:
@@ -50,8 +55,8 @@ class XGBModel(BaseModel):
             raise ValueError("model is not fitted yet!")
         test_df = dataset.data[self._feature_cols]
         dtest = xgb.DMatrix(test_df.values)
-        predict_result = self.model.predict(dtest)
-        dataset.insert('PREDICTION', predict_result)
+        preds = self.model.predict(dtest)
+        dataset.insert("PREDICTION", preds)
         return dataset
 
     def get_feature_importance(self, *args, **kwargs) -> pd.Series:
@@ -61,27 +66,16 @@ class XGBModel(BaseModel):
             parameters reference:
                 https://xgboost.readthedocs.io/en/latest/python/python_api.html#xgboost.Booster.get_score
         """
-        return pd.Series(self.model.get_score(*args, **kwargs)).sort_values(ascending=False)
+        return pd.Series(self.model.get_score(*args, **kwargs)).sort_values(
+            ascending=False
+        )
 
     def save(self, model_dir):
         if not os.path.exists(model_dir):
             os.makedirs(model_dir)
 
-        model_file = os.path.join(model_dir, 'model.json')
+        model_file = os.path.join(model_dir, "model.json")
         self.model.save_model(model_file)
 
-        model_params = {
-            'feature_cols': self._feature_cols,
-            'label_col': self._label_col,
-            'model_params': self.model_params
-        }
-        with open(os.path.join(model_dir, 'model.params'), 'w') as f:
-            json.dump(model_params, f)
-
     def load(self, model_dir):
-        self.model = xgb.Booster(model_file=os.path.join(model_dir, 'model.json'))
-        with open(os.path.join(model_dir, 'model.params'), 'r') as f:
-            model_params = json.load(f)
-            self._feature_cols = model_params['feature_cols']
-            self._label_col = model_params['label_col']
-            self.model_params = model_params['model_params']
+        self.model = xgb.Booster(model_file=os.path.join(model_dir, "model.json"))

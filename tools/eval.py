@@ -60,8 +60,8 @@ def main():
 
     # evaluation
     evaluator = Evaluator()
-    results = evaluator.evaluate(pred_df)
-    logger.info("Evaluation result: %s" % str(results))
+    metrics = evaluator.evaluate(pred_df)
+    logger.info("Evaluation metrics: %s" % str(metrics))
 
 
 if __name__ == "__main__":

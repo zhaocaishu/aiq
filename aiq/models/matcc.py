@@ -202,38 +202,6 @@ class MATCCModel(BaseModel):
         model_file = os.path.join(model_dir, "model.pth")
         torch.save(self.model.state_dict(), model_file)
 
-        model_params = {
-            "feature_cols": self._feature_cols,
-            "label_col": self._label_col,
-            "d_feat": self.d_feat,
-            "d_model": self.d_model,
-            "t_nhead": self.t_nhead,
-            "s_nhead": self.s_nhead,
-            "dropout": self.dropout,
-            "seq_len": self.seq_len,
-            "pred_len": self.pred_len,
-            "batch_size": self.batch_size,
-            "gate_input_start_index": self.gate_input_start_index,
-            "gate_input_end_index": self.gate_input_end_index,
-        }
-
-        with open(os.path.join(model_dir, "model.params"), "w") as f:
-            json.dump(model_params, f)
-
     def load(self, model_dir):
         model_file = os.path.join(model_dir, "model.pth")
         self.model.load_state_dict(torch.load(model_file, map_location=self.device))
-        with open(os.path.join(model_dir, "model.params"), "r") as f:
-            model_params = json.load(f)
-            self._feature_cols = model_params["feature_cols"]
-            self._label_col = model_params["label_col"]
-            self.d_feat = model_params["d_feat"]
-            self.d_model = model_params["d_model"]
-            self.t_nhead = model_params["t_nhead"]
-            self.s_nhead = model_params["s_nhead"]
-            self.dropout = model_params["dropout"]
-            self.seq_len = model_params["seq_len"]
-            self.pred_len = model_params["pred_len"]
-            self.batch_size = model_params["batch_size"]
-            self.gate_input_start_index = model_params["gate_input_start_index"]
-            self.gate_input_end_index = model_params["gate_input_end_index"]
