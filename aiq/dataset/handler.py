@@ -496,19 +496,17 @@ class MarketAlpha158(Alpha158):
         feature_dfs = [self.extract_market_features(df) for df in dfs]
 
         # extract and rename features for different markets ("000300.SH", "000903.SH", "000905.SH"), then merge them into a new DataFrame
-        feature_df = pd.concat(feature_dfs, ignore_index=True)
         feature_df = pd.concat(
             [
-                feature_df.loc[feature_df["Instrument"] == market]
-                .rename(
+                feature_df.rename(
                     columns={
-                        feature_name: f"{market}_{feature_name}"
+                        feature_name: f"{feature_df['Instrument'][0]}_{feature_name}"
                         for feature_name in self._market_feature_names
                     }
                 )
                 .drop(columns=["Instrument"])
                 .set_index("Date")
-                for market in ["000300.SH", "000903.SH", "000905.SH"]
+                for feature_df in feature_dfs
             ],
             axis=1,
             join="inner",
