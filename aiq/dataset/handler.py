@@ -495,32 +495,9 @@ class MarketAlpha158(Alpha158):
     ) -> pd.DataFrame:
         feature_dfs = [self.extract_market_features(df) for df in dfs]
 
-        # concat features and set multi-index
-        feature_df = pd.concat(feature_dfs, ignore_index=True).set_index(
-            ["Date", "Instrument"]
-        )
-        feature_df.sort_index(inplace=True)
-
-        # data preprocessor
-        column_tuples = [
-            ("feature", feature_name) for feature_name in self._market_feature_names
-        ]
-        feature_df.columns = pd.MultiIndex.from_tuples(column_tuples)
-
-        if mode == "train":
-            for processor in self.market_processors:
-                processor.fit(feature_df)
-                feature_df = processor(feature_df)
-        else:
-            for processor in self.market_processors:
-                if processor.is_for_infer():
-                    feature_df = processor(feature_df)
-
-        feature_df.columns = feature_df.columns.droplevel()
-        feature_df = feature_df.reset_index()
-
         # extract and rename features for different markets ("000300.SH", "000903.SH", "000905.SH"), then merge them into a new DataFrame
-        market_feature_df = pd.concat(
+        feature_df = pd.concat(feature_dfs, ignore_index=True)
+        feature_df = pd.concat(
             [
                 feature_df.loc[feature_df["Instrument"] == market]
                 .rename(
@@ -537,9 +514,28 @@ class MarketAlpha158(Alpha158):
             join="inner",
         )
 
-        self._feature_names.extend(market_feature_df.columns.tolist())
+        self._feature_names.extend(feature_df.columns.tolist())
 
-        return market_feature_df
+        # concat features and set multi-index
+        column_tuples = [
+            ("feature", feature_name) for feature_name in feature_df.columns.tolist()
+        ]
+        feature_df.columns = pd.MultiIndex.from_tuples(column_tuples)
+
+        # data preprocessing
+        if mode == "train":
+            for processor in self.market_processors:
+                processor.fit(feature_df)
+                feature_df = processor(feature_df)
+        else:
+            for processor in self.market_processors:
+                if processor.is_for_infer():
+                    feature_df = processor(feature_df)
+
+        feature_df.columns = feature_df.columns.droplevel()
+        feature_df = feature_df.reset_index()
+
+        return feature_df
 
     def process(
         self,
