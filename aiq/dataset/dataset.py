@@ -281,8 +281,9 @@ class MarketTSDataset(TSDataset):
             dfs.append(df)
 
         # market data
-        market_dfs = []
         market_names = ["000300.SH", "000903.SH", "000905.SH"]
+
+        market_dfs = []
         for market_name in market_names:
             df = DataLoader.load_features(
                 data_dir,
