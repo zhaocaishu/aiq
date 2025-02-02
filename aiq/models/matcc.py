@@ -159,7 +159,7 @@ class MATCCModel(BaseModel):
             model_file = os.path.join(
                 checkpoints_dir, "model_epoch{}.pth".format(epoch + 1)
             )
-            torch.save(self.model, model_file)
+            torch.save(self.model.state_dict(), model_file)
 
     def eval(self, val_dataset: Dataset):
         self.model.eval()
@@ -200,7 +200,7 @@ class MATCCModel(BaseModel):
             os.makedirs(model_dir)
 
         model_file = os.path.join(model_dir, "model.pth")
-        torch.save(self.model, model_file)
+        torch.save(self.model.state_dict(), model_file)
 
         model_params = {
             "feature_cols": self._feature_cols,
@@ -222,7 +222,7 @@ class MATCCModel(BaseModel):
 
     def load(self, model_dir):
         model_file = os.path.join(model_dir, "model.pth")
-        self.model = torch.load(model_file)
+        self.model.load_state_dict(torch.load(model_file, map_location=self.device))
         with open(os.path.join(model_dir, "model.params"), "r") as f:
             model_params = json.load(f)
             self._feature_cols = model_params["feature_cols"]
