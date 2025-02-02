@@ -282,17 +282,20 @@ class MarketTSDataset(TSDataset):
 
         # market data
         market_dfs = []
-        for instrument in ["000300.SH", "000903.SH", "000905.SH"]:
+        market_names = ["000300.SH", "000903.SH", "000905.SH"]
+        for market_name in market_names:
             df = DataLoader.load_features(
                 data_dir,
-                instrument=instrument,
+                instrument=market_name,
                 start_time=start_time,
                 end_time=end_time,
             )
             market_dfs.append(df)
 
         # preprocess
-        self.df = data_handler.process(dfs, market_dfs=market_dfs, mode=mode)
+        self.df = data_handler.process(
+            dfs, market_dfs=market_dfs, market_names=market_names, mode=mode
+        )
 
         # feature and label names
         self._feature_names = data_handler.feature_names
