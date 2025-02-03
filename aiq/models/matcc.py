@@ -204,4 +204,6 @@ class MATCCModel(BaseModel):
 
     def load(self, model_dir):
         model_file = os.path.join(model_dir, "model.pth")
-        self.model.load_state_dict(torch.load(model_file, map_location=self.device))
+        self.model.load_state_dict(
+            torch.load(model_file, map_location=self.device, weights_only=True)
+        )
