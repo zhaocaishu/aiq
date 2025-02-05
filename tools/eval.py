@@ -4,6 +4,7 @@ import pickle
 
 from aiq.utils.config import config as cfg
 from aiq.utils.module import init_instance_by_config
+from aiq.utils.logging import get_logger
 from aiq.evaluation import Evaluator
 
 
@@ -26,7 +27,11 @@ def main():
 
     # config
     cfg.from_file(args.cfg_file)
-    print(cfg)
+
+    # logger
+    logger = get_logger("EVAL")
+
+    logger.info(cfg)
 
     # data handler
     with open(os.path.join(args.save_dir, "data_handler.pkl"), "rb") as f:
@@ -39,13 +44,14 @@ def main():
         data_handler=data_handler,
         mode="valid",
     )
-    print("Loaded %d items to validation dataset" % len(val_dataset))
+    logger.info("Loaded %d items to validation dataset" % len(val_dataset))
 
     # load model
     model = init_instance_by_config(
         cfg.model,
         feature_cols=val_dataset.feature_names,
         label_col=[val_dataset.label_name],
+        logger=logger,
     )
     model.load(args.save_dir)
 
@@ -54,8 +60,8 @@ def main():
 
     # evaluation
     evaluator = Evaluator()
-    results = evaluator.evaluate(pred_df)
-    print("Evaluation result:", results)
+    metrics = evaluator.evaluate(pred_df)
+    logger.info("Evaluation metrics: %s" % str(metrics))
 
 
 if __name__ == "__main__":

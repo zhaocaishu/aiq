@@ -4,6 +4,7 @@ import pickle
 
 from aiq.utils.config import config as cfg
 from aiq.utils.module import init_instance_by_config
+from aiq.utils.logging import get_logger
 
 
 def parse_args():
@@ -25,7 +26,11 @@ def main():
 
     # config
     cfg.from_file(args.cfg_file)
-    print(cfg)
+
+    # logger
+    logger = get_logger("TRAIN")
+
+    logger.info(cfg)
 
     # data handler
     data_handler = init_instance_by_config(cfg.data_handler)
@@ -45,7 +50,7 @@ def main():
         mode="valid",
     )
 
-    print(
+    logger.info(
         "Loaded %d items to train dataset, %d items to validation dataset"
         % (len(train_dataset), len(val_dataset))
     )
@@ -55,6 +60,7 @@ def main():
         cfg.model,
         feature_cols=train_dataset.feature_names,
         label_col=[train_dataset.label_name],
+        logger=logger
     )
 
     model.fit(train_dataset=train_dataset, val_dataset=val_dataset)
@@ -68,7 +74,7 @@ def main():
 
     model.save(model_dir=args.save_dir)
 
-    print("Model training has been finished successfully!")
+    logger.info("Model training has been finished successfully!")
 
 
 if __name__ == "__main__":

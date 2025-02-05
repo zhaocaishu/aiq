@@ -27,12 +27,15 @@ class MATCCModel(BaseModel):
         seq_len=8,
         pred_len=1,
         dropout=0.5,
+        gate_input_start_index=158,
+        gate_input_end_index=221,
         epochs=5,
         batch_size=1,
         warmup_ratio=0.1,
         lr_scheduler_type="cosine",
         learning_rate=0.01,
         criterion_name="MSE",
+        logger=None,
     ):
         # input parameters
         self._feature_cols = feature_cols
@@ -45,6 +48,8 @@ class MATCCModel(BaseModel):
         self.seq_len = seq_len
         self.pred_len = pred_len
         self.dropout = dropout
+        self.gate_input_start_index = gate_input_start_index
+        self.gate_input_end_index = gate_input_end_index
         self.epochs = epochs
         self.batch_size = batch_size
         self.warmup_ratio = warmup_ratio
@@ -63,6 +68,8 @@ class MATCCModel(BaseModel):
             s_nhead=self.s_nhead,
             seq_len=self.seq_len,
             dropout=self.dropout,
+            gate_input_start_index=self.gate_input_start_index,
+            gate_input_end_index=self.gate_input_end_index,
         ).to(self.device)
         if self.criterion_name == "IC":
             self.criterion = ICLoss()
@@ -72,6 +79,8 @@ class MATCCModel(BaseModel):
             self.criterion = nn.MSELoss()
         else:
             raise NotImplementedError
+
+        self.logger = logger
 
     def fit(self, train_dataset: Dataset, val_dataset: Dataset = None):
         train_loader = DataLoader(
@@ -97,7 +106,7 @@ class MATCCModel(BaseModel):
             num_training_steps=num_training_steps,
         )
         for epoch in range(self.epochs):
-            print("========== Epoch {} ==========".format(epoch + 1))
+            self.logger.info("=" * 20 + " Epoch {} ".format(epoch + 1) + "=" * 20)
 
             iter_count = 0
             train_loss = []
@@ -117,7 +126,7 @@ class MATCCModel(BaseModel):
                 if (i + 1) % 100 == 0:
                     speed = (time.time() - time_now) / iter_count
                     left_time = speed * ((self.epochs - epoch) * train_steps_epoch - i)
-                    print(
+                    self.logger.info(
                         "Epoch: {0}, step: {1}, lr: {2:.5f} train loss: {3:.7f}, speed: {4:.4f}s/iter, left time: {5:.4f}s".format(
                             epoch + 1,
                             i + 1,
@@ -138,7 +147,7 @@ class MATCCModel(BaseModel):
 
             train_loss = np.average(train_loss)
             val_loss = self.eval(val_dataset)
-            print(
+            self.logger.info(
                 "Epoch: {0}, cost time: {1:.4f}s, train loss: {2:.7f}, val loss: {3:.7f}".format(
                     epoch + 1, time.time() - epoch_time, train_loss, val_loss
                 )
@@ -150,7 +159,7 @@ class MATCCModel(BaseModel):
             model_file = os.path.join(
                 checkpoints_dir, "model_epoch{}.pth".format(epoch + 1)
             )
-            torch.save(self.model, model_file)
+            torch.save(self.model.state_dict(), model_file)
 
     def eval(self, val_dataset: Dataset):
         self.model.eval()
@@ -191,36 +200,10 @@ class MATCCModel(BaseModel):
             os.makedirs(model_dir)
 
         model_file = os.path.join(model_dir, "model.pth")
-        torch.save(self.model, model_file)
-
-        model_params = {
-            "feature_cols": self._feature_cols,
-            "label_col": self._label_col,
-            "d_feat": self.d_feat,
-            "d_model": self.d_model,
-            "t_nhead": self.t_nhead,
-            "s_nhead": self.s_nhead,
-            "dropout": self.dropout,
-            "seq_len": self.seq_len,
-            "pred_len": self.pred_len,
-            "batch_size": self.batch_size,
-        }
-
-        with open(os.path.join(model_dir, "model.params"), "w") as f:
-            json.dump(model_params, f)
+        torch.save(self.model.state_dict(), model_file)
 
     def load(self, model_dir):
         model_file = os.path.join(model_dir, "model.pth")
-        self.model = torch.load(model_file)
-        with open(os.path.join(model_dir, "model.params"), "r") as f:
-            model_params = json.load(f)
-            self._feature_cols = model_params["feature_cols"]
-            self._label_col = model_params["label_col"]
-            self.d_feat = model_params["d_feat"]
-            self.d_model = model_params["d_model"]
-            self.t_nhead = model_params["t_nhead"]
-            self.s_nhead = model_params["s_nhead"]
-            self.dropout = model_params["dropout"]
-            self.seq_len = model_params["seq_len"]
-            self.pred_len = model_params["pred_len"]
-            self.batch_size = model_params["batch_size"]
+        self.model.load_state_dict(
+            torch.load(model_file, map_location=self.device, weights_only=True)
+        )
