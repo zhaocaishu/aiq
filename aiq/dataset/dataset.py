@@ -49,7 +49,7 @@ class Dataset(Dataset):
 
         # feature and label names
         self._feature_names = data_handler.feature_names
-        self._label_name = data_handler.label_name
+        self._label_names = data_handler.label_names
 
     def __getitem__(self, index):
         return self.df.iloc[[index]]
@@ -69,8 +69,8 @@ class Dataset(Dataset):
         return self._feature_names
 
     @property
-    def label_name(self):
-        return self._label_name
+    def label_names(self):
+        return self._label_names
 
 
 class TSDataset(Dataset):
@@ -123,7 +123,7 @@ class TSDataset(Dataset):
 
         # feature and label names
         self._feature_names = data_handler.feature_names
-        self._label_name = data_handler.label_name
+        self._label_names = data_handler.label_names
 
         # change index to <code, date>
         self.df.index = self.df.index.swaplevel()
@@ -132,8 +132,8 @@ class TSDataset(Dataset):
         # data and index
         self._feature = self.df[self._feature_names].values.astype("float32")
         self._label = (
-            self.df[self._label_name].values.astype("float32")
-            if self._label_name is not None
+            self.df[self._label_names].values.astype("float32")
+            if self._label_names is not None
             else None
         )
         self._index = self.df.index
@@ -231,8 +231,8 @@ class TSDataset(Dataset):
         return self._feature_names
 
     @property
-    def label_name(self):
-        return self._label_name
+    def label_names(self):
+        return self._label_names
 
 
 class MarketTSDataset(TSDataset):
@@ -300,7 +300,7 @@ class MarketTSDataset(TSDataset):
 
         # feature and label names
         self._feature_names = data_handler.feature_names
-        self._label_name = data_handler.label_name
+        self._label_names = data_handler.label_names
 
         # change index to <code, date>
         self.df.index = self.df.index.swaplevel()
@@ -309,8 +309,8 @@ class MarketTSDataset(TSDataset):
         # data and index
         self._feature = self.df[self._feature_names].values.astype("float32")
         self._label = (
-            self.df[self._label_name].values.astype("float32")
-            if self._label_name is not None
+            self.df[self._label_names].values.astype("float32")
+            if self._label_names is not None
             else None
         )
         self._index = self.df.index

@@ -19,7 +19,7 @@ class MATCCModel(BaseModel):
     def __init__(
         self,
         feature_cols=None,
-        label_col=None,
+        label_cols=None,
         d_feat=158,
         d_model=256,
         t_nhead=4,
@@ -39,7 +39,7 @@ class MATCCModel(BaseModel):
     ):
         # input parameters
         self._feature_cols = feature_cols
-        self._label_col = label_col
+        self._label_cols = label_cols
 
         self.d_feat = d_feat
         self.d_model = d_model

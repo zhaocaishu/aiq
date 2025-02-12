@@ -29,13 +29,13 @@ if __name__ == "__main__":
         mode="valid",
     )
 
-    print(train_dataset.feature_names, train_dataset.label_name)
+    print(train_dataset.feature_names, train_dataset.label_names)
 
     # train stage
     model = init_instance_by_config(
         cfg.model,
         feature_cols=train_dataset.feature_names,
-        label_col=[train_dataset.label_name],
+        label_cols=[train_dataset.label_names],
         logger=logger
     )
 

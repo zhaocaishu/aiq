@@ -36,23 +36,18 @@ class DataHandler(abc.ABC):
 
 class Alpha158(DataHandler):
     def __init__(self, processors: List = []):
+        self._feature_names = None
+        self._label_names = None
+
         self.processors = [init_instance_by_config(proc) for proc in processors]
 
-        self._feature_names = None
-        self._label_name = None
-
-    def extract_feature_labels(self, df: pd.DataFrame = None, mode: str = "train"):
+    def extract_features(self, df: pd.DataFrame = None, mode: str = "train"):
         # adjusted prices
         adjusted_factor = df["Adj_factor"]
-        df["Open"] = df["Open"] * adjusted_factor
-        df["Close"] = df["Close"] * adjusted_factor
-        df["High"] = df["High"] * adjusted_factor
-        df["Low"] = df["Low"] * adjusted_factor
-
-        open = df["Open"]
-        close = df["Close"]
-        high = df["High"]
-        low = df["Low"]
+        open = df["Open"] * adjusted_factor
+        close = df["Close"] * adjusted_factor
+        high = df["High"] * adjusted_factor
+        low = df["Low"] * adjusted_factor
         volume = df["Volume"]
 
         # kbar
@@ -80,12 +75,14 @@ class Alpha158(DataHandler):
         ]
 
         # price
-        for field in ["Open", "High", "Low", "Close"]:
+        for field, price in zip(
+            ["Open", "High", "Low", "Close"], [open, high, low, close]
+        ):
             for d in range(5):
                 if d != 0:
-                    features.append(Ref(df[field], d) / close)
+                    features.append(Ref(price, d) / close)
                 else:
-                    features.append(df[field] / close)
+                    features.append(price / close)
                 feature_names.append(field.upper() + str(d))
 
         # volume
@@ -344,35 +341,55 @@ class Alpha158(DataHandler):
             axis=1,
         )
 
+        return feature_df
+
+    def extract_labels(self, df: pd.DataFrame = None, mode: str = "train"):
+        adjusted_factor = df["Adj_factor"]
+        close = df["Close"] * adjusted_factor
+
         # labels
         if mode in ["train", "valid"]:
-            self._label_name = "LABEL"
-            label = (Ref(close, -5) / Ref(close, -1) - 1).rename(self._label_name)
-            feature_label_df = pd.concat([feature_df, label], axis=1)
+            self._label_names = ["LABEL"]
+            labels = [Ref(close, -5) / Ref(close, -1) - 1]
+            label_df = pd.concat(
+                [
+                    labels[i].rename(self._label_names[i])
+                    for i in range(len(self._label_names))
+                ],
+                axis=1,
+            ).astype("float32")
         else:
-            self._label_name = None
-            feature_label_df = feature_df
+            self._label_names = None
+            label_df = None
 
-        return feature_label_df
+        return label_df
 
     def process_feature_labels(
         self, dfs: List[pd.DataFrame] = [], mode: str = "train"
     ) -> pd.DataFrame:
-        # extract feature from data
-        feature_label_dfs = [self.extract_feature_labels(df, mode) for df in dfs]
+        # extract feature and label from data
+        feature_label_dfs = [
+            (
+                pd.concat([self.extract_features(df), self.extract_labels(df)], axis=1)
+                if (label_df := self.extract_labels(df)) is not None
+                else self.extract_features(df)
+            )
+            for df in dfs
+        ]
 
-        # concat features and set multi-index
         feature_label_df = pd.concat(feature_label_dfs, ignore_index=True).set_index(
             ["Date", "Instrument"]
         )
         feature_label_df.sort_index(inplace=True)
 
-        # data preprocessor
+        # data preprocessing
         column_tuples = [
             ("feature", feature_name) for feature_name in self._feature_names
         ]
-        if self._label_name:
-            column_tuples.append(("label", self._label_name))
+        if self._label_names:
+            column_tuples.extend(
+                [("label", label_name) for label_name in self._label_names]
+            )
         feature_label_df.columns = pd.MultiIndex.from_tuples(column_tuples)
 
         if mode == "train":
@@ -398,8 +415,8 @@ class Alpha158(DataHandler):
         return self._feature_names
 
     @property
-    def label_name(self):
-        return self._label_name
+    def label_names(self):
+        return self._label_names
 
 
 class MarketAlpha158(Alpha158):
@@ -411,7 +428,7 @@ class MarketAlpha158(Alpha158):
         self.processors = [init_instance_by_config(proc) for proc in processors]
 
         self._feature_names = None
-        self._label_name = None
+        self._label_names = None
 
         # handle market information
         self.market_processors = [
@@ -517,7 +534,6 @@ class MarketAlpha158(Alpha158):
 
         self._feature_names.extend(feature_df.columns.tolist())
 
-        # concat features and set multi-index
         column_tuples = [
             ("feature", feature_name) for feature_name in feature_df.columns.tolist()
         ]
@@ -550,7 +566,9 @@ class MarketAlpha158(Alpha158):
         feature_label_df = feature_label_df.reset_index()
 
         # market information
-        market_feature_df = self.process_market_features(market_dfs, market_names, mode=mode)
+        market_feature_df = self.process_market_features(
+            market_dfs, market_names, mode=mode
+        )
         market_feature_df = market_feature_df.reset_index()
 
         # merge market information
