@@ -35,7 +35,7 @@ if __name__ == "__main__":
     model = init_instance_by_config(
         cfg.model,
         feature_cols=train_dataset.feature_names,
-        label_cols=[train_dataset.label_names],
+        label_cols=train_dataset.label_names,
         logger=logger
     )
 

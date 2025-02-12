@@ -24,7 +24,7 @@ class LGBModel(BaseModel):
         train_df = train_dataset.data
         x_train, y_train = (
             train_df[self._feature_cols].values,
-            train_df[self._label_col].values,
+            train_df[self._label_cols].values,
         )
         dtrain = lgb.Dataset(x_train, label=y_train)
         evals = [dtrain]
@@ -33,7 +33,7 @@ class LGBModel(BaseModel):
             valid_df = val_dataset.data
             x_valid, y_valid = (
                 valid_df[self._feature_cols].values,
-                valid_df[self._label_col].values,
+                valid_df[self._label_cols].values,
             )
             dvalid = lgb.Dataset(x_valid, label=y_valid)
             evals.append(dvalid)

@@ -8,10 +8,10 @@ class BaseModel(abc.ABC):
     """Learnable Models"""
 
     def __init__(
-        self, feature_cols=None, label_col=None, model_params=None, logger=None
+        self, feature_cols=None, label_cols=None, model_params=None, logger=None
     ):
         self._feature_cols = feature_cols
-        self._label_col = label_col
+        self._label_cols = label_cols
 
         if model_params is not None:
             self.model_params = copy.deepcopy(dict(model_params))
@@ -53,4 +53,4 @@ class BaseModel(abc.ABC):
 
     @property
     def label_col(self):
-        return self._label_col
+        return self._label_cols
