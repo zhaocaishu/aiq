@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from typing import List
 
 from torch.utils.data import Dataset
 
@@ -57,8 +58,8 @@ class Dataset(Dataset):
     def __len__(self):
         return self.df.shape[0]
 
-    def insert(self, name: str, data: np.array):
-        self.df[name] = data
+    def insert(self, cols: List[str], data: np.array):
+        self.df[cols] = data
 
     @property
     def data(self):
@@ -84,13 +85,11 @@ class TSDataset(Dataset):
         instruments,
         segments,
         seq_len,
-        pred_len,
         data_handler=None,
         mode="train",
     ):
         # sequence length and prediction length
         self.seq_len = seq_len
-        self.pred_len = pred_len
         self.mode = mode
 
         # start and end time
@@ -246,13 +245,11 @@ class MarketTSDataset(TSDataset):
         instruments,
         segments,
         seq_len,
-        pred_len,
         data_handler=None,
         mode="train",
     ):
         # sequence length and prediction length
         self.seq_len = seq_len
-        self.pred_len = pred_len
         self.mode = mode
 
         # start and end time

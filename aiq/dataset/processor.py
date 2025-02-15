@@ -189,14 +189,11 @@ class DropExtremeLabel(Processor):
         self.percentile = percentile
 
     def forward(self, df):
-        rank_pct = df["label"].groupby(level="Date").rank(pct=True)
-        df.loc[:, "rank_pct"] = rank_pct
-        trimmed_df = df[
-            df["rank_pct"].between(
-                1 - self.percentile, self.percentile, inclusive="both"
-            )
-        ]
-        return trimmed_df.drop(columns=["rank_pct"])
+        cols = get_group_columns(df, self.fields_group)
+        rank_pct = df[cols].groupby(level="Date").rank(pct=True)
+        condition = (rank_pct >= (1 - self.percentile)) & (rank_pct <= self.percentile)
+        trimmed_df = df[condition.all(axis=1)]
+        return trimmed_df
 
     def __call__(self, df):
         return self.forward(df)

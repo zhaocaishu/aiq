@@ -3,7 +3,7 @@ from scipy.stats import spearmanr
 
 
 class Evaluator:
-    def __init__(self, pred_col="PREDICTION", label_col="LABEL"):
+    def __init__(self, pred_col="PRED", label_col="LABEL"):
         self.pred_col = pred_col
         self.label_col = label_col
 

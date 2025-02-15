@@ -67,6 +67,7 @@ class MATCCModel(BaseModel):
             t_nhead=self.t_nhead,
             s_nhead=self.s_nhead,
             seq_len=self.seq_len,
+            pred_len=self.pred_len,
             dropout=self.dropout,
             gate_input_start_index=self.gate_input_start_index,
             gate_input_end_index=self.gate_input_end_index,
@@ -184,7 +185,7 @@ class MATCCModel(BaseModel):
             test_dataset, batch_size=self.batch_size, shuffle=False
         )
 
-        preds = np.zeros(test_dataset.data.shape[0])
+        preds = np.zeros((test_dataset.data.shape[0], self.pred_len))
         for i, (index, batch_x, batch_y) in enumerate(test_loader):
             batch_x = batch_x.squeeze(0).float().to(self.device)
             with torch.no_grad():
@@ -192,7 +193,7 @@ class MATCCModel(BaseModel):
             pred = outputs.detach().cpu().numpy()  # .squeeze()
             preds[index] = pred
 
-        test_dataset.insert("PREDICTION", preds)
+        test_dataset.insert(cols=["PRED%d" % i for i in range(self.pred_len)], data=preds)
         return test_dataset
 
     def save(self, model_dir):

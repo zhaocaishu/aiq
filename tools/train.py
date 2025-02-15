@@ -28,7 +28,7 @@ def main():
     cfg.from_file(args.cfg_file)
 
     # logger
-    logger = get_logger("TRAIN")
+    logger = get_logger("TRAINING")
 
     logger.info(cfg)
 

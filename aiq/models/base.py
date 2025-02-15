@@ -35,12 +35,12 @@ class BaseModel(abc.ABC):
         """
         raise NotImplementedError()
 
-    def predict(self, dataset: Dataset) -> object:
+    def predict(self, test_dataset: Dataset) -> object:
         """
         Give prediction given Dataset
 
         Args:
-            dataset:  dataset will generate the processed dataset from model training.
+            test_dataset:  dataset for model prediction.
 
         Returns:
              Prediction results with certain type such as `pandas.Series`.

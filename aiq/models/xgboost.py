@@ -50,14 +50,14 @@ class XGBModel(BaseModel):
         if val_dataset is not None:
             eval_results["valid"] = list(eval_results["valid"].values())[0]
 
-    def predict(self, dataset: Dataset):
+    def predict(self, test_dataset: Dataset):
         if self.model is None:
             raise ValueError("model is not fitted yet!")
-        test_df = dataset.data[self._feature_cols]
+        test_df = test_dataset.data[self._feature_cols]
         dtest = xgb.DMatrix(test_df.values)
         preds = self.model.predict(dtest)
-        dataset.insert("PREDICTION", preds)
-        return dataset
+        test_dataset.insert(cols=["PRED"], data=preds)
+        return test_dataset
 
     def get_feature_importance(self, *args, **kwargs) -> pd.Series:
         """get feature importance

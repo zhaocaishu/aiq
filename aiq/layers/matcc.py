@@ -123,6 +123,7 @@ class MATCC(nn.Module):
         t_nhead=4,
         s_nhead=2,
         seq_len=8,
+        pred_len=1,
         dropout=0.5,
         gate_input_start_index=158,
         gate_input_end_index=221,
@@ -170,7 +171,7 @@ class MATCC(nn.Module):
             SAttention(d_model=d_model, nhead=s_nhead, dropout=dropout),  # [T,N,D]
             TemporalAttention(d_model=d_model),
             # decoder
-            nn.Linear(d_model, 1),
+            nn.Linear(d_model, pred_len),
         )
 
     def forward(self, x):

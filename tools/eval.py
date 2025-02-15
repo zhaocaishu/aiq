@@ -11,10 +11,39 @@ from aiq.evaluation import Evaluator
 def parse_args():
     parser = argparse.ArgumentParser(description="Evaluate a model")
     parser.add_argument(
-        "--cfg_file", type=str, default=None, help="specify the config for evaluation"
+        "--cfg_file",
+        type=str,
+        default=None,
+        help="Specify the configuration file path for evaluation. If not provided, default settings will be used.",
     )
-    parser.add_argument("--data_dir", type=str, help="the data directory")
-    parser.add_argument("--save_dir", type=str, help="the saved directory")
+
+    parser.add_argument(
+        "--eval_pred_col",
+        type=str,
+        default="PRED",
+        help="Column name in the dataset representing the model predictions during evaluation.",
+    )
+
+    parser.add_argument(
+        "--eval_label_col",
+        type=str,
+        default="LABEL",
+        help="Column name in the dataset representing the true labels during evaluation.",
+    )
+
+    parser.add_argument(
+        "--data_dir",
+        type=str,
+        required=True,
+        help="Directory path where the evaluation data is stored.",
+    )
+
+    parser.add_argument(
+        "--save_dir",
+        type=str,
+        required=True,
+        help="Directory path where the evaluation results will be saved.",
+    )
 
     args = parser.parse_args()
 
@@ -29,7 +58,7 @@ def main():
     cfg.from_file(args.cfg_file)
 
     # logger
-    logger = get_logger("EVAL")
+    logger = get_logger("EVALUATION")
 
     logger.info(cfg)
 
@@ -50,7 +79,7 @@ def main():
     model = init_instance_by_config(
         cfg.model,
         feature_cols=val_dataset.feature_names,
-        label_col=[val_dataset.label_name],
+        label_cols=[val_dataset.label_names],
         logger=logger,
     )
     model.load(args.save_dir)
@@ -59,7 +88,7 @@ def main():
     pred_df = model.predict(val_dataset).data
 
     # evaluation
-    evaluator = Evaluator()
+    evaluator = Evaluator(pred_col=args.eval_pred_col, label_col=args.eval_label_col)
     metrics = evaluator.evaluate(pred_df)
     logger.info("Evaluation metrics: %s" % str(metrics))
 

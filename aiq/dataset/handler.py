@@ -349,7 +349,7 @@ class Alpha158(DataHandler):
 
         # labels
         if mode in ["train", "valid"]:
-            self._label_names = ["LABEL"]
+            self._label_names = ["RETN_5D"]
             labels = [Ref(close, -5) / Ref(close, -1) - 1]
             label_df = pd.concat(
                 [
@@ -506,6 +506,32 @@ class MarketAlpha158(Alpha158):
         )
 
         return feature_df
+
+    def extract_labels(self, df: pd.DataFrame = None, mode: str = "train"):
+        adjusted_factor = df["Adj_factor"]
+        close = df["Close"] * adjusted_factor
+
+        # labels
+        if mode in ["train", "valid"]:
+            self._label_names = ["RETN_2D", "RETN_3D", "RETN_4D", "RETN_5D"]
+            labels = [
+                Ref(close, -2) / Ref(close, -1) - 1,
+                Ref(close, -3) / Ref(close, -1) - 1,
+                Ref(close, -4) / Ref(close, -1) - 1,
+                Ref(close, -5) / Ref(close, -1) - 1,
+            ]
+            label_df = pd.concat(
+                [
+                    labels[i].rename(self._label_names[i])
+                    for i in range(len(self._label_names))
+                ],
+                axis=1,
+            ).astype("float32")
+        else:
+            self._label_names = None
+            label_df = None
+
+        return label_df
 
     def process_market_features(
         self,
