@@ -58,11 +58,7 @@ class MATCCModel(BaseModel):
         self.learning_rate = learning_rate
         self.criterion_name = criterion_name
         self.num_classes = num_classes
-
-        if torch.cuda.device_count() == 1:
-            self.device = torch.device("cuda:0")
-        else:
-            self.device = "cpu"
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
         self.model = MATCC(
             d_feat=self.d_feat,
@@ -131,8 +127,8 @@ class MATCCModel(BaseModel):
                 if self.criterion_name == "CE":
                     batch_y = discretize(batch_y, num_bins=self.num_classes)
                     loss = sum(
-                        self.criterion(outputs[i], batch_y[:, i])
-                        for i in range(len(outputs))
+                        self.criterion(outputs[k], batch_y[:, k])
+                        for k in range(len(outputs))
                     )
                 else:
                     loss = self.criterion(outputs, batch_y)
@@ -192,8 +188,8 @@ class MATCCModel(BaseModel):
                 if self.criterion_name == "CE":
                     batch_y = discretize(batch_y, num_bins=self.num_classes)
                     loss = sum(
-                        self.criterion(outputs[i], batch_y[:, i])
-                        for i in range(len(outputs))
+                        self.criterion(outputs[k], batch_y[:, k])
+                        for k in range(len(outputs))
                     )
                 else:
                     loss = self.criterion(outputs, batch_y)
