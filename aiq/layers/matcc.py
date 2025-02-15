@@ -127,6 +127,7 @@ class MATCC(nn.Module):
         dropout=0.5,
         gate_input_start_index=158,
         gate_input_end_index=221,
+        num_classes=None,
     ):
         super().__init__()
 
@@ -134,6 +135,7 @@ class MATCC(nn.Module):
         self.d_model = d_model
         self.n_attn = d_model
         self.n_head = t_nhead
+        self.num_classes = num_classes
 
         # market
         self.gate_input_start_index = gate_input_start_index
@@ -170,22 +172,24 @@ class MATCC(nn.Module):
             self.rwkv,  # [N,T,D]
             SAttention(d_model=d_model, nhead=s_nhead, dropout=dropout),  # [T,N,D]
             TemporalAttention(d_model=d_model),
-            # decoder
-            nn.Linear(d_model, pred_len),
         )
+
+        if num_classes is not None:
+            self.decoders = nn.ModuleList(
+                [nn.Linear(d_model, num_classes) for _ in range(pred_len)]
+            )
+        else:
+            self.decoder = nn.Linear(d_model, pred_len)
 
     def forward(self, x):
         src = x[:, :, : self.gate_input_start_index]  # N, T, D
         gate_input = x[:, :, self.gate_input_start_index : self.gate_input_end_index]
         src = src + self.feature_gate.forward(gate_input)
 
-        output = self.layers(src).squeeze(-1)
+        features = self.layers(src).squeeze(-1)
 
-        return output
-
-
-if __name__ == "__main__":
-    x_sample = torch.randn((256, 8, 221))
-    model = MATCC()
-    y = model.forward(x_sample)
-    print(y.shape)
+        if self.num_classes is not None:
+            outputs = [decoder(features) for decoder in self.decoders]
+        else:
+            outputs = self.decoder(features)
+        return outputs

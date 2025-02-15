@@ -1,6 +1,5 @@
 import os
 import time
-import json
 
 import numpy as np
 import torch
@@ -11,6 +10,7 @@ from transformers import get_scheduler
 
 from aiq.layers import MATCC
 from aiq.losses import ICLoss, CCCLoss
+from aiq.utils.discretize import discretize, dediscretize
 
 from .base import BaseModel
 
@@ -35,6 +35,7 @@ class MATCCModel(BaseModel):
         lr_scheduler_type="cosine",
         learning_rate=0.01,
         criterion_name="MSE",
+        num_classes=None,
         logger=None,
     ):
         # input parameters
@@ -56,11 +57,13 @@ class MATCCModel(BaseModel):
         self.lr_scheduler_type = lr_scheduler_type
         self.learning_rate = learning_rate
         self.criterion_name = criterion_name
+        self.num_classes = num_classes
 
         if torch.cuda.device_count() == 1:
             self.device = torch.device("cuda:0")
         else:
             self.device = "cpu"
+
         self.model = MATCC(
             d_feat=self.d_feat,
             d_model=self.d_model,
@@ -71,13 +74,17 @@ class MATCCModel(BaseModel):
             dropout=self.dropout,
             gate_input_start_index=self.gate_input_start_index,
             gate_input_end_index=self.gate_input_end_index,
+            num_classes=self.num_classes,
         ).to(self.device)
+
         if self.criterion_name == "IC":
             self.criterion = ICLoss()
         elif self.criterion_name == "CCC":
             self.criterion = CCCLoss()
         elif self.criterion_name == "MSE":
             self.criterion = nn.MSELoss()
+        elif self.criterion_name == "CE":
+            self.criterion = nn.CrossEntropyLoss()
         else:
             raise NotImplementedError
 
@@ -121,7 +128,15 @@ class MATCCModel(BaseModel):
 
                 outputs = self.model(batch_x)
 
-                loss = self.criterion(outputs, batch_y)
+                if self.criterion_name == "CE":
+                    batch_y = discretize(batch_y, num_bins=self.num_classes)
+                    loss = sum(
+                        self.criterion(outputs[i], batch_y[:, i])
+                        for i in range(len(outputs))
+                    )
+                else:
+                    loss = self.criterion(outputs, batch_y)
+
                 train_loss.append(loss.item())
 
                 if (i + 1) % 100 == 0:
@@ -174,7 +189,15 @@ class MATCCModel(BaseModel):
 
                 outputs = self.model(batch_x)
 
-                loss = self.criterion(outputs, batch_y)
+                if self.criterion_name == "CE":
+                    batch_y = discretize(batch_y, num_bins=self.num_classes)
+                    loss = sum(
+                        self.criterion(outputs[i], batch_y[:, i])
+                        for i in range(len(outputs))
+                    )
+                else:
+                    loss = self.criterion(outputs, batch_y)
+
                 total_loss.append(loss.item())
         total_loss = np.average(total_loss)
         return total_loss
@@ -186,14 +209,22 @@ class MATCCModel(BaseModel):
         )
 
         preds = np.zeros((test_dataset.data.shape[0], self.pred_len))
-        for i, (index, batch_x, batch_y) in enumerate(test_loader):
+        for i, (index, batch_x, bacth_y) in enumerate(test_loader):
             batch_x = batch_x.squeeze(0).float().to(self.device)
             with torch.no_grad():
                 outputs = self.model(batch_x)
-            pred = outputs.detach().cpu().numpy()  # .squeeze()
-            preds[index] = pred
+            if self.criterion_name == "CE":
+                for i in range(len(outputs)):
+                    output_ids = torch.argmax(outputs[i], dim=1)
+                    pred = dediscretize(output_ids, num_bins=self.num_classes).numpy()
+                    preds[index, i] = pred
+            else:
+                pred = outputs.detach().cpu().numpy()  # .squeeze()
+                preds[index] = pred
 
-        test_dataset.insert(cols=["PRED%d" % i for i in range(self.pred_len)], data=preds)
+        test_dataset.insert(
+            cols=["PRED_%dD" % (i + 1) for i in range(self.pred_len)], data=preds
+        )
         return test_dataset
 
     def save(self, model_dir):

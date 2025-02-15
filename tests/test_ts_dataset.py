@@ -16,7 +16,6 @@ if __name__ == "__main__":
         instruments="csi300",
         segments=cfg.dataset.kwargs.segments,
         seq_len=8,
-        pred_len=4,
         data_handler=data_handler,
         mode="train",
     )

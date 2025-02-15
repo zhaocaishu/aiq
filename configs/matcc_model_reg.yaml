@@ -61,4 +61,5 @@ model:
     epochs: 30
     batch_size: 1
     learning_rate: 0.0003
-    criterion_name: 'MSE'
+    criterion_name: 'CE'
+    num_classes: 22
