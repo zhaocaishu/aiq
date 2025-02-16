@@ -24,13 +24,17 @@ def main():
     # parse args
     args = parse_args()
 
-    # config
-    cfg.from_file(args.cfg_file)
-
     # logger
     logger = get_logger("TRAINING")
 
+    # config
+    cfg.from_file(args.cfg_file)
+
     logger.info(cfg)
+
+    # saved directory
+    if not os.path.exists(args.save_dir):
+        os.makedirs(args.save_dir)
 
     # data handler
     data_handler = init_instance_by_config(cfg.data_handler)
@@ -50,27 +54,24 @@ def main():
         mode="valid",
     )
 
+    # save data hanlder
+    with open(os.path.join(args.save_dir, "data_handler.pkl"), "wb") as f:
+        pickle.dump(data_handler, f)
+
     logger.info(
         "Loaded %d items to train dataset, %d items to validation dataset"
         % (len(train_dataset), len(val_dataset))
     )
 
-    # train model
+    # train and save model
     model = init_instance_by_config(
         cfg.model,
         feature_cols=train_dataset.feature_names,
         label_cols=train_dataset.label_names,
-        logger=logger
+        logger=logger,
     )
 
     model.fit(train_dataset=train_dataset, val_dataset=val_dataset)
-
-    # save data hanlder and model
-    if not os.path.exists(args.save_dir):
-        os.makedirs(args.save_dir)
-
-    with open(os.path.join(args.save_dir, "data_handler.pkl"), "wb") as f:
-        pickle.dump(data_handler, f)
 
     model.save(model_dir=args.save_dir)
 
