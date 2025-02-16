@@ -85,11 +85,13 @@ class TSDataset(Dataset):
         instruments,
         segments,
         seq_len,
+        pred_len,
         data_handler=None,
         mode="train",
     ):
         # sequence length and prediction length
         self.seq_len = seq_len
+        self.pred_len = pred_len
         self.mode = mode
 
         # start and end time
@@ -131,7 +133,7 @@ class TSDataset(Dataset):
         # data and index
         self._feature = self.df[self._feature_names].values.astype("float32")
         self._label = (
-            self.df[self._label_names].values.astype("float32")
+            self.df[self._label_names[-self.pred_len :]].values.astype("float32")
             if self._label_names is not None
             else None
         )
@@ -245,11 +247,13 @@ class MarketTSDataset(TSDataset):
         instruments,
         segments,
         seq_len,
+        pred_len,
         data_handler=None,
         mode="train",
     ):
         # sequence length and prediction length
         self.seq_len = seq_len
+        self.pred_len = pred_len
         self.mode = mode
 
         # start and end time
@@ -306,7 +310,7 @@ class MarketTSDataset(TSDataset):
         # data and index
         self._feature = self.df[self._feature_names].values.astype("float32")
         self._label = (
-            self.df[self._label_names].values.astype("float32")
+            self.df[self._label_names[-self.pred_len :]].values.astype("float32")
             if self._label_names is not None
             else None
         )
