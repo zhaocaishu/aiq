@@ -1,5 +1,4 @@
 import torch
-import numpy as np
 
 
 def discretize(
@@ -11,7 +10,7 @@ def discretize(
     """
     将连续数据离散化为指定的区间。
     """
-    bins = torch.Tensor(np.linspace(min_value, max_value, num_bins))
+    bins = torch.linspace(min_value, max_value, num_bins, device=data.device)
     ids = torch.bucketize(
         torch.clamp(data, min_value, max_value),
         boundaries=bins,
@@ -28,7 +27,7 @@ def dediscretize(
     """
     将离散化的区间编号还原为连续数据的近似值。
     """
-    bins = torch.Tensor(np.linspace(min_value, max_value, num_bins))
     interval = (max_value - min_value) / (num_bins - 1)
-    data = bins[ids.long()] + 0.5 * interval
+    bins = torch.linspace(min_value, max_value, num_bins, device=ids.device)
+    data = bins[ids] + 0.5 * interval
     return data
