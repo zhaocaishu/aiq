@@ -171,15 +171,23 @@ class MATCC(nn.Module):
             self.dlinear,  # [N,T,D]
             self.rwkv,  # [N,T,D]
             SAttention(d_model=d_model, nhead=s_nhead, dropout=dropout),  # [T,N,D]
-            TemporalAttention(d_model=d_model),
         )
 
         if num_classes is not None:
             self.decoders = nn.ModuleList(
-                [nn.Linear(d_model, num_classes) for _ in range(pred_len)]
+                [
+                    nn.Sequential(
+                        TemporalAttention(d_model=d_model),
+                        nn.Linear(d_model, num_classes),
+                    )
+                    for _ in range(pred_len)
+                ]
             )
         else:
-            self.decoder = nn.Linear(d_model, pred_len)
+            self.decoder = nn.Sequential(
+                TemporalAttention(d_model=d_model),
+                nn.Linear(d_model, pred_len),
+            )
 
     def forward(self, x):
         src = x[:, :, : self.gate_input_start_index]  # N, T, D
