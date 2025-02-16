@@ -18,7 +18,7 @@ def discretize(
     return ids
 
 
-def dediscretize(
+def undiscretize(
     ids: torch.Tensor,
     min_value: float = -1.0,
     max_value: float = 1.0,

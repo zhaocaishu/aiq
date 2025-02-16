@@ -10,7 +10,7 @@ from transformers import get_scheduler
 
 from aiq.layers import MATCC
 from aiq.losses import ICLoss, CCCLoss
-from aiq.utils.discretize import discretize, dediscretize
+from aiq.utils.discretize import discretize, undiscretize
 
 from .base import BaseModel
 
@@ -169,7 +169,7 @@ class MATCCModel(BaseModel):
             checkpoints_dir = "./checkpoints"
             os.makedirs(checkpoints_dir, exist_ok=True)
             model_file = os.path.join(
-                checkpoints_dir, "model_epoch{}.pth".format(epoch + 1)
+                checkpoints_dir, "model_epoch_{}.pth".format(epoch + 1)
             )
             torch.save(self.model.state_dict(), model_file)
 
@@ -209,11 +209,12 @@ class MATCCModel(BaseModel):
             batch_x = batch_x.squeeze(0).float().to(self.device)
             with torch.no_grad():
                 outputs = self.model(batch_x)
+
             if self.criterion_name == "CE":
-                for i in range(len(outputs)):
-                    output_ids = torch.argmax(outputs[i], dim=1)
-                    pred = dediscretize(output_ids, num_bins=self.num_classes).numpy()
-                    preds[index, i] = pred
+                for k in range(len(outputs)):
+                    output_ids = torch.argmax(outputs[k], dim=1)
+                    pred = undiscretize(output_ids, num_bins=self.num_classes).numpy()
+                    preds[index, k] = pred
             else:
                 pred = outputs.detach().cpu().numpy()  # .squeeze()
                 preds[index] = pred
