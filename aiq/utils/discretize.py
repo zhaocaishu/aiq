@@ -29,5 +29,6 @@ def dediscretize(
     将离散化的区间编号还原为连续数据的近似值。
     """
     bins = torch.Tensor(np.linspace(min_value, max_value, num_bins))
-    data = bins[ids.long()]
+    interval = (max_value - min_value) / (num_bins - 1)
+    data = bins[ids.long()] + 0.5 * interval
     return data
