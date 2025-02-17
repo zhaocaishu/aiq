@@ -220,7 +220,7 @@ class MATCCModel(BaseModel):
                 preds[index] = pred
 
         test_dataset.insert(
-            cols=["PRED_%dD" % (i + 1) for i in range(self.pred_len)], data=preds
+            cols=["PRED%d" % i for i in range(self.pred_len)], data=preds
         )
         return test_dataset
 

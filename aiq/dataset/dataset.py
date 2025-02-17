@@ -85,13 +85,13 @@ class TSDataset(Dataset):
         instruments,
         segments,
         seq_len,
-        pred_len,
+        label_cols=None,
         data_handler=None,
         mode="train",
     ):
         # sequence length and prediction length
         self.seq_len = seq_len
-        self.pred_len = pred_len
+        self.label_cols = label_cols
         self.mode = mode
 
         # start and end time
@@ -124,7 +124,7 @@ class TSDataset(Dataset):
 
         # feature and label names
         self._feature_names = data_handler.feature_names
-        self._label_names = data_handler.label_names
+        self._label_names = label_cols
 
         # change index to <code, date>
         self.df.index = self.df.index.swaplevel()
@@ -133,7 +133,7 @@ class TSDataset(Dataset):
         # data and index
         self._feature = self.df[self._feature_names].values.astype("float32")
         self._label = (
-            self.df[self._label_names[-self.pred_len :]].values.astype("float32")
+            self.df[self._label_names].values.astype("float32")
             if self._label_names is not None
             else None
         )
@@ -247,13 +247,12 @@ class MarketTSDataset(TSDataset):
         instruments,
         segments,
         seq_len,
-        pred_len,
+        label_cols=None,
         data_handler=None,
         mode="train",
     ):
         # sequence length and prediction length
         self.seq_len = seq_len
-        self.pred_len = pred_len
         self.mode = mode
 
         # start and end time
@@ -301,7 +300,7 @@ class MarketTSDataset(TSDataset):
 
         # feature and label names
         self._feature_names = data_handler.feature_names
-        self._label_names = data_handler.label_names
+        self._label_names = label_cols
 
         # change index to <code, date>
         self.df.index = self.df.index.swaplevel()
@@ -310,7 +309,7 @@ class MarketTSDataset(TSDataset):
         # data and index
         self._feature = self.df[self._feature_names].values.astype("float32")
         self._label = (
-            self.df[self._label_names[-self.pred_len :]].values.astype("float32")
+            self.df[self._label_names].values.astype("float32")
             if self._label_names is not None
             else None
         )

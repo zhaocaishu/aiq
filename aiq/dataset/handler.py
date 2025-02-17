@@ -513,7 +513,7 @@ class MarketAlpha158(Alpha158):
 
         # labels
         if mode in ["train", "valid"]:
-            self._label_names = ["RETN_1D", "RETN_2D", "RETN_3D", "RETN_4D"]
+            self._label_names = ["RETN_2D", "RETN_3D", "RETN_4D", "RETN_5D"]
             labels = [
                 Ref(close, -2) / Ref(close, -1) - 1,
                 Ref(close, -3) / Ref(close, -1) - 1,
