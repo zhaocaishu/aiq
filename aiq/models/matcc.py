@@ -219,9 +219,14 @@ class MATCCModel(BaseModel):
                 pred = outputs.detach().cpu().numpy()  # .squeeze()
                 preds[index] = pred
 
-        test_dataset.insert(
-            cols=["PRED%d" % i for i in range(self.pred_len)], data=preds
-        )
+        if test_dataset.label_names is not None:
+            test_dataset.insert(
+                cols=["PRED_%s" % test_dataset.label_names[i] for i in range(self.pred_len)], data=preds
+            )
+        else:
+            test_dataset.insert(
+                cols=["PRED_%d" % i for i in range(self.pred_len)], data=preds
+            )
         return test_dataset
 
     def save(self, model_dir):
