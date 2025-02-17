@@ -91,7 +91,6 @@ class TSDataset(Dataset):
     ):
         # sequence length and prediction length
         self.seq_len = seq_len
-        self.label_cols = label_cols
         self.mode = mode
 
         # start and end time
