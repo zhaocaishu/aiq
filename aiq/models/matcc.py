@@ -1,6 +1,5 @@
 import os
 import time
-import json
 
 import numpy as np
 import torch
@@ -11,6 +10,7 @@ from transformers import get_scheduler
 
 from aiq.layers import MATCC
 from aiq.losses import ICLoss, CCCLoss
+from aiq.utils.discretize import discretize, undiscretize
 
 from .base import BaseModel
 
@@ -19,7 +19,7 @@ class MATCCModel(BaseModel):
     def __init__(
         self,
         feature_cols=None,
-        label_col=None,
+        label_cols=None,
         d_feat=158,
         d_model=256,
         t_nhead=4,
@@ -35,11 +35,12 @@ class MATCCModel(BaseModel):
         lr_scheduler_type="cosine",
         learning_rate=0.01,
         criterion_name="MSE",
+        num_classes=None,
         logger=None,
     ):
         # input parameters
         self._feature_cols = feature_cols
-        self._label_col = label_col
+        self._label_cols = label_cols
 
         self.d_feat = d_feat
         self.d_model = d_model
@@ -56,27 +57,30 @@ class MATCCModel(BaseModel):
         self.lr_scheduler_type = lr_scheduler_type
         self.learning_rate = learning_rate
         self.criterion_name = criterion_name
+        self.num_classes = num_classes
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-        if torch.cuda.device_count() == 1:
-            self.device = torch.device("cuda:0")
-        else:
-            self.device = "cpu"
         self.model = MATCC(
             d_feat=self.d_feat,
             d_model=self.d_model,
             t_nhead=self.t_nhead,
             s_nhead=self.s_nhead,
             seq_len=self.seq_len,
+            pred_len=self.pred_len,
             dropout=self.dropout,
             gate_input_start_index=self.gate_input_start_index,
             gate_input_end_index=self.gate_input_end_index,
+            num_classes=self.num_classes,
         ).to(self.device)
+
         if self.criterion_name == "IC":
             self.criterion = ICLoss()
         elif self.criterion_name == "CCC":
             self.criterion = CCCLoss()
         elif self.criterion_name == "MSE":
             self.criterion = nn.MSELoss()
+        elif self.criterion_name == "CE":
+            self.criterion = nn.CrossEntropyLoss()
         else:
             raise NotImplementedError
 
@@ -120,7 +124,15 @@ class MATCCModel(BaseModel):
 
                 outputs = self.model(batch_x)
 
-                loss = self.criterion(outputs, batch_y)
+                if self.criterion_name == "CE":
+                    batch_y = discretize(batch_y, num_bins=self.num_classes)
+                    loss = sum(
+                        self.criterion(outputs[k], batch_y[:, k])
+                        for k in range(len(outputs))
+                    )
+                else:
+                    loss = self.criterion(outputs, batch_y)
+
                 train_loss.append(loss.item())
 
                 if (i + 1) % 100 == 0:
@@ -157,7 +169,7 @@ class MATCCModel(BaseModel):
             checkpoints_dir = "./checkpoints"
             os.makedirs(checkpoints_dir, exist_ok=True)
             model_file = os.path.join(
-                checkpoints_dir, "model_epoch{}.pth".format(epoch + 1)
+                checkpoints_dir, "model_epoch_{}.pth".format(epoch + 1)
             )
             torch.save(self.model.state_dict(), model_file)
 
@@ -173,7 +185,15 @@ class MATCCModel(BaseModel):
 
                 outputs = self.model(batch_x)
 
-                loss = self.criterion(outputs, batch_y)
+                if self.criterion_name == "CE":
+                    batch_y = discretize(batch_y, num_bins=self.num_classes)
+                    loss = sum(
+                        self.criterion(outputs[k], batch_y[:, k])
+                        for k in range(len(outputs))
+                    )
+                else:
+                    loss = self.criterion(outputs, batch_y)
+
                 total_loss.append(loss.item())
         total_loss = np.average(total_loss)
         return total_loss
@@ -184,15 +204,29 @@ class MATCCModel(BaseModel):
             test_dataset, batch_size=self.batch_size, shuffle=False
         )
 
-        preds = np.zeros(test_dataset.data.shape[0])
-        for i, (index, batch_x, batch_y) in enumerate(test_loader):
+        preds = np.zeros((test_dataset.data.shape[0], self.pred_len))
+        for i, (index, batch_x, bacth_y) in enumerate(test_loader):
             batch_x = batch_x.squeeze(0).float().to(self.device)
             with torch.no_grad():
                 outputs = self.model(batch_x)
-            pred = outputs.detach().cpu().numpy()  # .squeeze()
-            preds[index] = pred
 
-        test_dataset.insert("PREDICTION", preds)
+            if self.criterion_name == "CE":
+                for k in range(len(outputs)):
+                    output_ids = torch.argmax(outputs[k], dim=1)
+                    pred = undiscretize(output_ids, num_bins=self.num_classes).numpy()
+                    preds[index, k] = pred
+            else:
+                pred = outputs.detach().cpu().numpy()  # .squeeze()
+                preds[index] = pred
+
+        if test_dataset.label_names is not None:
+            test_dataset.insert(
+                cols=["PRED_%s" % test_dataset.label_names[i] for i in range(self.pred_len)], data=preds
+            )
+        else:
+            test_dataset.insert(
+                cols=["PRED_%d" % i for i in range(self.pred_len)], data=preds
+            )
         return test_dataset
 
     def save(self, model_dir):

@@ -23,7 +23,7 @@ class XGBModel(BaseModel):
         train_df = train_dataset.data
         x_train, y_train = (
             train_df[self._feature_cols].values,
-            train_df[self._label_col].values,
+            train_df[self._label_cols].values,
         )
         dtrain = xgb.DMatrix(x_train, label=y_train)
         evals = [(dtrain, "train")]
@@ -32,7 +32,7 @@ class XGBModel(BaseModel):
             valid_df = val_dataset.data
             x_valid, y_valid = (
                 valid_df[self._feature_cols].values,
-                valid_df[self._label_col].values,
+                valid_df[self._label_cols].values,
             )
             dvalid = xgb.DMatrix(x_valid, label=y_valid)
             evals.append((dvalid, "valid"))
@@ -50,14 +50,14 @@ class XGBModel(BaseModel):
         if val_dataset is not None:
             eval_results["valid"] = list(eval_results["valid"].values())[0]
 
-    def predict(self, dataset: Dataset):
+    def predict(self, test_dataset: Dataset):
         if self.model is None:
             raise ValueError("model is not fitted yet!")
-        test_df = dataset.data[self._feature_cols]
+        test_df = test_dataset.data[self._feature_cols]
         dtest = xgb.DMatrix(test_df.values)
         preds = self.model.predict(dtest)
-        dataset.insert("PREDICTION", preds)
-        return dataset
+        test_dataset.insert(cols=["PRED"], data=preds)
+        return test_dataset
 
     def get_feature_importance(self, *args, **kwargs) -> pd.Series:
         """get feature importance

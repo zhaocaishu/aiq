@@ -1,4 +1,3 @@
-from aiq.models import LGBModel, MATCCModel
 from aiq.utils.config import config as cfg
 from aiq.utils.module import init_instance_by_config
 from aiq.utils.logging import get_logger
@@ -29,13 +28,13 @@ if __name__ == "__main__":
         mode="valid",
     )
 
-    print(train_dataset.feature_names, train_dataset.label_name)
+    print(train_dataset.feature_names, train_dataset.label_names)
 
     # train stage
     model = init_instance_by_config(
         cfg.model,
         feature_cols=train_dataset.feature_names,
-        label_col=[train_dataset.label_name],
+        label_cols=train_dataset.label_names,
         logger=logger
     )
 
@@ -43,6 +42,5 @@ if __name__ == "__main__":
     model.save(model_dir="./temp")
 
     # predict stage
-    model_eval = MATCCModel(logger=logger)
-    model_eval.load(model_dir="./temp")
-    model_eval.predict(dataset=val_dataset)
+    model.load(model_dir="./temp")
+    model.predict(test_dataset=val_dataset)
