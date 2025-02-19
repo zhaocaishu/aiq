@@ -24,4 +24,4 @@ def robust_zscore(x: pd.Series, zscore=False):
 
 
 def zscore(x: Union[pd.Series, pd.DataFrame]):
-    return (x - x.mean()).div(x.std() + +1e-12)
+    return (x - x.mean()).div(x.std() + 1e-12)
