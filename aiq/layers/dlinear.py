@@ -114,10 +114,19 @@ class DLinear(nn.Module):
     Decomposition-Linear
     """
 
-    def __init__(self, seq_len, pred_len, enc_in, kernel_size, individual=False):
+    def __init__(
+        self,
+        seq_len,
+        pred_len,
+        enc_in,
+        kernel_size,
+        individual=False,
+        merge_outputs=True,
+    ):
         super(DLinear, self).__init__()
         self.seq_len = seq_len
         self.pred_len = pred_len
+        self.merge_outputs = merge_outputs
 
         # Decompsition Kernel Size
         kernel_size = kernel_size
@@ -168,8 +177,13 @@ class DLinear(nn.Module):
             seasonal_output = self.Linear_Seasonal(seasonal_init)
             trend_output = self.Linear_Trend(trend_init)
 
-        x = seasonal_output + trend_output
-        return x.permute(0, 2, 1)  # to [Batch, Output length, Channel]
+        if self.merge_outputs:
+            x = trend_output + seasonal_output
+            return x.permute(0, 2, 1)
+        else:
+            return trend_output.permute(0, 2, 1), seasonal_output.permute(
+                0, 2, 1
+            )  # to [Batch, Output length, Channel]
 
 
 if __name__ == "__main__":
