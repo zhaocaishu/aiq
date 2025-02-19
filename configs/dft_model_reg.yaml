@@ -1,0 +1,66 @@
+data_handler:
+  class: MarketAlpha158
+  module_path: aiq.dataset.handler
+  kwargs:
+    processors:
+      - class: RobustZScoreNorm
+        module_path: aiq.dataset.processor
+        kwargs:
+          fields_group: "feature"
+          clip_outlier: true
+      - class: Fillna
+        module_path: aiq.dataset.processor
+        kwargs:
+          fields_group: "feature"
+      - class: Dropna
+        module_path: aiq.dataset.processor
+        kwargs:
+          fields_group: "label"
+      - class: DropExtremeLabel
+        module_path: aiq.dataset.processor
+        kwargs:
+          fields_group: "label"
+          percentile: 0.975
+      - class: CSZScoreNorm
+        module_path: aiq.dataset.processor
+        kwargs:
+          fields_group: "label"
+    market_processors:
+      - class: RobustZScoreNorm
+        module_path: aiq.dataset.processor
+        kwargs:
+          fields_group: "feature"
+          clip_outlier: true
+      - class: Fillna
+        module_path: aiq.dataset.processor
+        kwargs:
+          fields_group: "feature"
+dataset:
+  class: MarketTSDataset
+  module_path: aiq.dataset.dataset
+  kwargs:
+    instruments: "csi300"
+    segments:
+      train: ["2008-01-01", "2020-03-31"]
+      valid: ["2020-04-01", "2020-06-30"]
+      test: ["2020-07-01", "2023-12-31"]
+    seq_len: 8
+    label_cols: ["RETN_2D", "RETN_3D", "RETN_4D", "RETN_5D"]
+model:
+  class: DFTModel
+  module_path: aiq.models.dft
+  kwargs:
+    d_feat: 179
+    d_model: 256
+    t_nhead: 4
+    s_nhead: 2
+    seq_len: 8
+    pred_len: 4
+    dropout: 0.5
+    gate_input_start_index: 179
+    gate_input_end_index: 242
+    epochs: 30
+    batch_size: 1
+    learning_rate: 0.0003
+    criterion_name: "CE"
+    num_classes: 22
