@@ -36,6 +36,7 @@ class DFTModel(BaseModel):
         learning_rate=0.01,
         criterion_name="MSE",
         num_classes=None,
+        class_weight=None,
         logger=None,
     ):
         # input parameters
@@ -80,7 +81,10 @@ class DFTModel(BaseModel):
         elif self.criterion_name == "MSE":
             self.criterion = nn.MSELoss()
         elif self.criterion_name == "CE":
-            self.criterion = nn.CrossEntropyLoss()
+            class_weight = (
+                torch.Tensor(class_weight) if class_weight is not None else None
+            )
+            self.criterion = nn.CrossEntropyLoss(weight=class_weight)
         else:
             raise NotImplementedError
 
@@ -221,7 +225,11 @@ class DFTModel(BaseModel):
 
         if test_dataset.label_names is not None:
             test_dataset.insert(
-                cols=["PRED_%s" % test_dataset.label_names[i] for i in range(self.pred_len)], data=preds
+                cols=[
+                    "PRED_%s" % test_dataset.label_names[i]
+                    for i in range(self.pred_len)
+                ],
+                data=preds,
             )
         else:
             test_dataset.insert(
