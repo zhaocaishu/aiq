@@ -5,7 +5,7 @@ def discretize(
     data: torch.Tensor,
     min_value: float = -3.0,
     max_value: float = 3.0,
-    num_bins: int = 61,
+    num_bins: int = 60,
 ) -> torch.Tensor:
     """
     将连续数据离散化为指定的区间。
@@ -22,7 +22,7 @@ def undiscretize(
     ids: torch.Tensor,
     min_value: float = -3.0,
     max_value: float = 3.0,
-    num_bins: int = 61,
+    num_bins: int = 60,
 ) -> torch.Tensor:
     """
     将离散化的区间编号还原为连续数据的近似值。
