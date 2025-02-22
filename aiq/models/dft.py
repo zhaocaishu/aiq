@@ -209,7 +209,7 @@ class DFTModel(BaseModel):
         )
 
         preds = np.zeros((test_dataset.data.shape[0], self.pred_len))
-        for i, (index, batch_x, bacth_y) in enumerate(test_loader):
+        for i, (index, batch_x, *bacth_y) in enumerate(test_loader):
             batch_x = batch_x.squeeze(0).float().to(self.device)
             with torch.no_grad():
                 outputs = self.model(batch_x)
