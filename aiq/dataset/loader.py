@@ -3,6 +3,7 @@ import os
 from typing import List
 
 import pandas as pd
+import mysql.connector
 
 
 class DataLoader(abc.ABC):
@@ -15,7 +16,7 @@ class DataLoader(abc.ABC):
         """
         Args:
             data_dir (str): dataset directory
-            market (str): market names
+            market (str): market name
             start_time (str): start time
             end_time (str): end_time
 
@@ -23,12 +24,41 @@ class DataLoader(abc.ABC):
             List[Tuple[str]]: list of instrument's name and list date
         """
         instruments = set()
-        file_path = os.path.join(data_dir, "instruments", market + ".csv")
-        df = pd.read_csv(file_path)
-        if start_time is not None:
-            df = df[df["Date"] >= start_time]
-        if end_time is not None:
-            df = df[df["Date"] <= end_time]
+        if data_dir is not None:
+            file_path = os.path.join(data_dir, "instruments", market + ".csv")
+            df = pd.read_csv(file_path)
+            if start_time is not None:
+                df = df[df["Date"] >= start_time]
+            if end_time is not None:
+                df = df[df["Date"] <= end_time]
+        else:
+            connection = mysql.connector.connect(
+                host="127.0.0.1",
+                user="zcs",
+                passwd="2025zcsdaydayup",
+                database="stock_info",
+            )
+            with connection.cursor() as cursor:
+                query = (
+                    "SELECT DISTINCT ts_code, trade_date "
+                    "FROM ts_idx_index_weight "
+                    "WHERE index_code=%s AND trade_date >= %s AND trade_date <= %s"
+                )
+                cursor.execute(
+                    query,
+                    (market, start_time.replace("-", ""), end_time.replace("-", "")),
+                )
+
+                # Fetch all rows and create a DataFrame
+                data = cursor.fetchall()
+                df = pd.DataFrame(data, columns=["Instrument", "Date"])
+
+                # Convert 'Date' column to datetime format
+                df["Date"] = pd.to_datetime(df["Date"], format="%Y%m%d")
+
+                # Format 'Date' column to 'YYYY-MM-DD'
+                df["Date"] = df["Date"].dt.strftime("%Y-%m-%d")
+
         for _, row in df.iterrows():
             instruments.add(row["Instrument"])
 
