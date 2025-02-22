@@ -12,7 +12,7 @@ if __name__ == "__main__":
 
     features = DataLoader.load_features(
         data_dir=None,
-        instrument="0002081.SZ",
+        instrument="002081.SZ",
         start_time="2025-01-21",
         end_time="2025-02-21",
     )
