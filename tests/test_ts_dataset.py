@@ -13,7 +13,7 @@ if __name__ == "__main__":
     # train dataset
     train_dataset = MarketTSDataset(
         data_dir="./data",
-        instruments="csi300",
+        instruments="000300.SH",
         segments=cfg.dataset.kwargs.segments,
         seq_len=8,
         label_cols=["RETN_2D", "RETN_3D", "RETN_4D", "RETN_5D"],

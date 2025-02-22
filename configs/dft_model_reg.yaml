@@ -39,7 +39,7 @@ dataset:
   class: MarketTSDataset
   module_path: aiq.dataset.dataset
   kwargs:
-    instruments: "csi300"
+    instruments: "000300.SH"
     segments:
       train: ["2008-01-01", "2020-03-31"]
       valid: ["2020-04-01", "2020-06-30"]
