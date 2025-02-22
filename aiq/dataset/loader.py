@@ -33,8 +33,8 @@ class DataLoader(abc.ABC):
             if end_time is not None:
                 df = df[df["Date"] <= end_time]
         else:
-            connection = init_db_connection()
-            with connection.cursor() as cursor:
+            db_connection = init_db_connection()
+            with db_connection.cursor() as cursor:
                 query = (
                     "SELECT DISTINCT ts_code, trade_date "
                     "FROM ts_idx_index_weight "
@@ -54,6 +54,7 @@ class DataLoader(abc.ABC):
 
                 # Format 'Date' column to 'YYYY-MM-DD'
                 df["Date"] = df["Date"].dt.strftime("%Y-%m-%d")
+            db_connection.close()
 
         for _, row in df.iterrows():
             instruments.add(row["Instrument"])
@@ -91,8 +92,8 @@ class DataLoader(abc.ABC):
             if end_time is not None:
                 df = df[(df[timestamp_col] <= end_time)]
         else:
-            connection = init_db_connection()
-            with connection.cursor() as cursor:
+            db_connection = init_db_connection()
+            with db_connection.cursor() as cursor:
                 query = (
                     "SELECT daily.*, daily_basic.turnover_rate, daily_basic.turnover_rate_f, "
                     "daily_basic.volume_ratio, daily_basic.pe, daily_basic.pe_ttm, "
@@ -157,6 +158,7 @@ class DataLoader(abc.ABC):
 
                 # Format 'Date' column to 'YYYY-MM-DD'
                 df["Date"] = df["Date"].dt.strftime("%Y-%m-%d")
+            db_connection.close()
 
         if column_names is not None:
             df = df[column_names]
@@ -194,8 +196,8 @@ class DataLoader(abc.ABC):
             if end_time is not None:
                 df = df[(df[timestamp_col] <= end_time)]
         else:
-            connection = init_db_connection()
-            with connection.cursor() as cursor:
+            db_connection = init_db_connection()
+            with db_connection.cursor() as cursor:
                 query = "SELECT * FROM ts_idx_index_daily WHERE index_code=%s AND trade_date>=%s AND trade_date<=%s LIMIT 50000"
                 cursor.execute(
                     query,
@@ -230,6 +232,7 @@ class DataLoader(abc.ABC):
 
                 # Format 'Date' column to 'YYYY-MM-DD'
                 df["Date"] = df["Date"].dt.strftime("%Y-%m-%d")
+            db_connection.close()
 
         if column_names is not None:
             df = df[column_names]
@@ -261,8 +264,8 @@ class DataLoader(abc.ABC):
             if end_time is not None:
                 df = df[(df[timestamp_col] <= end_time)]
         else:
-            connection = init_db_connection()
-            with connection.cursor() as cursor:
+            db_connection = init_db_connection()
+            with db_connection.cursor() as cursor:
                 query = (
                     "SELECT DISTINCT exchange, DATE_FORMAT(cal_date, '%Y-%m-%d') FROM ts_basic_trade_cal "
                     "WHERE is_open=1 AND cal_date >= %s AND cal_date <= %s"
@@ -276,6 +279,7 @@ class DataLoader(abc.ABC):
                 # Fetch all rows and create a DataFrame
                 data = cursor.fetchall()
                 df = pd.DataFrame(data, columns=["Exchange", "Trade_date"])
+            db_connection.close()
 
         trade_dates = df[df["Exchange"] == "SSE"]["Trade_date"].tolist()
         return trade_dates
