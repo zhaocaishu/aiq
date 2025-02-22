@@ -38,7 +38,7 @@ class DataLoader(abc.ABC):
                 query = (
                     "SELECT DISTINCT ts_code, trade_date "
                     "FROM ts_idx_index_weight "
-                    "WHERE index_code=%s AND trade_date >= %s AND trade_date <= %s"
+                    "WHERE index_code=%s AND trade_date>=%s AND trade_date<=%s"
                 )
                 cursor.execute(
                     query,
@@ -106,7 +106,7 @@ class DataLoader(abc.ABC):
                     "JOIN ts_quotation_adj_factor factor ON "
                     "daily.ts_code=factor.ts_code AND "
                     "daily.trade_date=factor.trade_date "
-                    "WHERE daily.ts_code='%s' AND daily.trade_date >=%s AND daily.trade_date <= %s LIMIT 50000 "
+                    "WHERE daily.ts_code=%s AND daily.trade_date>=%s AND daily.trade_date<=%s LIMIT 50000 "
                 )
                 cursor.execute(
                     query,
@@ -196,7 +196,7 @@ class DataLoader(abc.ABC):
         else:
             connection = init_db_connection()
             with connection.cursor() as cursor:
-                query = "SELECT * FROM ts_idx_index_daily WHERE index_code='%s' AND trade_date >= %s AND trade_date <= %s LIMIT 50000"
+                query = "SELECT * FROM ts_idx_index_daily WHERE index_code=%s AND trade_date>=%s AND trade_date<=%s LIMIT 50000"
                 cursor.execute(
                     query,
                     (
