@@ -284,7 +284,7 @@ class MarketTSDataset(TSDataset):
 
         market_dfs = []
         for market_name in market_names:
-            df = DataLoader.load_features(
+            df = DataLoader.load_index_features(
                 data_dir,
                 instrument=market_name,
                 start_time=start_time,
