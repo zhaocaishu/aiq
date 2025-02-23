@@ -257,7 +257,7 @@ class DFTModel(BaseModel):
                         "PRED_%s_PROBS" % test_dataset.label_names[i]
                         for i in range(self.pred_len)
                     ],
-                    data=pred_probs,
+                    data=pred_probs.reshape(pred_probs.shape[0], -1),
                 )
                 test_dataset.insert(
                     cols=[
