@@ -45,7 +45,7 @@ dataset:
       valid: ["2020-04-01", "2020-06-30"]
       test: ["2020-07-01", "2023-12-31"]
     seq_len: 8
-    label_cols: ["RETN_2D", "RETN_3D", "RETN_4D", "RETN_5D"]
+    label_cols: ["RETN_1D", "RETN_2D", "RETN_3D", "RETN_4D", "RETN_5D"]
 model:
   class: MATCCModel
   module_path: aiq.models.matcc
@@ -55,7 +55,7 @@ model:
     t_nhead: 4
     s_nhead: 2
     seq_len: 8
-    pred_len: 4
+    pred_len: 5
     dropout: 0.5
     gate_input_start_index: 179
     gate_input_end_index: 242
