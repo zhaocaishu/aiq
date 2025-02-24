@@ -59,4 +59,4 @@ model:
     batch_size: 1
     learning_rate: 0.0003
     criterion_name: "CE"
-    num_classes: 21
+    num_classes: 20
