@@ -218,11 +218,11 @@ class DFTModel(BaseModel):
             test_dataset, batch_size=self.batch_size, shuffle=False
         )
 
+        preds = np.zeros((test_dataset.data.shape[0], self.pred_len))
         pred_probs = np.zeros(
             (test_dataset.data.shape[0], self.pred_len, self.num_classes)
         )
         pred_cls = np.zeros((test_dataset.data.shape[0], self.pred_len))
-        pred_returns = np.zeros((test_dataset.data.shape[0], self.pred_len))
         for i, (index, batch_x, *bacth_y) in enumerate(test_loader):
             batch_x = batch_x.squeeze(0).float().to(self.device)
             with torch.no_grad():
@@ -234,14 +234,14 @@ class DFTModel(BaseModel):
                     cls_ids = torch.argmax(probs, dim=1)
                     pred_probs[index, k] = probs.numpy()
                     pred_cls[index, k] = cls_ids.numpy()
-                    pred_returns[index, k] = undiscretize(
+                    preds[index, k] = undiscretize(
                         cls_ids,
                         min_value=-0.1,
                         max_value=0.1,
                         num_bins=self.num_classes,
                     ).numpy()
             else:
-                pred_returns[index] = outputs.detach().cpu().numpy()
+                preds[index] = outputs.detach().cpu().numpy()
 
         if test_dataset.label_names is not None:
             test_dataset.insert(
@@ -249,7 +249,7 @@ class DFTModel(BaseModel):
                     "PRED_%s" % test_dataset.label_names[i]
                     for i in range(self.pred_len)
                 ],
-                data=pred_returns,
+                data=preds,
             )
             if self.criterion_name == "CE":
                 test_dataset.insert(
@@ -257,7 +257,10 @@ class DFTModel(BaseModel):
                         "PRED_%s_PROBS" % test_dataset.label_names[i]
                         for i in range(self.pred_len)
                     ],
-                    data=pred_probs.reshape(pred_probs.shape[0], -1),
+                    data = [
+                        [pred_probs[i, j] for j in range(self.pred_len)]
+                        for i in range(test_dataset.data.shape[0])
+                    ]
                 )
                 test_dataset.insert(
                     cols=[
@@ -268,16 +271,19 @@ class DFTModel(BaseModel):
                 )
         else:
             test_dataset.insert(
-                cols=["PRED_RETN_%d" % i for i in range(self.pred_len)],
-                data=pred_returns,
+                cols=["PRED_%d" % i for i in range(self.pred_len)],
+                data=preds,
             )
             if self.criterion_name == "CE":
                 test_dataset.insert(
-                    cols=["PRED_RETN_%d_PROBS" % i for i in range(self.pred_len)],
-                    data=pred_probs,
+                    cols=["PRED_%d_PROBS" % i for i in range(self.pred_len)],
+                    data = [
+                        [pred_probs[i, j] for j in range(self.pred_len)]
+                        for i in range(test_dataset.data.shape[0])
+                    ]
                 )
                 test_dataset.insert(
-                    cols=["PRED_RETN_%d_CLS" % i for i in range(self.pred_len)],
+                    cols=["PRED_%d_CLS" % i for i in range(self.pred_len)],
                     data=pred_cls,
                 )
         return test_dataset
