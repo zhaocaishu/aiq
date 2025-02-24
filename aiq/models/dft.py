@@ -131,8 +131,8 @@ class DFTModel(BaseModel):
                 if self.criterion_name == "CE":
                     batch_y = discretize(
                         batch_y,
-                        min_value=-0.1,
-                        max_value=0.1,
+                        min_value=-0.2,
+                        max_value=0.2,
                         num_bins=self.num_classes,
                     )
                     loss = sum(
@@ -197,8 +197,8 @@ class DFTModel(BaseModel):
                 if self.criterion_name == "CE":
                     batch_y = discretize(
                         batch_y,
-                        min_value=-0.1,
-                        max_value=0.1,
+                        min_value=-0.2,
+                        max_value=0.2,
                         num_bins=self.num_classes,
                     )
                     loss = sum(
@@ -236,8 +236,8 @@ class DFTModel(BaseModel):
                     pred_cls[index, k] = cls_ids.numpy()
                     preds[index, k] = undiscretize(
                         cls_ids,
-                        min_value=-0.1,
-                        max_value=0.1,
+                        min_value=-0.2,
+                        max_value=0.2,
                         num_bins=self.num_classes,
                     ).numpy()
             else:
