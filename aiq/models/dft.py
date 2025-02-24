@@ -35,7 +35,9 @@ class DFTModel(BaseModel):
         lr_scheduler_type="cosine",
         learning_rate=0.01,
         criterion_name="MSE",
-        num_classes=None,
+        min_label_value=-0.1,
+        max_label_value=0.1,
+        num_classes=21,
         class_weight=None,
         logger=None,
     ):
@@ -58,6 +60,8 @@ class DFTModel(BaseModel):
         self.lr_scheduler_type = lr_scheduler_type
         self.learning_rate = learning_rate
         self.criterion_name = criterion_name
+        self.min_label_value = min_label_value
+        self.max_label_value = max_label_value
         self.num_classes = num_classes
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -131,8 +135,8 @@ class DFTModel(BaseModel):
                 if self.criterion_name == "CE":
                     batch_y = discretize(
                         batch_y,
-                        min_value=-0.2,
-                        max_value=0.2,
+                        min_value=self.min_label_value,
+                        max_value=self.max_label_value,
                         num_bins=self.num_classes,
                     )
                     loss = sum(
@@ -197,8 +201,8 @@ class DFTModel(BaseModel):
                 if self.criterion_name == "CE":
                     batch_y = discretize(
                         batch_y,
-                        min_value=-0.2,
-                        max_value=0.2,
+                        min_value=self.min_label_value,
+                        max_value=self.max_label_value,
                         num_bins=self.num_classes,
                     )
                     loss = sum(
@@ -236,8 +240,8 @@ class DFTModel(BaseModel):
                     pred_cls[index, k] = cls_ids.numpy()
                     preds[index, k] = undiscretize(
                         cls_ids,
-                        min_value=-0.2,
-                        max_value=0.2,
+                        min_value=self.min_label_value,
+                        max_value=self.max_label_value,
                         num_bins=self.num_classes,
                     ).numpy()
             else:
@@ -260,7 +264,7 @@ class DFTModel(BaseModel):
                     data=[
                         [pred_probs[i, j] for j in range(self.pred_len)]
                         for i in range(test_dataset.data.shape[0])
-                    ]
+                    ],
                 )
                 test_dataset.insert(
                     cols=[
@@ -280,7 +284,7 @@ class DFTModel(BaseModel):
                     data=[
                         [pred_probs[i, j] for j in range(self.pred_len)]
                         for i in range(test_dataset.data.shape[0])
-                    ]
+                    ],
                 )
                 test_dataset.insert(
                     cols=["PRED_%d_CLS" % i for i in range(self.pred_len)],

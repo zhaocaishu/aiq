@@ -35,7 +35,9 @@ class MATCCModel(BaseModel):
         lr_scheduler_type="cosine",
         learning_rate=0.01,
         criterion_name="MSE",
-        num_classes=None,
+        min_label_value=-0.1,
+        max_label_value=0.1,
+        num_classes=21,
         class_weight=None,
         logger=None,
     ):
@@ -58,6 +60,8 @@ class MATCCModel(BaseModel):
         self.lr_scheduler_type = lr_scheduler_type
         self.learning_rate = learning_rate
         self.criterion_name = criterion_name
+        self.min_label_value = min_label_value
+        self.max_label_value = max_label_value
         self.num_classes = num_classes
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -129,7 +133,12 @@ class MATCCModel(BaseModel):
                 outputs = self.model(batch_x)
 
                 if self.criterion_name == "CE":
-                    batch_y = discretize(batch_y, num_bins=self.num_classes)
+                    batch_y = discretize(
+                        batch_y,
+                        min_value=self.min_label_value,
+                        max_value=self.max_label_value,
+                        num_bins=self.num_classes,
+                    )
                     loss = sum(
                         self.criterion(outputs[k], batch_y[:, k])
                         for k in range(len(outputs))
@@ -190,7 +199,12 @@ class MATCCModel(BaseModel):
                 outputs = self.model(batch_x)
 
                 if self.criterion_name == "CE":
-                    batch_y = discretize(batch_y, num_bins=self.num_classes)
+                    batch_y = discretize(
+                        batch_y,
+                        min_value=self.min_label_value,
+                        max_value=self.max_label_value,
+                        num_bins=self.num_classes,
+                    )
                     loss = sum(
                         self.criterion(outputs[k], batch_y[:, k])
                         for k in range(len(outputs))
@@ -217,7 +231,12 @@ class MATCCModel(BaseModel):
             if self.criterion_name == "CE":
                 for k in range(len(outputs)):
                     output_ids = torch.argmax(outputs[k], dim=1)
-                    pred = undiscretize(output_ids, num_bins=self.num_classes).numpy()
+                    pred = undiscretize(
+                        output_ids,
+                        min_value=self.min_label_value,
+                        max_value=self.max_label_value,
+                        num_bins=self.num_classes,
+                    ).numpy()
                     preds[index, k] = pred
             else:
                 pred = outputs.detach().cpu().numpy()  # .squeeze()
