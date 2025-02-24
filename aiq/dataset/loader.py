@@ -255,7 +255,7 @@ class DataLoader(abc.ABC):
 
         """
         if data_dir is not None:
-            file_path = os.path.join(data_dir, "calendars", "calendar.csv")
+            file_path = os.path.join(data_dir, "calendars", "day.csv")
             if not os.path.exists(file_path):
                 return None
             df = pd.read_csv(file_path)
