@@ -230,13 +230,13 @@ class MATCCModel(BaseModel):
 
             if self.criterion_name == "CE":
                 for k in range(len(outputs)):
-                    output_ids = torch.argmax(outputs[k], dim=1)
+                    cls_ids = torch.argmax(outputs[k], dim=1)
                     pred = undiscretize(
                         output_ids,
                         min_value=self.min_label_value,
                         max_value=self.max_label_value,
                         num_bins=self.num_classes,
-                    ).numpy()
+                    ).cpu().numpy()
                     preds[index, k] = pred
             else:
                 pred = outputs.detach().cpu().numpy()  # .squeeze()
