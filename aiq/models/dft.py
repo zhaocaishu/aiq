@@ -236,14 +236,14 @@ class DFTModel(BaseModel):
                 for k in range(len(outputs)):
                     probs = torch.softmax(outputs[k], dim=1)
                     cls_ids = torch.argmax(probs, dim=1)
-                    pred_probs[index, k] = probs.numpy()
-                    pred_cls[index, k] = cls_ids.numpy()
+                    pred_probs[index, k] = probs.cpu().numpy()
+                    pred_cls[index, k] = cls_ids.cpu().numpy()
                     preds[index, k] = undiscretize(
                         cls_ids,
                         min_value=self.min_label_value,
                         max_value=self.max_label_value,
                         num_bins=self.num_classes,
-                    ).numpy()
+                    ).cpu().numpy()
             else:
                 preds[index] = outputs.detach().cpu().numpy()
 
