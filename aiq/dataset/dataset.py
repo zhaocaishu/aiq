@@ -58,7 +58,11 @@ class Dataset(Dataset):
     def __len__(self):
         return self.df.shape[0]
 
-    def insert(self, cols: List[str], data: Union[np.array, List]):
+    def insert(
+        self,
+        cols: List[str],
+        data: Union[np.ndarray, List[np.ndarray], List[List[np.ndarray]]]
+    ):
         self.df[cols] = data
 
     @property

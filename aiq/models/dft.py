@@ -265,7 +265,10 @@ class DFTModel(BaseModel):
                         "PRED_%s_PROBS" % test_dataset.label_names[i]
                         for i in range(self.pred_len)
                     ],
-                    data=pred_probs.tolist(),
+                    data=[
+                        [pred_probs[i, j] for j in range(self.pred_len)]
+                        for i in range(test_dataset.data.shape[0])
+                    ],
                 )
                 test_dataset.insert(
                     cols=[
@@ -282,7 +285,10 @@ class DFTModel(BaseModel):
             if self.criterion_name == "CE":
                 test_dataset.insert(
                     cols=["PRED_%d_PROBS" % i for i in range(self.pred_len)],
-                    data=pred_probs.tolist(),
+                    data=[
+                        [pred_probs[i, j] for j in range(self.pred_len)]
+                        for i in range(test_dataset.data.shape[0])
+                    ],
                 )
                 test_dataset.insert(
                     cols=["PRED_%d_CLS" % i for i in range(self.pred_len)],
