@@ -238,12 +238,16 @@ class DFTModel(BaseModel):
                     cls_ids = torch.argmax(probs, dim=1)
                     pred_probs[index, k] = probs.cpu().numpy()
                     pred_cls[index, k] = cls_ids.cpu().numpy()
-                    preds[index, k] = undiscretize(
-                        cls_ids,
-                        min_value=self.min_label_value,
-                        max_value=self.max_label_value,
-                        num_bins=self.num_classes,
-                    ).cpu().numpy()
+                    preds[index, k] = (
+                        undiscretize(
+                            cls_ids,
+                            min_value=self.min_label_value,
+                            max_value=self.max_label_value,
+                            num_bins=self.num_classes,
+                        )
+                        .cpu()
+                        .numpy()
+                    )
             else:
                 preds[index] = outputs.detach().cpu().numpy()
 
@@ -261,10 +265,7 @@ class DFTModel(BaseModel):
                         "PRED_%s_PROBS" % test_dataset.label_names[i]
                         for i in range(self.pred_len)
                     ],
-                    data=[
-                        [pred_probs[i, j] for j in range(self.pred_len)]
-                        for i in range(test_dataset.data.shape[0])
-                    ],
+                    data=pred_probs.tolist(),
                 )
                 test_dataset.insert(
                     cols=[
@@ -281,10 +282,7 @@ class DFTModel(BaseModel):
             if self.criterion_name == "CE":
                 test_dataset.insert(
                     cols=["PRED_%d_PROBS" % i for i in range(self.pred_len)],
-                    data=[
-                        [pred_probs[i, j] for j in range(self.pred_len)]
-                        for i in range(test_dataset.data.shape[0])
-                    ],
+                    data=pred_probs.tolist(),
                 )
                 test_dataset.insert(
                     cols=["PRED_%d_CLS" % i for i in range(self.pred_len)],

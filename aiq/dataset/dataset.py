@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from typing import List
+from typing import List, Union
 
 from torch.utils.data import Dataset
 
@@ -58,7 +58,7 @@ class Dataset(Dataset):
     def __len__(self):
         return self.df.shape[0]
 
-    def insert(self, cols: List[str], data: np.array):
+    def insert(self, cols: List[str], data: Union[np.array, List]):
         self.df[cols] = data
 
     @property
