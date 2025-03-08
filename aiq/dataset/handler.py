@@ -1,4 +1,3 @@
-import abc
 from typing import List
 
 import pandas as pd
@@ -26,7 +25,7 @@ from aiq.ops import (
 from aiq.utils.module import init_instance_by_config
 
 
-class DataHandler(abc.ABC):
+class DataHandler:
     def __init__(self, processors: List = None):
         pass
 
@@ -38,7 +37,6 @@ class Alpha158(DataHandler):
     def __init__(self, processors: List = None):
         self._feature_names = None
         self._label_names = None
-
         self.processors = [init_instance_by_config(proc) for proc in processors]
 
     def extract_features(self, df: pd.DataFrame = None, mode: str = "train"):
@@ -425,13 +423,15 @@ class MarketAlpha158(Alpha158):
         processors: List = None,
         market_processors: List = None,
     ):
-        super().__init__(processors)
+        self._feature_names = None
+        self._label_names = None
+        self.processors = [init_instance_by_config(proc) for proc in processors]
 
         # handle market information
+        self._market_feature_names = None
         self.market_processors = [
             init_instance_by_config(proc) for proc in market_processors
         ]
-        self._market_feature_names = None
 
     def extract_market_features(self, df: pd.DataFrame = None):
         # prices
