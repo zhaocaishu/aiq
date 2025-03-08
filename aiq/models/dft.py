@@ -1,5 +1,6 @@
 import os
 import time
+import math
 
 import numpy as np
 import torch
@@ -64,6 +65,7 @@ class DFTModel(BaseModel):
         self.max_label_value = max_label_value
         self.num_classes = num_classes
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.apply_log_to_labels = True
 
         self.model = DFT(
             d_feat=self.d_feat,
@@ -129,6 +131,9 @@ class DFTModel(BaseModel):
                 iter_count += 1
                 batch_x = batch_x.squeeze(0).float().to(self.device)
                 batch_y = batch_y.squeeze(0).float()
+
+                if self.apply_log_to_labels:
+                    batch_y = torch.log(1 + batch_y)
 
                 outputs = self.model(batch_x)
 
@@ -196,6 +201,9 @@ class DFTModel(BaseModel):
                 batch_x = batch_x.squeeze(0).float().to(self.device)
                 batch_y = batch_y.squeeze(0).float()
 
+                if self.apply_log_to_labels:
+                    batch_y = torch.log(1 + batch_y)
+
                 outputs = self.model(batch_x)
 
                 if self.criterion_name == "CE":
@@ -207,6 +215,7 @@ class DFTModel(BaseModel):
                     )
                     loss = sum(
                         self.criterion(outputs[k], batch_y[:, k])
+                        * math.pow(0.8, self.pred_len - 1 - k)
                         for k in range(len(outputs))
                     )
                 else:
@@ -248,6 +257,8 @@ class DFTModel(BaseModel):
                         .cpu()
                         .numpy()
                     )
+                    if self.apply_log_to_labels:
+                        preds = np.exp(preds) - 1
             else:
                 preds[index] = outputs.detach().cpu().numpy()
 
