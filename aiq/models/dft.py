@@ -146,6 +146,7 @@ class DFTModel(BaseModel):
                     )
                     loss = sum(
                         self.criterion(outputs[k], batch_y[:, k])
+                        * math.pow(0.8, self.pred_len - 1 - k)
                         for k in range(len(outputs))
                     )
                 else:
