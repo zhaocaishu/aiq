@@ -27,7 +27,7 @@ from aiq.utils.module import init_instance_by_config
 
 
 class DataHandler(abc.ABC):
-    def __init__(self, processors: List = []):
+    def __init__(self, processors: List = None):
         pass
 
     def process(self, df: pd.DataFrame = None, mode: str = "train") -> pd.DataFrame:
@@ -35,7 +35,7 @@ class DataHandler(abc.ABC):
 
 
 class Alpha158(DataHandler):
-    def __init__(self, processors: List = []):
+    def __init__(self, processors: List = None):
         self._feature_names = None
         self._label_names = None
 
@@ -365,7 +365,7 @@ class Alpha158(DataHandler):
         return label_df
 
     def process_feature_labels(
-        self, dfs: List[pd.DataFrame] = [], mode: str = "train"
+        self, dfs: List[pd.DataFrame] = None, mode: str = "train"
     ) -> pd.DataFrame:
         # extract feature and label from data
         feature_label_dfs = [
@@ -405,7 +405,7 @@ class Alpha158(DataHandler):
         return feature_label_df
 
     def process(
-        self, dfs: List[pd.DataFrame] = [], mode: str = "train"
+        self, dfs: List[pd.DataFrame] = None, mode: str = "train"
     ) -> pd.DataFrame:
         feature_label_df = self.process_feature_labels(dfs, mode=mode)
         return feature_label_df
@@ -422,13 +422,10 @@ class Alpha158(DataHandler):
 class MarketAlpha158(Alpha158):
     def __init__(
         self,
-        processors: List = [],
-        market_processors: List = [],
+        processors: List = None,
+        market_processors: List = None,
     ):
-        self.processors = [init_instance_by_config(proc) for proc in processors]
-
-        self._feature_names = None
-        self._label_names = None
+        super().__init__(processors)
 
         # handle market information
         self.market_processors = [
@@ -509,8 +506,8 @@ class MarketAlpha158(Alpha158):
 
     def process_market_features(
         self,
-        dfs: List[pd.DataFrame] = [],
-        df_names: List[str] = [],
+        dfs: List[pd.DataFrame] = None,
+        df_names: List[str] = None,
         mode: str = "train",
     ) -> pd.DataFrame:
         feature_dfs = [self.extract_market_features(df) for df in dfs]
@@ -520,13 +517,13 @@ class MarketAlpha158(Alpha158):
             [
                 feature_df.rename(
                     columns={
-                        feature_name: f"{market_name}_{feature_name}"
+                        feature_name: f"{df_name}_{feature_name}"
                         for feature_name in self._market_feature_names
                     }
                 )
                 .drop(columns=["Instrument"])
                 .set_index("Date")
-                for feature_df, market_name in zip(feature_dfs, df_names)
+                for feature_df, df_name in zip(feature_dfs, df_names)
             ],
             axis=1,
             join="inner",
@@ -583,9 +580,9 @@ class MarketAlpha158(Alpha158):
 
     def process(
         self,
-        dfs: List[pd.DataFrame] = [],
-        market_dfs: List[pd.DataFrame] = [],
-        market_names: List[str] = [],
+        dfs: List[pd.DataFrame] = None,
+        market_dfs: List[pd.DataFrame] = None,
+        market_names: List[str] = None,
         mode: str = "train",
     ) -> pd.DataFrame:
         # instrument feature and label

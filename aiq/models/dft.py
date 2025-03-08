@@ -259,6 +259,11 @@ class DFTModel(BaseModel):
                         .numpy()
                     )
                     if self.apply_log_to_labels:
+                        preds = np.clip(
+                            preds,
+                            a_min=self.min_label_value,
+                            a_max=self.max_label_value,
+                        )
                         preds = np.exp(preds) - 1
             else:
                 preds[index] = outputs.detach().cpu().numpy()

@@ -2,12 +2,12 @@ import numpy as np
 import pandas as pd
 from typing import List, Union
 
-from torch.utils.data import Dataset
+import torch
 
 from .loader import DataLoader
 
 
-class Dataset(Dataset):
+class Dataset(torch.utils.data.Dataset):
     """
     Preparing data for model training and inference.
     """
@@ -61,7 +61,7 @@ class Dataset(Dataset):
     def insert(
         self,
         cols: List[str],
-        data: Union[np.ndarray, List[np.ndarray], List[List[np.ndarray]]]
+        data: Union[np.ndarray, List[np.ndarray], List[List[np.ndarray]]],
     ):
         self.df[cols] = data
 
@@ -179,7 +179,7 @@ class TSDataset(Dataset):
         for cur_loc, cur_cnt in zip(start_index_of_insts, sample_count_by_insts):
             for stop in range(1, cur_cnt + 1):
                 end = cur_loc + stop
-                start = max(end - seq_len, 0)
+                start = max(end - seq_len, cur_loc)
                 slices.append(slice(start, end))
         slices = np.array(slices, dtype="object")
 
@@ -254,6 +254,10 @@ class MarketTSDataset(TSDataset):
         data_handler=None,
         mode="train",
     ):
+        super().__init__(
+            data_dir, instruments, segments, seq_len, label_cols, data_handler, mode
+        )
+
         # sequence length and prediction length
         self.seq_len = seq_len
         self.mode = mode
