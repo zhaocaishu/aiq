@@ -254,10 +254,6 @@ class MarketTSDataset(TSDataset):
         data_handler=None,
         mode="train",
     ):
-        super().__init__(
-            data_dir, instruments, segments, seq_len, label_cols, data_handler, mode
-        )
-
         # sequence length and prediction length
         self.seq_len = seq_len
         self.mode = mode
