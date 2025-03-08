@@ -1,7 +1,7 @@
-import numpy as np
-import pandas as pd
 from typing import List, Union
 
+import numpy as np
+import pandas as pd
 import torch
 
 from .loader import DataLoader
