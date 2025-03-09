@@ -60,7 +60,7 @@ class MATCCModel(BaseModel):
         self.criterion_name = criterion_name
         self.class_boundaries = class_boundaries
         if self.class_boundaries is not None:
-            self.num_classes = len(class_boundaries) - 1
+            self.num_classes = len(class_boundaries)
         else:
             self.num_classes = None
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
