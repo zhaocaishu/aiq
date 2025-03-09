@@ -258,8 +258,8 @@ class DFTModel(BaseModel):
                         .cpu()
                         .numpy()
                     )
-                    if self.apply_log_to_labels:
-                        preds = np.exp(preds) - 1
+                if self.apply_log_to_labels:
+                    preds = np.exp(preds) - 1
             else:
                 preds[index] = outputs.detach().cpu().numpy()
 
