@@ -36,9 +36,7 @@ class DFTModel(BaseModel):
         lr_scheduler_type="cosine",
         learning_rate=0.01,
         criterion_name="MSE",
-        min_label_value=-0.1,
-        max_label_value=0.1,
-        num_classes=21,
+        class_boundaries=None,
         class_weight=None,
         logger=None,
     ):
@@ -61,11 +59,12 @@ class DFTModel(BaseModel):
         self.lr_scheduler_type = lr_scheduler_type
         self.learning_rate = learning_rate
         self.criterion_name = criterion_name
-        self.min_label_value = min_label_value
-        self.max_label_value = max_label_value
-        self.num_classes = num_classes
+        self.class_boundaries = class_boundaries
+        if self.class_boundaries is not None:
+            self.num_classes = len(class_boundaries) - 1
+        else:
+            self.num_classes = None
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        self.apply_log_to_labels = True
 
         self.model = DFT(
             d_feat=self.d_feat,
@@ -132,17 +131,12 @@ class DFTModel(BaseModel):
                 batch_x = batch_x.squeeze(0).float().to(self.device)
                 batch_y = batch_y.squeeze(0).float()
 
-                if self.apply_log_to_labels:
-                    batch_y = torch.log(1 + batch_y)
-
                 outputs = self.model(batch_x)
 
                 if self.criterion_name == "CE":
                     batch_y = discretize(
                         batch_y,
-                        min_value=self.min_label_value,
-                        max_value=self.max_label_value,
-                        num_bins=self.num_classes,
+                        bins=self.class_boundaries,
                     )
                     loss = sum(
                         self.criterion(outputs[k], batch_y[:, k])
@@ -202,17 +196,12 @@ class DFTModel(BaseModel):
                 batch_x = batch_x.squeeze(0).float().to(self.device)
                 batch_y = batch_y.squeeze(0).float()
 
-                if self.apply_log_to_labels:
-                    batch_y = torch.log(1 + batch_y)
-
                 outputs = self.model(batch_x)
 
                 if self.criterion_name == "CE":
                     batch_y = discretize(
                         batch_y,
-                        min_value=self.min_label_value,
-                        max_value=self.max_label_value,
-                        num_bins=self.num_classes,
+                        bins=self.class_boundaries,
                     )
                     loss = sum(
                         self.criterion(outputs[k], batch_y[:, k])
@@ -251,18 +240,13 @@ class DFTModel(BaseModel):
                     preds[index, k] = (
                         undiscretize(
                             cls_ids,
-                            min_value=self.min_label_value,
-                            max_value=self.max_label_value,
-                            num_bins=self.num_classes,
+                            bins=self.class_boundaries,
                         )
                         .cpu()
                         .numpy()
                     )
             else:
                 preds[index] = outputs.detach().cpu().numpy()
-
-        if self.apply_log_to_labels:
-            preds = np.exp(preds) - 1
 
         if test_dataset.label_names is not None:
             test_dataset.insert(
