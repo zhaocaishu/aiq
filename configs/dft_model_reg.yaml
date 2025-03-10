@@ -58,7 +58,7 @@ model:
     epochs: 30
     batch_size: 1
     learning_rate: 0.0003
-    criterion_name: "CE"
+    criterion_name: "CB"
     class_boundaries:
       [
         -0.2,

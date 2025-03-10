@@ -35,9 +35,8 @@ def compute_discretized_class_counts(data_loader, class_boundaries):
     counts = torch.zeros(num_classes, dtype=torch.int64)  # 初始化统计张量
 
     for i, (_, batch_x, batch_y) in enumerate(data_loader):
-        batch_y = batch_y.squeeze(0).float()
-        batch_y_discrete = discretize(batch_y, bins=class_boundaries)
-        batch_y_discrete = batch_y_discrete.long()
+        batch_y = batch_y.flatten().float()
+        batch_y_discrete = discretize(batch_y, bins=class_boundaries).long()
 
         current_counts = torch.bincount(batch_y_discrete, minlength=num_classes)
         # 累计全局统计结果

@@ -131,7 +131,7 @@ class MATCCModel(BaseModel):
 
                 outputs = self.model(batch_x)
 
-                if self.criterion_name == "CE":
+                if self.num_classes is not None:
                     batch_y = discretize(
                         batch_y,
                         bins=self.class_boundaries,
@@ -195,7 +195,7 @@ class MATCCModel(BaseModel):
 
                 outputs = self.model(batch_x)
 
-                if self.criterion_name == "CE":
+                if self.num_classes is not None:
                     batch_y = discretize(
                         batch_y,
                         bins=self.class_boundaries,
@@ -223,7 +223,7 @@ class MATCCModel(BaseModel):
             with torch.no_grad():
                 outputs = self.model(batch_x)
 
-            if self.criterion_name == "CE":
+            if self.num_classes is not None:
                 for k in range(len(outputs)):
                     cls_ids = torch.argmax(outputs[k], dim=1)
                     pred = (

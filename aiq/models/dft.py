@@ -116,7 +116,9 @@ class DFTModel(BaseModel):
             )
             self.criterion = nn.CrossEntropyLoss(weight=class_weight)
         elif self.criterion_name == "CB":
-            samples_per_class = compute_discretized_class_counts(train_loader, self.class_boundaries)
+            samples_per_class = compute_discretized_class_counts(
+                train_loader, self.class_boundaries
+            )
             self.criterion = ClassBalancedLoss(samples_per_class=samples_per_class)
         else:
             raise NotImplementedError
@@ -136,7 +138,7 @@ class DFTModel(BaseModel):
 
                 outputs = self.model(batch_x)
 
-                if self.criterion_name == "CE":
+                if self.num_classes is not None:
                     batch_y = discretize(
                         batch_y,
                         bins=self.class_boundaries,
@@ -201,7 +203,7 @@ class DFTModel(BaseModel):
 
                 outputs = self.model(batch_x)
 
-                if self.criterion_name == "CE":
+                if self.num_classes is not None:
                     batch_y = discretize(
                         batch_y,
                         bins=self.class_boundaries,
@@ -234,7 +236,7 @@ class DFTModel(BaseModel):
             with torch.no_grad():
                 outputs = self.model(batch_x)
 
-            if self.criterion_name == "CE":
+            if self.num_classes is not None:
                 for k in range(len(outputs)):
                     probs = torch.softmax(outputs[k], dim=1)
                     cls_ids = torch.argmax(probs, dim=1)
