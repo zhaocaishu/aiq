@@ -9,7 +9,7 @@ from torch.utils.data import Dataset, DataLoader
 from transformers import get_scheduler
 
 from aiq.layers import MATCC
-from aiq.losses import ICLoss, CCCLoss
+from aiq.losses import ClassBalancedLoss
 from aiq.utils.discretize import discretize, undiscretize
 
 from .base import BaseModel
@@ -59,10 +59,10 @@ class MATCCModel(BaseModel):
         self.learning_rate = learning_rate
         self.criterion_name = criterion_name
         self.class_boundaries = class_boundaries
-        if self.class_boundaries is not None:
-            self.num_classes = len(class_boundaries)
-        else:
-            self.num_classes = None
+        self.num_classes = (
+            len(class_boundaries) if self.class_boundaries is not None else None
+        )
+        self.class_weight = class_weight
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
         self.model = MATCC(
@@ -77,20 +77,6 @@ class MATCCModel(BaseModel):
             gate_input_end_index=self.gate_input_end_index,
             num_classes=self.num_classes,
         ).to(self.device)
-
-        if self.criterion_name == "IC":
-            self.criterion = ICLoss()
-        elif self.criterion_name == "CCC":
-            self.criterion = CCCLoss()
-        elif self.criterion_name == "MSE":
-            self.criterion = nn.MSELoss()
-        elif self.criterion_name == "CE":
-            class_weight = (
-                torch.Tensor(class_weight) if class_weight is not None else None
-            )
-            self.criterion = nn.CrossEntropyLoss(weight=class_weight)
-        else:
-            raise NotImplementedError
 
         self.logger = logger
 
@@ -117,6 +103,21 @@ class MATCCModel(BaseModel):
             num_warmup_steps=num_warmup_steps,
             num_training_steps=num_training_steps,
         )
+        
+        if self.criterion_name == "MSE":
+            self.criterion = nn.MSELoss()
+        elif self.criterion_name == "CE":
+            class_weight = (
+                torch.Tensor(self.class_weight)
+                if self.class_weight is not None
+                else None
+            )
+            self.criterion = nn.CrossEntropyLoss(weight=class_weight)
+        elif self.criterion_name == "CB":
+            self.criterion = ClassBalancedLoss()
+        else:
+            raise NotImplementedError
+    
         for epoch in range(self.epochs):
             self.logger.info("=" * 20 + " Epoch {} ".format(epoch + 1) + "=" * 20)
 
