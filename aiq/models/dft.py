@@ -261,7 +261,7 @@ class DFTModel(BaseModel):
                 ],
                 data=preds,
             )
-            if self.criterion_name == "CE":
+            if self.num_classes is not None:
                 test_dataset.insert(
                     cols=[
                         "PRED_%s_PROBS" % test_dataset.label_names[i]
@@ -284,7 +284,7 @@ class DFTModel(BaseModel):
                 cols=["PRED_%d" % i for i in range(self.pred_len)],
                 data=preds,
             )
-            if self.criterion_name == "CE":
+            if self.num_classes is not None:
                 test_dataset.insert(
                     cols=["PRED_%d_PROBS" % i for i in range(self.pred_len)],
                     data=[
