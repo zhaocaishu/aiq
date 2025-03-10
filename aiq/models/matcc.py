@@ -113,8 +113,6 @@ class MATCCModel(BaseModel):
                 else None
             )
             self.criterion = nn.CrossEntropyLoss(weight=class_weight)
-        elif self.criterion_name == "CB":
-            self.criterion = ClassBalancedLoss()
         else:
             raise NotImplementedError
     
