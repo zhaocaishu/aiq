@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 class ClassBalancedLoss(nn.Module):
-    def __init__(self, samples_per_class, beta=0.99):
+    def __init__(self, samples_per_class, beta=0.9999):
         super(ClassBalancedLoss, self).__init__()
         self.beta = beta
 
