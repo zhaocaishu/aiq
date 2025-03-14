@@ -338,6 +338,7 @@ class Alpha158(DataHandler):
             ],
             axis=1,
         )
+        feature_df = feature_df.reset_index(drop=True)
 
         return feature_df
 
@@ -354,6 +355,7 @@ class Alpha158(DataHandler):
             ],
             axis=1,
         ).astype("float32")
+        label_df = label_df.reset_index(drop=True)
 
         return label_df
 
@@ -375,7 +377,7 @@ class Alpha158(DataHandler):
         )
         feature_label_df.sort_index(inplace=True)
 
-        # data preprocessing
+        # data preprocess
         column_tuples = [
             ("feature", feature_name) for feature_name in self._feature_names
         ]
@@ -395,6 +397,7 @@ class Alpha158(DataHandler):
                     feature_label_df = processor(feature_label_df)
 
         feature_label_df.columns = feature_label_df.columns.droplevel()
+        
         return feature_label_df
 
     def process(
