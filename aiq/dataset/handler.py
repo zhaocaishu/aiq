@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Dict
 
 import pandas as pd
 
@@ -506,16 +506,13 @@ class MarketAlpha158(Alpha158):
 
     def process_market_features(
         self,
-        dfs: List[pd.DataFrame] = None,
-        df_names: List[str] = None,
+        dfs: Dict[str, pd.DataFrame] = None,
         mode: str = "train",
     ) -> pd.DataFrame:
-        feature_dfs = [self.extract_market_features(df) for df in dfs]
-
         # extract and rename features for different markets, then merge them into a new DataFrame
         feature_df = pd.concat(
             [
-                feature_df.rename(
+                self.extract_market_features(df).rename(
                     columns={
                         feature_name: f"{df_name}_{feature_name}"
                         for feature_name in self._market_feature_names
@@ -523,7 +520,7 @@ class MarketAlpha158(Alpha158):
                 )
                 .drop(columns=["Instrument"])
                 .set_index("Date")
-                for feature_df, df_name in zip(feature_dfs, df_names)
+                for df_name, df in dfs.items()
             ],
             axis=1,
             join="inner",
@@ -581,8 +578,7 @@ class MarketAlpha158(Alpha158):
     def process(
         self,
         dfs: List[pd.DataFrame] = None,
-        market_dfs: List[pd.DataFrame] = None,
-        market_names: List[str] = None,
+        market_dfs: Dict[str, pd.DataFrame] = None,
         mode: str = "train",
     ) -> pd.DataFrame:
         # instrument feature and label
@@ -591,7 +587,7 @@ class MarketAlpha158(Alpha158):
 
         # market information
         market_feature_df = self.process_market_features(
-            market_dfs, market_names, mode=mode
+            market_dfs, mode=mode
         )
         market_feature_df = market_feature_df.reset_index()
 

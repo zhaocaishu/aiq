@@ -16,7 +16,7 @@ if __name__ == "__main__":
         instruments="000300.SH",
         segments=cfg.dataset.kwargs.segments,
         seq_len=8,
-        label_cols=["RETN_2D", "RETN_3D", "RETN_4D", "RETN_5D"],
+        label_cols=["RETN_5D"],
         data_handler=data_handler,
         mode="train",
     )
