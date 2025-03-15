@@ -216,41 +216,29 @@ class MATCCModel(BaseModel):
         test_loader = DataLoader(
             test_dataset, batch_size=self.batch_size, shuffle=False
         )
+        num_samples = test_dataset.data.shape[0]
 
-        preds = np.zeros((test_dataset.data.shape[0], self.pred_len))
-        for i, (index, batch_x, *bacth_y) in enumerate(test_loader):
+        preds = np.zeros((num_samples, self.pred_len))
+        for index, batch_x, *batch_y in test_loader:
+            index = index.cpu().numpy()  # 确保索引为 numpy 数组
             batch_x = batch_x.squeeze(0).float().to(self.device)
+            
             with torch.no_grad():
                 outputs = self.model(batch_x)
-
+            
             if self.num_classes is not None:
-                for k in range(len(outputs)):
-                    cls_ids = torch.argmax(outputs[k], dim=1)
-                    pred = (
-                        undiscretize(
-                            cls_ids,
-                            bins=self.class_boundaries,
-                        )
-                        .cpu()
-                        .numpy()
+                for k, output in enumerate(outputs):
+                    probs = torch.softmax(output, dim=1)
+                    cls_ids = torch.argmax(probs, dim=1)
+                    preds[index, k] = (
+                        undiscretize(cls_ids, bins=self.class_boundaries).cpu().numpy()
                     )
-                    preds[index, k] = pred
             else:
-                pred = outputs.detach().cpu().numpy()  # .squeeze()
-                preds[index] = pred
-
-        if test_dataset.label_names is not None:
-            test_dataset.insert(
-                cols=[
-                    "PRED_%s" % test_dataset.label_names[i]
-                    for i in range(self.pred_len)
-                ],
-                data=preds,
-            )
-        else:
-            test_dataset.insert(
-                cols=["PRED_%d" % i for i in range(self.pred_len)], data=preds
-            )
+                preds[index] = outputs.cpu().numpy()
+        
+        # 统一数据插入逻辑
+        label_names = test_dataset.label_names or [str(i) for i in range(self.pred_len)]
+        test_dataset.insert(cols=[f"PRED_{name}" for name in label_names], data=preds)
         return test_dataset
 
     def save(self, model_dir):

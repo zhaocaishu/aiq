@@ -225,77 +225,43 @@ class DFTModel(BaseModel):
         test_loader = DataLoader(
             test_dataset, batch_size=self.batch_size, shuffle=False
         )
+        num_samples = test_dataset.data.shape[0]
 
-        preds = np.zeros((test_dataset.data.shape[0], self.pred_len))
-        pred_probs = np.zeros(
-            (test_dataset.data.shape[0], self.pred_len, self.num_classes)
-        )
-        pred_cls = np.zeros((test_dataset.data.shape[0], self.pred_len))
-        for i, (index, batch_x, *bacth_y) in enumerate(test_loader):
+        preds = np.zeros((num_samples, self.pred_len))
+        pred_probs = pred_cls = None
+        
+        if self.num_classes is not None:
+            pred_probs = np.zeros((num_samples, self.pred_len, self.num_classes))
+            pred_cls = np.zeros((num_samples, self.pred_len))
+        
+        for index, batch_x, *batch_y in test_loader:
+            index = index.cpu().numpy()  # 确保索引为 numpy 数组
             batch_x = batch_x.squeeze(0).float().to(self.device)
+            
             with torch.no_grad():
                 outputs = self.model(batch_x)
-
+            
             if self.num_classes is not None:
-                for k in range(len(outputs)):
-                    probs = torch.softmax(outputs[k], dim=1)
+                for k, output in enumerate(outputs):
+                    probs = torch.softmax(output, dim=1)
                     cls_ids = torch.argmax(probs, dim=1)
+                    
                     pred_probs[index, k] = probs.cpu().numpy()
                     pred_cls[index, k] = cls_ids.cpu().numpy()
                     preds[index, k] = (
-                        undiscretize(
-                            cls_ids,
-                            bins=self.class_boundaries,
-                        )
-                        .cpu()
-                        .numpy()
+                        undiscretize(cls_ids, bins=self.class_boundaries).cpu().numpy()
                     )
             else:
-                preds[index] = outputs.detach().cpu().numpy()
-
-        if test_dataset.label_names is not None:
-            test_dataset.insert(
-                cols=[
-                    "PRED_%s" % test_dataset.label_names[i]
-                    for i in range(self.pred_len)
-                ],
-                data=preds,
-            )
-            if self.num_classes is not None:
-                test_dataset.insert(
-                    cols=[
-                        "PRED_%s_PROBS" % test_dataset.label_names[i]
-                        for i in range(self.pred_len)
-                    ],
-                    data=[
-                        [pred_probs[i, j] for j in range(self.pred_len)]
-                        for i in range(test_dataset.data.shape[0])
-                    ],
-                )
-                test_dataset.insert(
-                    cols=[
-                        "PRED_%s_CLS" % test_dataset.label_names[i]
-                        for i in range(self.pred_len)
-                    ],
-                    data=pred_cls,
-                )
-        else:
-            test_dataset.insert(
-                cols=["PRED_%d" % i for i in range(self.pred_len)],
-                data=preds,
-            )
-            if self.num_classes is not None:
-                test_dataset.insert(
-                    cols=["PRED_%d_PROBS" % i for i in range(self.pred_len)],
-                    data=[
-                        [pred_probs[i, j] for j in range(self.pred_len)]
-                        for i in range(test_dataset.data.shape[0])
-                    ],
-                )
-                test_dataset.insert(
-                    cols=["PRED_%d_CLS" % i for i in range(self.pred_len)],
-                    data=pred_cls,
-                )
+                preds[index] = outputs.cpu().numpy()
+        
+        # 统一数据插入逻辑
+        label_names = test_dataset.label_names or [str(i) for i in range(self.pred_len)]
+        test_dataset.insert(cols=[f"PRED_{name}" for name in label_names], data=preds)
+        
+        if self.num_classes is not None:
+            test_dataset.insert(cols=[f"PRED_{name}_PROBS" for name in label_names], data=pred_probs.tolist())
+            test_dataset.insert(cols=[f"PRED_{name}_CLS" for name in label_names], data=pred_cls)
+        
         return test_dataset
 
     def save(self, model_dir):
