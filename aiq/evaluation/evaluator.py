@@ -9,7 +9,7 @@ class Evaluator:
 
     def compute_r2(self, df):
         label = df[self.label_col].values
-        pred = self.pred_col.values
+        pred = df[self.pred_col].values
 
         r2 = 1 - ((label - pred) ** 2).sum() / (label ** 2).sum()
         return r2
