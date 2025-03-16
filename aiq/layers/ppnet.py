@@ -113,9 +113,34 @@ class TemporalAttention(nn.Module):
         # [N, 1, T], [N, T, D] --> [N, 1, D]
         output = torch.matmul(lam, z).squeeze(1)
         return output
+    
+class GateNN(nn.Module):
+    def __init__(
+        self, 
+        input_dim,
+        hidden_dim=None,
+        output_dim=None,
+        dropout_rate=0.0,
+        batch_norm=False
+    ):
+        super(GateNN, self).__init__()
+        if hidden_dim is None:
+            hidden_dim = output_dim
+        gate_layers = [nn.Linear(input_dim, hidden_dim)]
+        if batch_norm:
+            gate_layers.append(nn.BatchNorm1d(hidden_dim))
+        gate_layers.append(nn.ReLU())
+        if dropout_rate > 0:
+            gate_layers.append(nn.Dropout(dropout_rate))
+        gate_layers.append(nn.Linear(hidden_dim, output_dim))
+        gate_layers.append(nn.Sigmoid())
+        self.gate = nn.Sequential(*gate_layers)
+
+    def forward(self, inputs):
+        return self.gate(inputs) * 2
 
 
-class MATCC(nn.Module):
+class PPNet(nn.Module):
     def __init__(
         self,
         d_feat=158,
@@ -143,7 +168,7 @@ class MATCC(nn.Module):
         self.d_gate_input = gate_input_end_index - gate_input_start_index  # F'
         self.feature_gate = Filter(self.d_gate_input, self.d_feat, seq_len)
 
-        self.rwkv = Block(
+        self.rwkv_trend = Block(
             layer_id=0,
             n_embd=self.d_model,
             n_attn=self.n_attn,
@@ -153,25 +178,52 @@ class MATCC(nn.Module):
             hidden_sz=self.d_model,
         )
         RWKV_Init(
-            self.rwkv, vocab_size=self.d_model, n_embd=self.d_model, rwkv_emb_scale=1.0
+            self.rwkv_trend,
+            vocab_size=self.d_model,
+            n_embd=self.d_model,
+            rwkv_emb_scale=1.0,
+        )
+        self.rwkv_season = Block(
+            layer_id=0,
+            n_embd=self.d_model,
+            n_attn=self.n_attn,
+            n_head=self.n_head,
+            ctx_len=300,
+            n_ffn=self.d_model,
+            hidden_sz=self.d_model,
+        )
+        RWKV_Init(
+            self.rwkv_season,
+            vocab_size=self.d_model,
+            n_embd=self.d_model,
+            rwkv_emb_scale=1.0,
         )
 
+        self.feat_to_model = nn.Linear(d_feat, d_model)
         self.dlinear = DLinear(
             seq_len=seq_len,
             pred_len=seq_len,
             enc_in=self.d_model,
             kernel_size=3,
             individual=False,
+            merge_outputs=False
         )
         DLinear_Init(self.dlinear, min_val=-5e-2, max_val=8e-2)
 
-        self.layers = nn.Sequential(
-            # feature layer
-            nn.Linear(d_feat, d_model),
-            self.dlinear,  # [N,T,D]
-            self.rwkv,  # [N,T,D]
-            SAttention(d_model=d_model, nhead=s_nhead, dropout=dropout),  # [T,N,D]
+        self.trend_TC = nn.Sequential(
+            SAttention(
+                d_model=d_model, nhead=s_nhead, dropout=dropout
+            ),  # Stock correlation
+            self.rwkv_trend,  # Time correlation
         )
+        self.season_TC = nn.Sequential(
+            self.rwkv_season,  # Time correlation
+            SAttention(
+                d_model=d_model, nhead=s_nhead, dropout=dropout
+            ),  # Stock correlation
+        )
+
+        self.market_linear = nn.Linear(d_feat, d_model)
 
         if num_classes is not None:
             self.classifiers = nn.ModuleList(
@@ -192,12 +244,15 @@ class MATCC(nn.Module):
     def forward(self, x):
         src = x[:, :, : self.gate_input_start_index]  # N, T, D
         gate_input = x[:, :, self.gate_input_start_index : self.gate_input_end_index]
-        src = src + self.feature_gate.forward(gate_input)
+        market = self.feature_gate.forward(gate_input)
 
-        features = self.layers(src).squeeze(-1)
+        src_model = self.feat_to_model(src)
+        src_trend, src_season = self.dlinear(src_model)
+        src_trend = self.trend_TC(src_trend) + self.market_linear(market)
+        src_season = self.season_TC(src_season)
 
         if self.num_classes is not None:
-            outputs = [classifier(features) for classifier in self.classifiers]
+            outputs = [classifier(src_trend + src_season) for classifier in self.classifiers]
         else:
-            outputs = self.decoder(features)
+            outputs = self.decoder(src_trend + src_season)
         return outputs

@@ -23,13 +23,13 @@ class Dataset(torch.utils.data.Dataset):
         # start and end time
         start_time, end_time = segments[mode]
 
-        # load instruments from market
+        # load instruments of market
         if isinstance(instruments, str):
             instruments = DataLoader.load_instruments(
                 data_dir, instruments, start_time, end_time
             )
 
-        # process instrument
+        # load instrument's data
         dfs = []
         for instrument in instruments:
             df = DataLoader.load_features(
@@ -45,10 +45,9 @@ class Dataset(torch.utils.data.Dataset):
 
             dfs.append(df)
 
-        # preprocess
+        # extract feature and labels
         self.df = data_handler.process(dfs, mode=mode)
 
-        # feature and label names
         self._feature_names = data_handler.feature_names
         self._label_names = data_handler.label_names
 
@@ -100,13 +99,13 @@ class TSDataset(Dataset):
         # start and end time
         start_time, end_time = segments[self.mode]
 
-        # load instruments from market
+        # load instruments of market
         if isinstance(instruments, str):
             instruments = DataLoader.load_instruments(
                 data_dir, instruments, start_time, end_time
             )
 
-        # process instrument
+        # load instrument's data
         dfs = []
         for instrument in instruments:
             df = DataLoader.load_features(
@@ -122,10 +121,9 @@ class TSDataset(Dataset):
 
             dfs.append(df)
 
-        # preprocess
+        # extract feature and labels
         self.df = data_handler.process(dfs, mode=mode)
 
-        # feature and label names
         self._feature_names = data_handler.feature_names
         self._label_names = label_cols
 
@@ -261,13 +259,13 @@ class MarketTSDataset(TSDataset):
         # start and end time
         start_time, end_time = segments[self.mode]
 
-        # load instruments from market
+        # load instruments of market
         if isinstance(instruments, str):
             instruments = DataLoader.load_instruments(
                 data_dir, instruments, start_time, end_time
             )
 
-        # process instrument
+        # load instrument's data
         dfs = []
         for instrument in instruments:
             df = DataLoader.load_features(
@@ -283,7 +281,7 @@ class MarketTSDataset(TSDataset):
 
             dfs.append(df)
 
-        # market data
+        # load market data
         market_dfs = {}
         for market_name in ["000300.SH", "000903.SH", "000905.SH"]:
             df = DataLoader.load_index_features(
@@ -294,12 +292,11 @@ class MarketTSDataset(TSDataset):
             )
             market_dfs[market_name] = df
 
-        # preprocess
+        # extract feature and labels
         self.df = data_handler.process(
             dfs, market_dfs=market_dfs, mode=mode
         )
 
-        # feature and label names
         self._feature_names = data_handler.feature_names
         self._label_names = label_cols
 

@@ -201,7 +201,7 @@ class DFT(nn.Module):
         self.market_linear = nn.Linear(d_feat, d_model)
 
         if num_classes is not None:
-            self.decoders = nn.ModuleList(
+            self.classifiers = nn.ModuleList(
                 [
                     nn.Sequential(
                         TemporalAttention(d_model=d_model),
@@ -227,7 +227,7 @@ class DFT(nn.Module):
         src_season = self.season_TC(src_season)
 
         if self.num_classes is not None:
-            outputs = [decoder(src_trend + src_season) for decoder in self.decoders]
+            outputs = [classifier(src_trend + src_season) for classifier in self.classifiers]
         else:
             outputs = self.decoder(src_trend + src_season)
         return outputs
