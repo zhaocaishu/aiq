@@ -8,14 +8,12 @@ from torch.utils.data import Dataset, DataLoader
 
 from transformers import get_scheduler
 
-from aiq.layers import MATCC
-from aiq.losses import ClassBalancedLoss
-from aiq.utils.discretize import discretize, undiscretize
+from aiq.layers import MASTER
 
 from .base import BaseModel
 
 
-class MATCCModel(BaseModel):
+class MASTERModel(BaseModel):
     def __init__(
         self,
         feature_cols=None,
@@ -25,8 +23,8 @@ class MATCCModel(BaseModel):
         t_nhead=4,
         s_nhead=2,
         seq_len=8,
-        pred_len=1,
         dropout=0.5,
+        beta=5,
         gate_input_start_index=158,
         gate_input_end_index=221,
         epochs=5,
@@ -35,8 +33,6 @@ class MATCCModel(BaseModel):
         lr_scheduler_type="cosine",
         learning_rate=0.01,
         criterion_name="MSE",
-        class_boundaries=None,
-        class_weight=None,
         logger=None,
     ):
         # input parameters
@@ -48,8 +44,8 @@ class MATCCModel(BaseModel):
         self.t_nhead = t_nhead
         self.s_nhead = s_nhead
         self.seq_len = seq_len
-        self.pred_len = pred_len
         self.dropout = dropout
+        self.beta = beta
         self.gate_input_start_index = gate_input_start_index
         self.gate_input_end_index = gate_input_end_index
         self.epochs = epochs
@@ -58,24 +54,17 @@ class MATCCModel(BaseModel):
         self.lr_scheduler_type = lr_scheduler_type
         self.learning_rate = learning_rate
         self.criterion_name = criterion_name
-        self.class_boundaries = class_boundaries
-        self.num_classes = (
-            len(class_boundaries) if self.class_boundaries is not None else None
-        )
-        self.class_weight = class_weight
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-        self.model = MATCC(
+        self.model = MASTER(
             d_feat=self.d_feat,
             d_model=self.d_model,
             t_nhead=self.t_nhead,
             s_nhead=self.s_nhead,
-            seq_len=self.seq_len,
-            pred_len=self.pred_len,
             dropout=self.dropout,
             gate_input_start_index=self.gate_input_start_index,
             gate_input_end_index=self.gate_input_end_index,
-            num_classes=self.num_classes,
+            beta=self.beta,
         ).to(self.device)
 
         self.logger = logger
@@ -106,13 +95,6 @@ class MATCCModel(BaseModel):
         
         if self.criterion_name == "MSE":
             self.criterion = nn.MSELoss()
-        elif self.criterion_name == "CE":
-            class_weight = (
-                torch.Tensor(self.class_weight)
-                if self.class_weight is not None
-                else None
-            )
-            self.criterion = nn.CrossEntropyLoss(weight=class_weight)
         else:
             raise NotImplementedError
     
@@ -131,17 +113,7 @@ class MATCCModel(BaseModel):
 
                 outputs = self.model(batch_x)
 
-                if self.num_classes is not None:
-                    batch_y = discretize(
-                        batch_y,
-                        bins=self.class_boundaries,
-                    )
-                    loss = sum(
-                        self.criterion(outputs[k], batch_y[:, k])
-                        for k in range(len(outputs))
-                    )
-                else:
-                    loss = self.criterion(outputs, batch_y)
+                loss = self.criterion(outputs, batch_y)
 
                 train_loss.append(loss.item())
 
@@ -195,17 +167,7 @@ class MATCCModel(BaseModel):
 
                 outputs = self.model(batch_x)
 
-                if self.num_classes is not None:
-                    batch_y = discretize(
-                        batch_y,
-                        bins=self.class_boundaries,
-                    )
-                    loss = sum(
-                        self.criterion(outputs[k], batch_y[:, k])
-                        for k in range(len(outputs))
-                    )
-                else:
-                    loss = self.criterion(outputs, batch_y)
+                loss = self.criterion(outputs, batch_y)
 
                 total_loss.append(loss.item())
         total_loss = np.average(total_loss)
@@ -226,15 +188,7 @@ class MATCCModel(BaseModel):
             with torch.no_grad():
                 outputs = self.model(batch_x)
             
-            if self.num_classes is not None:
-                for k, output in enumerate(outputs):
-                    probs = torch.softmax(output, dim=1)
-                    cls_ids = torch.argmax(probs, dim=1)
-                    preds[index, k] = (
-                        undiscretize(cls_ids, bins=self.class_boundaries).cpu().numpy()
-                    )
-            else:
-                preds[index] = outputs.cpu().numpy()
+            preds[index] = outputs.cpu().numpy()
         
         # 统一数据插入逻辑
         label_names = test_dataset.label_names or [str(i) for i in range(self.pred_len)]

@@ -1,13 +1,13 @@
+from typing import List, Union
+
 import numpy as np
 import pandas as pd
-from typing import List
-
-from torch.utils.data import Dataset
+import torch
 
 from .loader import DataLoader
 
 
-class Dataset(Dataset):
+class Dataset(torch.utils.data.Dataset):
     """
     Preparing data for model training and inference.
     """
@@ -58,7 +58,11 @@ class Dataset(Dataset):
     def __len__(self):
         return self.df.shape[0]
 
-    def insert(self, cols: List[str], data: np.array):
+    def insert(
+        self,
+        cols: List[str],
+        data: Union[np.ndarray, List[np.ndarray], List[List[np.ndarray]]],
+    ):
         self.df[cols] = data
 
     @property
@@ -175,7 +179,7 @@ class TSDataset(Dataset):
         for cur_loc, cur_cnt in zip(start_index_of_insts, sample_count_by_insts):
             for stop in range(1, cur_cnt + 1):
                 end = cur_loc + stop
-                start = max(end - seq_len, 0)
+                start = max(end - seq_len, cur_loc)
                 slices.append(slice(start, end))
         slices = np.array(slices, dtype="object")
 
@@ -280,21 +284,19 @@ class MarketTSDataset(TSDataset):
             dfs.append(df)
 
         # market data
-        market_names = ["000300.SH", "000903.SH", "000905.SH"]
-
-        market_dfs = []
-        for market_name in market_names:
-            df = DataLoader.load_features(
+        market_dfs = {}
+        for market_name in ["000300.SH", "000903.SH", "000905.SH"]:
+            df = DataLoader.load_index_features(
                 data_dir,
                 instrument=market_name,
                 start_time=start_time,
                 end_time=end_time,
             )
-            market_dfs.append(df)
+            market_dfs[market_name] = df
 
         # preprocess
         self.df = data_handler.process(
-            dfs, market_dfs=market_dfs, market_names=market_names, mode=mode
+            dfs, market_dfs=market_dfs, mode=mode
         )
 
         # feature and label names

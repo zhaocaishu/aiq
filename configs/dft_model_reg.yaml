@@ -21,10 +21,6 @@ data_handler:
         module_path: aiq.dataset.processor
         kwargs:
           fields_group: "feature"
-      - class: CSZScoreNorm
-        module_path: aiq.dataset.processor
-        kwargs:
-          fields_group: "label"
     market_processors:
       - class: RobustZScoreNorm
         module_path: aiq.dataset.processor
@@ -39,13 +35,13 @@ dataset:
   class: MarketTSDataset
   module_path: aiq.dataset.dataset
   kwargs:
-    instruments: "csi300"
+    instruments: "000300.SH"
     segments:
       train: ["2008-01-01", "2020-03-31"]
       valid: ["2020-04-01", "2020-06-30"]
       test: ["2020-07-01", "2023-12-31"]
     seq_len: 8
-    label_cols: ["RETN_2D", "RETN_3D", "RETN_4D", "RETN_5D"]
+    label_cols: ["RETN_1D", "RETN_2D", "RETN_3D", "RETN_4D", "RETN_5D"]
 model:
   class: DFTModel
   module_path: aiq.models.dft
@@ -55,7 +51,7 @@ model:
     t_nhead: 4
     s_nhead: 2
     seq_len: 8
-    pred_len: 4
+    pred_len: 5
     dropout: 0.5
     gate_input_start_index: 179
     gate_input_end_index: 242
@@ -63,4 +59,47 @@ model:
     batch_size: 1
     learning_rate: 0.0003
     criterion_name: "CE"
-    num_classes: 60
+    class_boundaries:
+      [
+        -0.2,
+        -0.19,
+        -0.18,
+        -0.17,
+        -0.16,
+        -0.15,
+        -0.14,
+        -0.13,
+        -0.12,
+        -0.11,
+        -0.10,
+        -0.09,
+        -0.08,
+        -0.07,
+        -0.06,
+        -0.05,
+        -0.04,
+        -0.03,
+        -0.02,
+        -0.01,
+        0.0,
+        0.01,
+        0.02,
+        0.03,
+        0.04,
+        0.05,
+        0.06,
+        0.07,
+        0.08,
+        0.09,
+        0.1,
+        0.11,
+        0.12,
+        0.13,
+        0.14,
+        0.15,
+        0.16,
+        0.17,
+        0.18,
+        0.19,
+        0.2
+      ]

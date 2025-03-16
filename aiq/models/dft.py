@@ -1,5 +1,6 @@
 import os
 import time
+import math
 
 import numpy as np
 import torch
@@ -9,7 +10,8 @@ from torch.utils.data import Dataset, DataLoader
 from transformers import get_scheduler
 
 from aiq.layers import DFT
-from aiq.losses import ICLoss, CCCLoss
+from aiq.losses import ClassBalancedLoss
+from aiq.utils.data import compute_discretized_class_counts
 from aiq.utils.discretize import discretize, undiscretize
 
 from .base import BaseModel
@@ -35,7 +37,7 @@ class DFTModel(BaseModel):
         lr_scheduler_type="cosine",
         learning_rate=0.01,
         criterion_name="MSE",
-        num_classes=None,
+        class_boundaries=None,
         class_weight=None,
         logger=None,
     ):
@@ -58,7 +60,11 @@ class DFTModel(BaseModel):
         self.lr_scheduler_type = lr_scheduler_type
         self.learning_rate = learning_rate
         self.criterion_name = criterion_name
-        self.num_classes = num_classes
+        self.class_boundaries = class_boundaries
+        self.num_classes = (
+            len(class_boundaries) if self.class_boundaries is not None else None
+        )
+        self.class_weight = class_weight
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
         self.model = DFT(
@@ -73,20 +79,6 @@ class DFTModel(BaseModel):
             gate_input_end_index=self.gate_input_end_index,
             num_classes=self.num_classes,
         ).to(self.device)
-
-        if self.criterion_name == "IC":
-            self.criterion = ICLoss()
-        elif self.criterion_name == "CCC":
-            self.criterion = CCCLoss()
-        elif self.criterion_name == "MSE":
-            self.criterion = nn.MSELoss()
-        elif self.criterion_name == "CE":
-            class_weight = (
-                torch.Tensor(class_weight) if class_weight is not None else None
-            )
-            self.criterion = nn.CrossEntropyLoss(weight=class_weight)
-        else:
-            raise NotImplementedError
 
         self.logger = logger
 
@@ -113,6 +105,24 @@ class DFTModel(BaseModel):
             num_warmup_steps=num_warmup_steps,
             num_training_steps=num_training_steps,
         )
+
+        if self.criterion_name == "MSE":
+            self.criterion = nn.MSELoss()
+        elif self.criterion_name == "CE":
+            class_weight = (
+                torch.Tensor(self.class_weight)
+                if self.class_weight is not None
+                else None
+            )
+            self.criterion = nn.CrossEntropyLoss(weight=class_weight)
+        elif self.criterion_name == "CB":
+            samples_per_class = compute_discretized_class_counts(
+                train_loader, self.class_boundaries
+            )
+            self.criterion = ClassBalancedLoss(samples_per_class=samples_per_class)
+        else:
+            raise NotImplementedError
+
         for epoch in range(self.epochs):
             self.logger.info("=" * 20 + " Epoch {} ".format(epoch + 1) + "=" * 20)
 
@@ -128,10 +138,14 @@ class DFTModel(BaseModel):
 
                 outputs = self.model(batch_x)
 
-                if self.criterion_name == "CE":
-                    batch_y = discretize(batch_y, num_bins=self.num_classes)
+                if self.num_classes is not None:
+                    batch_y = discretize(
+                        batch_y,
+                        bins=self.class_boundaries,
+                    )
                     loss = sum(
                         self.criterion(outputs[k], batch_y[:, k])
+                        * math.pow(0.8, self.pred_len - 1 - k)
                         for k in range(len(outputs))
                     )
                 else:
@@ -189,10 +203,14 @@ class DFTModel(BaseModel):
 
                 outputs = self.model(batch_x)
 
-                if self.criterion_name == "CE":
-                    batch_y = discretize(batch_y, num_bins=self.num_classes)
+                if self.num_classes is not None:
+                    batch_y = discretize(
+                        batch_y,
+                        bins=self.class_boundaries,
+                    )
                     loss = sum(
                         self.criterion(outputs[k], batch_y[:, k])
+                        * math.pow(0.8, self.pred_len - 1 - k)
                         for k in range(len(outputs))
                     )
                 else:
@@ -207,34 +225,43 @@ class DFTModel(BaseModel):
         test_loader = DataLoader(
             test_dataset, batch_size=self.batch_size, shuffle=False
         )
+        num_samples = test_dataset.data.shape[0]
 
-        preds = np.zeros((test_dataset.data.shape[0], self.pred_len))
-        for i, (index, batch_x, bacth_y) in enumerate(test_loader):
+        preds = np.zeros((num_samples, self.pred_len))
+        pred_probs = pred_cls = None
+        
+        if self.num_classes is not None:
+            pred_probs = np.zeros((num_samples, self.pred_len, self.num_classes))
+            pred_cls = np.zeros((num_samples, self.pred_len))
+        
+        for index, batch_x, *batch_y in test_loader:
+            index = index.cpu().numpy()  # 确保索引为 numpy 数组
             batch_x = batch_x.squeeze(0).float().to(self.device)
+            
             with torch.no_grad():
                 outputs = self.model(batch_x)
-
-            if self.criterion_name == "CE":
-                for k in range(len(outputs)):
-                    output_ids = torch.argmax(outputs[k], dim=1)
-                    pred = undiscretize(output_ids, num_bins=self.num_classes).numpy()
-                    preds[index, k] = pred
+            
+            if self.num_classes is not None:
+                for k, output in enumerate(outputs):
+                    probs = torch.softmax(output, dim=1)
+                    cls_ids = torch.argmax(probs, dim=1)
+                    
+                    pred_probs[index, k] = probs.cpu().numpy()
+                    pred_cls[index, k] = cls_ids.cpu().numpy()
+                    preds[index, k] = (
+                        undiscretize(cls_ids, bins=self.class_boundaries).cpu().numpy()
+                    )
             else:
-                pred = outputs.detach().cpu().numpy()  # .squeeze()
-                preds[index] = pred
-
-        if test_dataset.label_names is not None:
-            test_dataset.insert(
-                cols=[
-                    "PRED_%s" % test_dataset.label_names[i]
-                    for i in range(self.pred_len)
-                ],
-                data=preds,
-            )
-        else:
-            test_dataset.insert(
-                cols=["PRED_%d" % i for i in range(self.pred_len)], data=preds
-            )
+                preds[index] = outputs.cpu().numpy()
+        
+        # 统一数据插入逻辑
+        label_names = test_dataset.label_names or [str(i) for i in range(self.pred_len)]
+        test_dataset.insert(cols=[f"PRED_{name}" for name in label_names], data=preds)
+        
+        if self.num_classes is not None:
+            test_dataset.insert(cols=[f"PRED_{name}_PROBS" for name in label_names], data=pred_probs.tolist())
+            test_dataset.insert(cols=[f"PRED_{name}_CLS" for name in label_names], data=pred_cls)
+        
         return test_dataset
 
     def save(self, model_dir):

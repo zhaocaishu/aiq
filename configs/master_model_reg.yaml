@@ -47,15 +47,15 @@ dataset:
     seq_len: 8
     label_cols: ["RETN_5D"]
 model:
-  class: MATCCModel
-  module_path: aiq.models.matcc
+  class: MASTERModel
+  module_path: aiq.models.master
   kwargs:
     d_feat: 179
     d_model: 256
     t_nhead: 4
     s_nhead: 2
     seq_len: 8
-    pred_len: 1
+    beta: 5
     dropout: 0.5
     gate_input_start_index: 179
     gate_input_end_index: 242

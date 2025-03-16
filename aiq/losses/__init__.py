@@ -1,5 +1,4 @@
-from .ic_loss import ICLoss
-from .ccc_loss import CCCLoss
+from .cb_loss import ClassBalancedLoss
 
 
-__all__ = ['ICLoss', 'CCCLoss']
+__all__ = ["ClassBalancedLoss"]

@@ -79,7 +79,7 @@ def main():
     model = init_instance_by_config(
         cfg.model,
         feature_cols=val_dataset.feature_names,
-        label_cols=[val_dataset.label_names],
+        label_cols=val_dataset.label_names,
         logger=logger,
     )
     model.load(args.save_dir)
