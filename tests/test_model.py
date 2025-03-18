@@ -35,12 +35,13 @@ if __name__ == "__main__":
         cfg.model,
         feature_cols=train_dataset.feature_names,
         label_cols=train_dataset.label_names,
+        save_dir="./temp",
         logger=logger
     )
 
     model.fit(train_dataset=train_dataset, val_dataset=val_dataset)
-    model.save(model_dir="./temp")
+    model.save()
 
     # predict stage
-    model.load(model_dir="./temp")
+    model.load()
     model.predict(test_dataset=val_dataset)

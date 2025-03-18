@@ -80,9 +80,10 @@ def main():
         cfg.model,
         feature_cols=val_dataset.feature_names,
         label_cols=val_dataset.label_names,
+        save_dir=args.save_dir,
         logger=logger,
     )
-    model.load(args.save_dir)
+    model.load()
 
     # prediction
     pred_df = model.predict(val_dataset).data

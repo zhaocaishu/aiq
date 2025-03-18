@@ -250,9 +250,10 @@ class PPNet(nn.Module):
         src_trend, src_season = self.dlinear(src_model)
         src_trend = self.trend_TC(src_trend) + self.market_linear(market)
         src_season = self.season_TC(src_season)
+        src_fusion = src_trend + src_season
 
         if self.num_classes is not None:
-            outputs = [classifier(src_trend + src_season) for classifier in self.classifiers]
+            outputs = [classifier(src_fusion) for classifier in self.classifiers]
         else:
-            outputs = self.decoder(src_trend + src_season)
+            outputs = self.decoder(src_fusion)
         return outputs

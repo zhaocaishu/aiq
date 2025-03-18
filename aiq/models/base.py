@@ -8,7 +8,7 @@ class BaseModel(abc.ABC):
     """Learnable Models"""
 
     def __init__(
-        self, feature_cols=None, label_cols=None, model_params=None, logger=None
+        self, feature_cols=None, label_cols=None, model_params=None, save_dir=None, logger=None
     ):
         self._feature_cols = feature_cols
         self._label_cols = label_cols
@@ -19,6 +19,8 @@ class BaseModel(abc.ABC):
             self.model_params = {}
 
         self.model = None
+
+        self.save_dir = save_dir
 
         self.logger = logger
 
@@ -46,6 +48,25 @@ class BaseModel(abc.ABC):
              Prediction results with certain type such as `pandas.Series`.
         """
         raise NotImplementedError()
+    
+    def save(self, model_name):
+        """
+        Persistently saves the object's state to storage using the specified model name.
+    
+        Args:
+            model_name: Unique identifier for the model in storage.
+        """
+        raise NotImplementedError()
+
+    def load(self, model_name):
+        """
+        Loads object state from storage using the specified model name.
+    
+        Args:
+            model_name: Unique identifier of the model to load from storage
+        """
+        raise NotImplementedError()
+
 
     @property
     def feature_cols(self):

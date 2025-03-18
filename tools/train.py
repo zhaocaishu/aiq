@@ -68,12 +68,13 @@ def main():
         cfg.model,
         feature_cols=train_dataset.feature_names,
         label_cols=train_dataset.label_names,
+        save_dir=args.save_dir,
         logger=logger,
     )
 
     model.fit(train_dataset=train_dataset, val_dataset=val_dataset)
 
-    model.save(model_dir=args.save_dir)
+    model.save()
 
     logger.info("Model training has been finished successfully!")
 

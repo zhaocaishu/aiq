@@ -39,6 +39,7 @@ class DFTModel(BaseModel):
         criterion_name="MSE",
         class_boundaries=None,
         class_weight=None,
+        save_dir=None,
         logger=None,
     ):
         # input parameters
@@ -79,6 +80,8 @@ class DFTModel(BaseModel):
             gate_input_end_index=self.gate_input_end_index,
             num_classes=self.num_classes,
         ).to(self.device)
+
+        self.save_dir = save_dir
 
         self.logger = logger
 
@@ -184,10 +187,9 @@ class DFTModel(BaseModel):
             )
 
             # save checkpoints
-            checkpoints_dir = "./checkpoints"
-            os.makedirs(checkpoints_dir, exist_ok=True)
+            os.makedirs(self.save_dir, exist_ok=True)
             model_file = os.path.join(
-                checkpoints_dir, "model_epoch_{}.pth".format(epoch + 1)
+                self.save_dir, "model_epoch_{}.pth".format(epoch + 1)
             )
             torch.save(self.model.state_dict(), model_file)
 
@@ -264,15 +266,17 @@ class DFTModel(BaseModel):
         
         return test_dataset
 
-    def save(self, model_dir):
-        if not os.path.exists(model_dir):
-            os.makedirs(model_dir)
+    def save(self, model_name=None):
+        if not os.path.exists(self.save_dir):
+            os.makedirs(self.save_dir)
 
-        model_file = os.path.join(model_dir, "model.pth")
+        model_name = "model.pth" if model_name is None else model_name
+        model_file = os.path.join(self.save_dir, model_name)
         torch.save(self.model.state_dict(), model_file)
 
-    def load(self, model_dir):
-        model_file = os.path.join(model_dir, "model.pth")
+    def load(self, model_name=None):
+        model_name = "model.pth" if model_name is None else model_name
+        model_file = os.path.join(self.save_dir, model_name)
         self.model.load_state_dict(
             torch.load(model_file, map_location=self.device, weights_only=True)
         )
