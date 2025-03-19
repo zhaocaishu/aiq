@@ -564,11 +564,16 @@ class MarketAlpha158(Alpha158):
         # labels
         self._label_names = ["RETN_1D", "RETN_2D", "RETN_3D", "RETN_4D", "RETN_5D"]
         labels = [
-            Ref(close, -1) / close - 1,
-            Ref(close, -2) / close - 1,
-            Ref(close, -3) / close - 1,
-            Ref(close, -4) / close - 1,
-            Ref(close, -5) / close - 1,
+            (Ref(close, -1) / close - 1) / (Ref(market_close, -1) / market_close - 1)
+            - 1,
+            (Ref(close, -2) / close - 1) / (Ref(market_close, -2) / market_close - 1)
+            - 1,
+            (Ref(close, -3) / close - 1) / (Ref(market_close, -3) / market_close - 1)
+            - 1,
+            (Ref(close, -4) / close - 1) / (Ref(market_close, -4) / market_close - 1)
+            - 1,
+            (Ref(close, -5) / close - 1) / (Ref(market_close, -5) / market_close - 1)
+            - 1,
         ]
         label_df = pd.concat(
             [
