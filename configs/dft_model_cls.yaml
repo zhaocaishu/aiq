@@ -51,7 +51,7 @@ model:
     t_nhead: 4
     s_nhead: 2
     seq_len: 8
-    pred_len: 5
+    pred_len: 1
     dropout: 0.5
     gate_input_start_index: 179
     gate_input_end_index: 242
