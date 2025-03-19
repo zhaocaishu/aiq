@@ -557,6 +557,8 @@ class MarketAlpha158(Alpha158):
             how="inner",
         )
 
+        assert merge_df.shape[0] == df.shape[0]
+
         adjusted_factor = merge_df["Adj_factor"]
         close = merge_df["Close"] * adjusted_factor
         market_close = merge_df["MKT_Close"]
@@ -650,13 +652,15 @@ class MarketAlpha158(Alpha158):
         market_feature_df = market_feature_df.reset_index()
 
         # merge market information
-        feature_label_df = pd.merge(
+        market_feature_label_df = pd.merge(
             feature_label_df,
             market_feature_df,
             on="Date",
             how="inner",
         )
-        feature_label_df = feature_label_df.set_index(["Date", "Instrument"])
-        feature_label_df.sort_index(inplace=True)
+        market_feature_label_df = market_feature_label_df.set_index(["Date", "Instrument"])
+        market_feature_label_df.sort_index(inplace=True)
 
-        return feature_label_df
+        assert feature_label_df.shape[0] == market_feature_label_df.shape[0]
+
+        return market_feature_label_df

@@ -41,7 +41,7 @@ dataset:
       valid: ["2020-04-01", "2020-06-30"]
       test: ["2020-07-01", "2023-12-31"]
     seq_len: 8
-    label_cols: ["RETN_1D", "RETN_2D", "RETN_3D", "RETN_4D", "RETN_5D"]
+    label_cols: ["RETN_5D"]
 model:
   class: DFTModel
   module_path: aiq.models.dft
