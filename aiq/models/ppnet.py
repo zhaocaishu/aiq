@@ -78,7 +78,7 @@ class PPNetModel(BaseModel):
             num_classes=self.num_classes,
         ).to(self.device)
         
-        self.save_dir = save_dir,
+        self.save_dir = save_dir
 
         self.logger = logger
 
