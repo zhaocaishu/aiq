@@ -143,7 +143,7 @@ class GateNN(nn.Module):
 class PPNet(nn.Module):
     def __init__(
         self,
-        embedding_dim=64,
+        embedding_dim=128,
         d_feat=158,
         d_model=256,
         t_nhead=4,
@@ -237,10 +237,15 @@ class PPNet(nn.Module):
                                  dropout_rate=dropout,
                                  batch_norm=True)
         
-        self.mlp = nn.Linear(d_model, pred_len)
+        self.mlp =  nn.Sequential(
+            nn.Linear(d_model, d_model),
+            nn.BatchNorm1d(d_model),
+            nn.ReLU(),
+            nn.Linear(d_model, pred_len)
+        )
 
     def forward(self, x, inst_ids):
-        inst_embed = self.embedding_layer(inst_ids)
+        inst_emb = self.embedding_layer(inst_ids)
 
         src = x[:, :, : self.gate_input_start_index]  # N, T, D
         gate_input = x[:, :, self.gate_input_start_index : self.gate_input_end_index]
@@ -253,7 +258,7 @@ class PPNet(nn.Module):
         src_fusion = src_trend + src_season
 
         src_features = self.temporal_attn(src_fusion)
-        gate_input = torch.cat([src_features.detach(), inst_embed], dim=-1)
-        gated_features = self.gate_layer(gate_input)
-        outputs = self.mlp(gated_features)
+        gate_input = torch.cat([src_features.detach(), inst_emb], dim=-1)
+        gw = self.gate_layer(gate_input)
+        outputs = self.mlp(src_features * gw)
         return outputs
