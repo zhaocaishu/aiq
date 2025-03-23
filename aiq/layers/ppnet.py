@@ -256,8 +256,8 @@ class PPNet(nn.Module):
         src_trend = self.trend_TC(src_trend) + self.market_linear(market)
         src_season = self.season_TC(src_season)
         src_fusion = src_trend + src_season
-
         src_features = self.temporal_attn(src_fusion)
+        
         gate_input = torch.cat([src_features.detach(), inst_emb], dim=-1)
         gw = self.gate_layer(gate_input)
         outputs = self.mlp(src_features * gw)
