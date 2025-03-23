@@ -134,7 +134,7 @@ class DFTModel(BaseModel):
 
             self.model.train()
             epoch_time = time.time()
-            for i, (_, batch_x, batch_y) in enumerate(train_loader):
+            for i, (_, _, batch_x, batch_y) in enumerate(train_loader):
                 iter_count += 1
                 batch_x = batch_x.squeeze(0).float().to(self.device)
                 batch_y = batch_y.squeeze(0).float()
@@ -199,7 +199,7 @@ class DFTModel(BaseModel):
 
         total_loss = []
         with torch.no_grad():
-            for i, (_, batch_x, batch_y) in enumerate(val_loader):
+            for i, (_, _, batch_x, batch_y) in enumerate(val_loader):
                 batch_x = batch_x.squeeze(0).float().to(self.device)
                 batch_y = batch_y.squeeze(0).float()
 
@@ -236,7 +236,7 @@ class DFTModel(BaseModel):
             pred_probs = np.zeros((num_samples, self.pred_len, self.num_classes))
             pred_cls = np.zeros((num_samples, self.pred_len))
         
-        for index, batch_x, *batch_y in test_loader:
+        for index, _, batch_x, *batch_y in test_loader:
             index = index.cpu().numpy()  # 确保索引为 numpy 数组
             batch_x = batch_x.squeeze(0).float().to(self.device)
             

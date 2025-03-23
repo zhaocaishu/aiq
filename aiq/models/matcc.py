@@ -9,7 +9,6 @@ from torch.utils.data import Dataset, DataLoader
 from transformers import get_scheduler
 
 from aiq.layers import MATCC
-from aiq.losses import ClassBalancedLoss
 from aiq.utils.discretize import discretize, undiscretize
 
 from .base import BaseModel
@@ -127,7 +126,7 @@ class MATCCModel(BaseModel):
 
             self.model.train()
             epoch_time = time.time()
-            for i, (_, batch_x, batch_y) in enumerate(train_loader):
+            for i, (_, _, batch_x, batch_y) in enumerate(train_loader):
                 iter_count += 1
                 batch_x = batch_x.squeeze(0).float().to(self.device)
                 batch_y = batch_y.squeeze(0).float()
@@ -191,7 +190,7 @@ class MATCCModel(BaseModel):
 
         total_loss = []
         with torch.no_grad():
-            for i, (_, batch_x, batch_y) in enumerate(val_loader):
+            for i, (_, _, batch_x, batch_y) in enumerate(val_loader):
                 batch_x = batch_x.squeeze(0).float().to(self.device)
                 batch_y = batch_y.squeeze(0).float()
 
@@ -221,7 +220,7 @@ class MATCCModel(BaseModel):
         num_samples = test_dataset.data.shape[0]
 
         preds = np.zeros((num_samples, self.pred_len))
-        for index, batch_x, *batch_y in test_loader:
+        for index, inst_ids, batch_x, *batch_y in test_loader:
             index = index.cpu().numpy()  # 确保索引为 numpy 数组
             batch_x = batch_x.squeeze(0).float().to(self.device)
             
