@@ -143,6 +143,7 @@ class GateNN(nn.Module):
 class PPNet(nn.Module):
     def __init__(
         self,
+        embedding_dim=64,
         d_feat=158,
         d_model=256,
         t_nhead=4,
@@ -167,6 +168,9 @@ class PPNet(nn.Module):
         self.gate_input_end_index = gate_input_end_index
         self.d_gate_input = gate_input_end_index - gate_input_start_index  # F'
         self.feature_gate = Filter(self.d_gate_input, self.d_feat, seq_len)
+
+        # instrument's embedding
+        self.embedding_layer = nn.Embedding(1024, embedding_dim)
 
         self.rwkv_trend = Block(
             layer_id=0,
@@ -225,23 +229,19 @@ class PPNet(nn.Module):
 
         self.market_linear = nn.Linear(d_feat, d_model)
 
-        if num_classes is not None:
-            self.classifiers = nn.ModuleList(
-                [
-                    nn.Sequential(
-                        TemporalAttention(d_model=d_model),
-                        nn.Linear(d_model, num_classes),
-                    )
-                    for _ in range(pred_len)
-                ]
-            )
-        else:
-            self.decoder = nn.Sequential(
-                TemporalAttention(d_model=d_model),
-                nn.Linear(d_model, pred_len),
-            )
+        self.temporal_attn = TemporalAttention(d_model=d_model)
 
-    def forward(self, x):
+        self.gate_layer = GateNN(input_dim=d_model + embedding_dim,
+                                 hidden_dim=d_model,
+                                 output_dim=d_model,
+                                 dropout_rate=dropout,
+                                 batch_norm=False)
+        
+        self.out = nn.Linear(d_model, pred_len)
+
+    def forward(self, x, inst_ids):
+        inst_embed = self.embedding_layer(inst_ids)
+
         src = x[:, :, : self.gate_input_start_index]  # N, T, D
         gate_input = x[:, :, self.gate_input_start_index : self.gate_input_end_index]
         market = self.feature_gate.forward(gate_input)
@@ -252,8 +252,8 @@ class PPNet(nn.Module):
         src_season = self.season_TC(src_season)
         src_fusion = src_trend + src_season
 
-        if self.num_classes is not None:
-            outputs = [classifier(src_fusion) for classifier in self.classifiers]
-        else:
-            outputs = self.decoder(src_fusion)
+        src_features = self.temporal_attn(src_fusion)
+        gate_input = torch.cat([src_features.detach(), inst_embed], dim=-1)
+        gated_features = self.gate_layer(gate_input)
+        outputs = self.out(gated_features)
         return outputs
