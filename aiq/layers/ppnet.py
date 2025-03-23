@@ -235,9 +235,9 @@ class PPNet(nn.Module):
                                  hidden_dim=d_model,
                                  output_dim=d_model,
                                  dropout_rate=dropout,
-                                 batch_norm=False)
+                                 batch_norm=True)
         
-        self.out = nn.Linear(d_model, pred_len)
+        self.mlp = nn.Linear(d_model, pred_len)
 
     def forward(self, x, inst_ids):
         inst_embed = self.embedding_layer(inst_ids)
@@ -255,5 +255,5 @@ class PPNet(nn.Module):
         src_features = self.temporal_attn(src_fusion)
         gate_input = torch.cat([src_features.detach(), inst_embed], dim=-1)
         gated_features = self.gate_layer(gate_input)
-        outputs = self.out(gated_features)
+        outputs = self.mlp(gated_features)
         return outputs
