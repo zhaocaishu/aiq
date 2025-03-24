@@ -143,7 +143,7 @@ class GateNN(nn.Module):
 class PPNet(nn.Module):
     def __init__(
         self,
-        embedding_dim=128,
+        embedding_dim=64,
         d_feat=158,
         d_model=256,
         t_nhead=4,
@@ -170,7 +170,7 @@ class PPNet(nn.Module):
         self.feature_gate = Filter(self.d_gate_input, self.d_feat, seq_len)
 
         # instrument's embedding
-        self.embedding_layer = nn.Embedding(1024, embedding_dim)
+        self.embedding_layer = nn.Embedding(2048, embedding_dim)
 
         self.rwkv_trend = Block(
             layer_id=0,
@@ -245,8 +245,6 @@ class PPNet(nn.Module):
         )
 
     def forward(self, x, inst_ids):
-        inst_emb = self.embedding_layer(inst_ids)
-
         src = x[:, :, : self.gate_input_start_index]  # N, T, D
         gate_input = x[:, :, self.gate_input_start_index : self.gate_input_end_index]
         market = self.feature_gate.forward(gate_input)
@@ -257,7 +255,8 @@ class PPNet(nn.Module):
         src_season = self.season_TC(src_season)
         src_fusion = src_trend + src_season
         src_features = self.temporal_attn(src_fusion)
-        
+
+        inst_emb = self.embedding_layer(inst_ids)
         gate_input = torch.cat([src_features.detach(), inst_emb], dim=-1)
         gw = self.gate_layer(gate_input)
         outputs = self.mlp(src_features * gw)
