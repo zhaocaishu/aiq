@@ -29,7 +29,7 @@ def load_instrument_data(data_dir, instruments, start_time, end_time, mode):
             end_time=end_time
         )
 
-        if df is None or (is_train and df.shape[0] <= 60) or (not is_train and instrument not in instrument_name_to_idx):
+        if df is None or (not is_train and instrument not in instrument_name_to_idx):
             continue
         
         filtered_instruments[instrument] = next_id if is_train else instrument_name_to_idx[instrument]
