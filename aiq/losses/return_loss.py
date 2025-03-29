@@ -5,7 +5,7 @@ class ReturnWeightedMSELoss(torch.nn.Module):
         super().__init__()
         self.alpha = alpha
     
-    def forward(self, pred, target, returns):
-        weights = torch.abs(returns) ** self.alpha
+    def forward(self, pred, target):
+        weights = torch.abs(target) ** self.alpha
         loss = torch.mean(weights * (pred - target) ** 2)
         return loss
