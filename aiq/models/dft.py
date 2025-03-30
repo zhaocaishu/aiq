@@ -10,7 +10,7 @@ from torch.utils.data import Dataset, DataLoader
 from transformers import get_scheduler
 
 from aiq.layers import DFT
-from aiq.losses import ClassBalancedLoss, ReturnWeightedMSELoss
+from aiq.losses import ClassBalancedLoss
 from aiq.utils.data import compute_discretized_class_counts
 from aiq.utils.discretize import discretize, undiscretize
 
@@ -111,8 +111,6 @@ class DFTModel(BaseModel):
 
         if self.criterion_name == "MSE":
             self.criterion = nn.MSELoss()
-        elif self.criterion_name == "WMSE":
-            self.criterion = ReturnWeightedMSELoss(alpha=1.2)
         elif self.criterion_name == "CE":
             class_weight = (
                 torch.Tensor(self.class_weight)
