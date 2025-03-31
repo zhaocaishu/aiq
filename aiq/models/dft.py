@@ -12,7 +12,7 @@ from transformers import get_scheduler
 from aiq.layers import DFT
 from aiq.losses import ClassBalancedLoss
 from aiq.utils.data import compute_discretized_class_counts
-from aiq.utils.discretize import discretize, undiscretize
+from aiq.utils.processing import discretize, undiscretize
 
 from .base import BaseModel
 

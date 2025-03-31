@@ -9,7 +9,7 @@ from torch.utils.data import Dataset, DataLoader
 from transformers import get_scheduler
 
 from aiq.layers import MATCC
-from aiq.utils.discretize import discretize, undiscretize
+from aiq.utils.processing import discretize, undiscretize
 
 from .base import BaseModel
 
