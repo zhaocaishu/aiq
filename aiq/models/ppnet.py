@@ -34,8 +34,6 @@ class PPNetModel(BaseModel):
         lr_scheduler_type="cosine",
         learning_rate=0.01,
         criterion_name="MSE",
-        class_boundaries=None,
-        class_weight=None,
         save_dir=None,
         logger=None,
     ):
@@ -58,11 +56,6 @@ class PPNetModel(BaseModel):
         self.lr_scheduler_type = lr_scheduler_type
         self.learning_rate = learning_rate
         self.criterion_name = criterion_name
-        self.class_boundaries = class_boundaries
-        self.num_classes = (
-            len(class_boundaries) if self.class_boundaries is not None else None
-        )
-        self.class_weight = class_weight
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
         self.model = PPNet(
@@ -74,8 +67,7 @@ class PPNetModel(BaseModel):
             pred_len=self.pred_len,
             dropout=self.dropout,
             gate_input_start_index=self.gate_input_start_index,
-            gate_input_end_index=self.gate_input_end_index,
-            num_classes=self.num_classes,
+            gate_input_end_index=self.gate_input_end_index
         ).to(self.device)
         
         self.save_dir = save_dir
@@ -108,13 +100,6 @@ class PPNetModel(BaseModel):
         
         if self.criterion_name == "MSE":
             self.criterion = nn.MSELoss()
-        elif self.criterion_name == "CE":
-            class_weight = (
-                torch.Tensor(self.class_weight)
-                if self.class_weight is not None
-                else None
-            )
-            self.criterion = nn.CrossEntropyLoss(weight=class_weight)
         else:
             raise NotImplementedError
     
@@ -133,17 +118,7 @@ class PPNetModel(BaseModel):
 
                 outputs = self.model(batch_x)
 
-                if self.num_classes is not None:
-                    batch_y = discretize(
-                        batch_y,
-                        bins=self.class_boundaries,
-                    )
-                    loss = sum(
-                        self.criterion(outputs[k], batch_y[:, k])
-                        for k in range(len(outputs))
-                    )
-                else:
-                    loss = self.criterion(outputs, batch_y)
+                loss = self.criterion(outputs, batch_y)
 
                 train_loss.append(loss.item())
 
@@ -196,17 +171,7 @@ class PPNetModel(BaseModel):
 
                 outputs = self.model(batch_x)
 
-                if self.num_classes is not None:
-                    batch_y = discretize(
-                        batch_y,
-                        bins=self.class_boundaries,
-                    )
-                    loss = sum(
-                        self.criterion(outputs[k], batch_y[:, k])
-                        for k in range(len(outputs))
-                    )
-                else:
-                    loss = self.criterion(outputs, batch_y)
+                loss = self.criterion(outputs, batch_y)
 
                 total_loss.append(loss.item())
         total_loss = np.average(total_loss)
@@ -227,15 +192,7 @@ class PPNetModel(BaseModel):
             with torch.no_grad():
                 outputs = self.model(batch_x)
             
-            if self.num_classes is not None:
-                for k, output in enumerate(outputs):
-                    probs = torch.softmax(output, dim=1)
-                    cls_ids = torch.argmax(probs, dim=1)
-                    preds[index, k] = (
-                        undiscretize(cls_ids, bins=self.class_boundaries).cpu().numpy()
-                    )
-            else:
-                preds[index] = outputs.cpu().numpy()
+            preds[index] = outputs.cpu().numpy()
         
         # 统一数据插入逻辑
         label_names = test_dataset.label_names or [str(i) for i in range(self.pred_len)]

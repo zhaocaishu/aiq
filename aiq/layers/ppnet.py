@@ -143,7 +143,6 @@ class GateNN(nn.Module):
 class PPNet(nn.Module):
     def __init__(
         self,
-        embedding_dim=64,
         d_feat=158,
         d_model=256,
         t_nhead=4,
@@ -152,8 +151,7 @@ class PPNet(nn.Module):
         pred_len=1,
         dropout=0.5,
         gate_input_start_index=158,
-        gate_input_end_index=221,
-        num_classes=None,
+        gate_input_end_index=221
     ):
         super().__init__()
 
@@ -161,7 +159,6 @@ class PPNet(nn.Module):
         self.d_model = d_model
         self.n_attn = d_model
         self.n_head = t_nhead
-        self.num_classes = num_classes
 
         # market
         self.gate_input_start_index = gate_input_start_index
