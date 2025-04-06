@@ -376,10 +376,12 @@ class Alpha158(DataHandler):
             for df in dfs
         ]
 
-        feature_label_df = pd.concat(feature_label_dfs, ignore_index=True).set_index(
-            ["Date", "Instrument"]
+        feature_label_df = (
+            pd.concat(feature_label_dfs, ignore_index=True)
+            .replace([np.inf, -np.inf], np.nan)
+            .set_index(["Date", "Instrument"])
+            .sort_index()
         )
-        feature_label_df.sort_index(inplace=True)
 
         # data preprocess
         column_tuples = [
