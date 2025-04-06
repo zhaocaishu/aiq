@@ -202,10 +202,11 @@ class PPNet(nn.Module):
         )
 
         self.feat_to_model = nn.Linear(d_feat, d_model)
+        self.fusion_layer = nn.Linear(d_model + self.ind_embedding_dim, d_model)
         self.dlinear = DLinear(
             seq_len=seq_len,
             pred_len=seq_len,
-            enc_in=self.d_model + self.ind_embedding_dim,
+            enc_in=self.d_model,
             kernel_size=3,
             individual=False,
             merge_outputs=False
@@ -241,15 +242,16 @@ class PPNet(nn.Module):
         
         # 1. Categorical feature embedding
         ind_class = x[:, :, 0].long()  # Ensure index is long
-        cat_embed = self.ind_embedding(ind_class)  # Shape: (N, T, D_embed)
+        cat_feats = self.ind_embedding(ind_class)  # Shape: (N, T, D_embed)
 
         # 2. Continuous feature processing
         cont_feats = x[:, :, 1:self.gate_input_start_index]  # Shape: (N, T, D_cont)
-        cont_embed = self.feat_to_model(cont_feats)  # Shape: (N, T, D_model)
+        cont_feats = self.feat_to_model(cont_feats)  # Shape: (N, T, D_model)
 
         # 3. Combine categorical and continuous features
-        model_input = torch.cat([cat_embed, cont_embed], dim=2)  # Shape: (N, T, D_combined)
-        trend_feat, season_feat = self.dlinear(model_input)  # Decompose into trend & season
+        fused_feats = torch.cat([cat_feats, cont_feats], dim=2)  # Shape: (N, T, D_combined)
+        fused_feats = self.fusion_layer(fused_feats)
+        trend_feat, season_feat = self.dlinear(fused_feats)  # Decompose into trend & season
 
         # 4. Market-aware gating
         gate_input = x[:, :, self.gate_input_start_index:self.gate_input_end_index]
