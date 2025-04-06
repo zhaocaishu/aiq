@@ -202,7 +202,12 @@ class PPNet(nn.Module):
         )
 
         self.feat_to_model = nn.Linear(d_feat, d_model)
-        self.fusion_layer = nn.Linear(d_model + self.ind_embedding_dim, d_model)
+        self.fusion_layer = nn.Sequential(
+            nn.Linear(d_model + self.ind_embedding_dim, d_model),
+            nn.ReLU(),
+            nn.Dropout(0.5)
+        )
+
         self.dlinear = DLinear(
             seq_len=seq_len,
             pred_len=seq_len,
@@ -230,12 +235,7 @@ class PPNet(nn.Module):
 
         self.temporal_attn = TemporalAttention(d_model=d_model)
         
-        self.mlp =  nn.Sequential(
-            nn.Linear(d_model, d_model),
-            nn.BatchNorm1d(d_model),
-            nn.ReLU(),
-            nn.Linear(d_model, pred_len)
-        )
+        self.fc = nn.Linear(d_model, pred_len)
 
     def forward(self, x):
         # x shape: (N, T, D_total)
@@ -266,5 +266,5 @@ class PPNet(nn.Module):
         temporal_out = self.temporal_attn(fused_feat)
 
         # 7. Final prediction
-        output = self.mlp(temporal_out)
+        output = self.fc(temporal_out)
         return output
