@@ -49,7 +49,7 @@ class Dataset(torch.utils.data.Dataset):
             )
 
         # load instrument's data
-        instrument_dfs = load_instruments_data(data_dir, instruments, start_time, end_time, mode)
+        instrument_dfs = load_instruments_data(data_dir, instruments, start_time, end_time)
 
         # extract feature and labels
         self.df = data_handler.process(instrument_dfs, mode=mode)
@@ -112,7 +112,7 @@ class TSDataset(Dataset):
             )
 
         # load instrument's data
-        instrument_dfs = load_instruments_data(data_dir, instruments, start_time, end_time, mode)
+        instrument_dfs = load_instruments_data(data_dir, instruments, start_time, end_time)
 
         # extract feature and labels
         self.df = data_handler.process(instrument_dfs, mode=mode)
@@ -262,7 +262,7 @@ class MarketTSDataset(TSDataset):
             )
 
         # load instrument's data
-        instrument_dfs = load_instruments_data(data_dir, instruments, start_time, end_time, mode)
+        instrument_dfs = load_instruments_data(data_dir, instruments, start_time, end_time)
 
         # load market data
         market_dfs = {}
