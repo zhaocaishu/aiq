@@ -35,7 +35,7 @@ if __name__ == "__main__":
         cfg.model,
         feature_cols=train_dataset.feature_names,
         label_cols=train_dataset.label_names,
-        save_dir="./temp",
+        save_dir="./checkpoints",
         logger=logger
     )
 
