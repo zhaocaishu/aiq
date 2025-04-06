@@ -205,7 +205,7 @@ class PPNet(nn.Module):
         self.dlinear = DLinear(
             seq_len=seq_len,
             pred_len=seq_len,
-            enc_in=self.d_model + self.ind_emb_dim,
+            enc_in=self.d_model + self.ind_embedding_dim,
             kernel_size=3,
             individual=False,
             merge_outputs=False
