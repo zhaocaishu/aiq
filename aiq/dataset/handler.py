@@ -606,12 +606,13 @@ class MarketAlpha158(Alpha158):
             for df in dfs
         ]
 
-        feature_label_df = pd.concat(feature_label_dfs, ignore_index=True).set_index(
-            ["Date", "Instrument"]
+        feature_label_df = (
+            pd.concat(feature_label_dfs, ignore_index=True)
+            .replace([np.inf, -np.inf], np.nan)
+            .set_index(["Date", "Instrument"])
+            .sort_index()
         )
-        feature_label_df.sort_index(inplace=True)
-        feature_label_df.replace([np.inf, -np.inf], np.nan, inplace=True)
-
+        
         # data preprocessing
         column_tuples = [
             ("feature", feature_name) for feature_name in self._feature_names
