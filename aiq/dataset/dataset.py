@@ -196,9 +196,6 @@ class TSDataset(Dataset):
         # index
         index = np.array([slice[1] for slice in self._daily_slices[i]])
 
-        # instrument's id
-        inst_ids = np.array([slice[2] for slice in self._daily_slices[i]])
-
         # feature
         feature = np.array(
             [
