@@ -217,17 +217,26 @@ class DFT(nn.Module):
             )
 
     def forward(self, x):
-        src = x[:, :, : self.gate_input_start_index]  # N, T, D
-        gate_input = x[:, :, self.gate_input_start_index : self.gate_input_end_index]
-        market = self.feature_gate.forward(gate_input)
+        # Slice input features
+        continuous_feats = x[:, :, 1:self.gate_input_start_index]         # Continuous features (N, T, D_c)
+        gate_input_feats = x[:, :, self.gate_input_start_index:self.gate_input_end_index]  # Gate-related features
 
-        src_model = self.feat_to_model(src)
-        src_trend, src_season = self.dlinear(src_model)
-        src_trend = self.trend_TC(src_trend) + self.market_linear(market)
-        src_season = self.season_TC(src_season)
+        # Feature gating (e.g., market attention)
+        market_signal = self.feature_gate(gate_input_feats)
 
+        # Map features to model-specific space and decompose
+        encoded_feats = self.feat_to_model(continuous_feats)
+        trend_component, season_component = self.dlinear(encoded_feats)
+
+        # Apply trend/seasonal transformations
+        trend_component = self.trend_TC(trend_component) + self.market_linear(market_signal)
+        season_component = self.season_TC(season_component)
+
+        # Combine and generate output
+        fused_component = trend_component + season_component
         if self.num_classes is not None:
-            outputs = [classifier(src_trend + src_season) for classifier in self.classifiers]
+            outputs = [classifier(fused_component) for classifier in self.classifiers]
         else:
-            outputs = self.decoder(src_trend + src_season)
+            outputs = self.decoder(fused_component)
+
         return outputs

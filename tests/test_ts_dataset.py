@@ -5,7 +5,7 @@ from aiq.dataset.dataset import MarketTSDataset
 
 if __name__ == "__main__":
     # config
-    cfg.from_file("./configs/matcc_model_reg.yaml")
+    cfg.from_file("./configs/ppnet_model_reg.yaml")
 
     # data handler
     data_handler = init_instance_by_config(cfg.data_handler)
@@ -22,5 +22,5 @@ if __name__ == "__main__":
     )
 
     for i in range(len(train_dataset)):
-        index, inst_ids, feature, label = train_dataset[i]
-        print(index, inst_ids, feature.shape, label.shape)
+        index, feature, label = train_dataset[i]
+        print(index, feature.shape, label.shape)

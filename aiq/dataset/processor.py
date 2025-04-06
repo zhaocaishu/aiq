@@ -6,7 +6,7 @@ import numpy as np
 from aiq.utils.processing import robust_zscore, zscore
 
 
-def get_group_columns(df: pd.DataFrame, group: str = None):
+def get_group_columns(df: pd.DataFrame, group: str = None, exclude_discrete: bool=False):
     """
     get a group of columns from multi-index columns DataFrame
 
@@ -16,11 +16,19 @@ def get_group_columns(df: pd.DataFrame, group: str = None):
         with multi of columns.
     group : str
         the name of the feature group, i.e. the first level value of the group index.
+    exclude_discrete : bool
+        whether exclude discrete columns
     """
     if group is None:
-        return df.columns
+        cols = df.columns
     else:
-        return df.columns[df.columns.get_loc(group)]
+        cols = df.columns[df.columns.get_loc(group)]
+
+    if exclude_discrete:
+        continous_cols = cols[~cols.get_level_values(-1).str.contains('_CAT')]
+        return continous_cols
+    else:
+        return cols
 
 
 class Processor(abc.ABC):
@@ -110,7 +118,7 @@ class RobustZScoreNorm(Processor):
         self.clip_outlier = clip_outlier
 
     def fit(self, df: pd.DataFrame = None):
-        self.cols = get_group_columns(df, self.fields_group)
+        self.cols = get_group_columns(df, self.fields_group, exclude_discrete=True)
         X = df[self.cols].values
         self.mean_train = np.nanmedian(X, axis=0)
         self.std_train = np.nanmedian(np.abs(X - self.mean_train), axis=0)
@@ -140,7 +148,7 @@ class CSZScoreNorm(Processor):
             raise NotImplementedError(f"This type of input is not supported")
 
     def __call__(self, df):
-        cols = get_group_columns(df, self.fields_group)
+        cols = get_group_columns(df, self.fields_group, exclude_discrete=True)
         df[cols] = df[cols].groupby("Date", group_keys=False).apply(self.zscore_func)
         return df
 
@@ -173,7 +181,7 @@ class CSRankNorm(Processor):
 
     def __call__(self, df):
         # try not modify original dataframe
-        cols = get_group_columns(df, self.fields_group)
+        cols = get_group_columns(df, self.fields_group, exclude_discrete=True)
         t = df[cols].groupby("Date").rank(pct=True)
         t -= 0.5
         t *= 3.46  # NOTE: towards unit std
@@ -189,7 +197,7 @@ class DropExtremeLabel(Processor):
         self.percentile = percentile
 
     def forward(self, df):
-        cols = get_group_columns(df, self.fields_group)
+        cols = get_group_columns(df, self.fields_group, exclude_discrete=True)
         rank_pct = df[cols].groupby(level="Date").rank(pct=True)
         condition = (rank_pct >= (1 - self.percentile)) & (rank_pct <= self.percentile)
         trimmed_df = df[condition.all(axis=1)]
