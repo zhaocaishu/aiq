@@ -116,6 +116,9 @@ class PPNetModel(BaseModel):
                 batch_x = batch_x.squeeze(0).float().to(self.device)
                 batch_y = batch_y.squeeze(0).float()
 
+                assert not torch.isnan(batch_x).any(), "NaN at batch_x"
+                assert not torch.isnan(batch_y).any(), "NaN at batch_y"
+
                 outputs = self.model(batch_x)
 
                 loss = self.criterion(outputs, batch_y)

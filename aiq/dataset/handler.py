@@ -610,6 +610,7 @@ class MarketAlpha158(Alpha158):
             ["Date", "Instrument"]
         )
         feature_label_df.sort_index(inplace=True)
+        feature_label_df.replace([np.inf, -np.inf], np.nan, inplace=True)
 
         # data preprocessing
         column_tuples = [
@@ -658,7 +659,5 @@ class MarketAlpha158(Alpha158):
         market_feature_label_df.sort_index(inplace=True)
 
         assert feature_label_df.shape[0] == market_feature_label_df.shape[0]
-
-        market_feature_label_df.replace([np.inf, -np.inf], np.nan, inplace=True)
 
         return market_feature_label_df
