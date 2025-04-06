@@ -241,7 +241,7 @@ class PPNet(nn.Module):
         
         # 1. Categorical feature embedding
         ind_class = x[:, :, 0].long()  # Ensure index is long
-        cat_embed = self.ind_embedding[ind_class]  # Shape: (N, T, D_embed)
+        cat_embed = self.ind_embedding(ind_class)  # Shape: (N, T, D_embed)
 
         # 2. Continuous feature processing
         cont_feats = x[:, :, 1:self.gate_input_start_index]  # Shape: (N, T, D_cont)
