@@ -218,8 +218,8 @@ class DFT(nn.Module):
 
     def forward(self, x):
         # Slice input features
-        continuous_feats = x[:, :, 1:self.gate_input_start_index]         # Continuous features (N, T, D_c)
-        gate_input_feats = x[:, :, self.gate_input_start_index:self.gate_input_end_index]  # Gate-related features
+        continuous_feats = x[:, :, 1:self.gate_input_start_index] # Continuous features (N, T, D_c)
+        gate_input_feats = x[:, :, self.gate_input_start_index:self.gate_input_end_index] # Gate-related features
 
         # Feature gating (e.g., market attention)
         market_signal = self.feature_gate(gate_input_feats)

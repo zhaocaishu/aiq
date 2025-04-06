@@ -202,12 +202,6 @@ class PPNet(nn.Module):
         )
 
         self.feat_to_model = nn.Linear(d_feat, d_model)
-        self.fusion_layer = nn.Sequential(
-            nn.Linear(d_model + self.ind_embedding_dim, d_model),
-            nn.ReLU(),
-            nn.Linear(d_model, d_model),
-            nn.Dropout(0.5)
-        )
 
         self.dlinear = DLinear(
             seq_len=seq_len,
@@ -235,38 +229,37 @@ class PPNet(nn.Module):
         self.market_linear = nn.Linear(d_feat, d_model)
 
         self.temporal_attn = TemporalAttention(d_model=d_model)
+
+        self.fusion_layer = nn.Sequential(
+            nn.Linear(d_model + self.ind_embedding_dim, d_model),
+            nn.ReLU(),
+            nn.Linear(d_model, d_model),
+            nn.Dropout(0.5)
+        )
         
         self.fc = nn.Linear(d_model, pred_len)
 
     def forward(self, x):
-        # x shape: (N, T, D_total)
-        
-        # 1. Categorical feature embedding
-        ind_class = x[:, :, 0].long()  # Ensure index is long
+        # x: [N, T, D]
+        ind_class = x[:, -1, 0].long()
         assert ind_class.max() < self.ind_embedding.num_embeddings, "Index out of embedding range"
-        cat_feats = self.ind_embedding(ind_class)  # Shape: (N, T, D_embed)
+        cat_feats = self.ind_embedding(ind_class)
 
-        # 2. Continuous feature processing
-        cont_feats = x[:, :, 1:self.gate_input_start_index]  # Shape: (N, T, D_cont)
-        cont_feats = self.feat_to_model(cont_feats)  # Shape: (N, T, D_model)
+        cont_feats = x[:, :, 1:self.gate_input_start_index]
+        cont_feats = self.feat_to_model(cont_feats)
+        trend_feat, season_feat = self.dlinear(cont_feats)
 
-        # 3. Combine categorical and continuous features
-        fused_feats = torch.cat([cat_feats, cont_feats], dim=2)  # Shape: (N, T, D_combined)
-        fused_feats = self.fusion_layer(fused_feats)
-        trend_feat, season_feat = self.dlinear(fused_feats)  # Decompose into trend & season
-
-        # 4. Market-aware gating
         gate_input = x[:, :, self.gate_input_start_index:self.gate_input_end_index]
-        market_feat = self.feature_gate(gate_input)  # Shape: (N, T, D_market)
+        market_feat = self.feature_gate(gate_input)
 
-        # 5. Trend and season transformation with market information
         trend_out = self.trend_TC(trend_feat) + self.market_linear(market_feat)
         season_out = self.season_TC(season_feat)
 
-        # 6. Fusion and temporal attention
         fused_out = trend_out + season_out
         temporal_out = self.temporal_attn(fused_out)
 
-        # 7. Final prediction
-        output = self.fc(temporal_out)
+        fused_feats = torch.cat([cat_feats, temporal_out], dim=1)
+        fused_feats = self.fusion_layer(fused_feats)
+
+        output = self.fc(fused_feats)
         return output
