@@ -11,8 +11,7 @@ from transformers import get_scheduler
 
 from aiq.layers import DFT
 from aiq.losses import ClassBalancedLoss
-from aiq.utils.data import count_samples_per_bin
-from aiq.utils.processing import discretize, undiscretize
+from aiq.utils.processing import discretize, undiscretize, count_samples_per_bin
 
 from .base import BaseModel
 
