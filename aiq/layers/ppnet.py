@@ -169,9 +169,6 @@ class PPNet(nn.Module):
         self.d_gate_input = gate_input_end_index - gate_input_start_index  # F'
         self.feature_gate = Filter(self.d_gate_input, self.d_feat, seq_len)
 
-        # instrument's embedding
-        self.embedding_layer = nn.Embedding(2048, embedding_dim)
-
         self.rwkv_trend = Block(
             layer_id=0,
             n_embd=self.d_model,
@@ -230,12 +227,6 @@ class PPNet(nn.Module):
         self.market_linear = nn.Linear(d_feat, d_model)
 
         self.temporal_attn = TemporalAttention(d_model=d_model)
-
-        self.gate_layer = GateNN(input_dim=d_model + embedding_dim,
-                                 hidden_dim=d_model,
-                                 output_dim=d_model,
-                                 dropout_rate=dropout,
-                                 batch_norm=True)
         
         self.mlp =  nn.Sequential(
             nn.Linear(d_model, d_model),
@@ -244,7 +235,7 @@ class PPNet(nn.Module):
             nn.Linear(d_model, pred_len)
         )
 
-    def forward(self, x, inst_ids):
+    def forward(self, x):
         src = x[:, :, : self.gate_input_start_index]  # N, T, D
         gate_input = x[:, :, self.gate_input_start_index : self.gate_input_end_index]
         market = self.feature_gate.forward(gate_input)
@@ -256,8 +247,5 @@ class PPNet(nn.Module):
         src_fusion = src_trend + src_season
         src_features = self.temporal_attn(src_fusion)
 
-        inst_emb = self.embedding_layer(inst_ids)
-        gate_input = torch.cat([src_features.detach(), inst_emb], dim=-1)
-        gw = self.gate_layer(gate_input)
-        outputs = self.mlp(src_features * gw)
+        outputs = self.mlp(src_features)
         return outputs

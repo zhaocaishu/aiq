@@ -9,18 +9,8 @@ import torch
 from .loader import DataLoader
 
 
-def load_instrument_data(data_dir, instruments, start_time, end_time, mode):
-    is_train = mode == "train"
-    instrument_name_to_idx = {}
-    
-    if not is_train:
-        with open(os.path.join(data_dir, "instruments.pkl"), "rb") as f:
-            instrument_name_to_idx = pickle.load(f)
-    
-    filtered_instruments = {}
-    filtered_dfs = []
-    next_id = 0
-    
+def load_instruments_data(data_dir, instruments, start_time, end_time):
+    dfs = []
     for instrument in instruments:
         df = DataLoader.load_features(
             data_dir,
@@ -29,18 +19,11 @@ def load_instrument_data(data_dir, instruments, start_time, end_time, mode):
             end_time=end_time
         )
 
-        if df is None or (not is_train and instrument not in instrument_name_to_idx):
+        if df is None:
             continue
         
-        filtered_instruments[instrument] = next_id if is_train else instrument_name_to_idx[instrument]
-        next_id += is_train  # 仅在训练模式下递增 ID
-        filtered_dfs.append(df)
-    
-    if is_train:
-        with open(os.path.join(data_dir, "instruments.pkl"), "wb") as f:
-            pickle.dump(filtered_instruments, f)
-    
-    return filtered_instruments, filtered_dfs
+        dfs.append(df)
+    return dfs
 
 
 class Dataset(torch.utils.data.Dataset):
@@ -66,7 +49,7 @@ class Dataset(torch.utils.data.Dataset):
             )
 
         # load instrument's data
-        instrument_ids, instrument_dfs = load_instrument_data(data_dir, instruments, start_time, end_time, mode)
+        instrument_dfs = load_instruments_data(data_dir, instruments, start_time, end_time, mode)
 
         # extract feature and labels
         self.df = data_handler.process(instrument_dfs, mode=mode)
@@ -129,7 +112,7 @@ class TSDataset(Dataset):
             )
 
         # load instrument's data
-        instrument_ids, instrument_dfs = load_instrument_data(data_dir, instruments, start_time, end_time, mode)
+        instrument_dfs = load_instruments_data(data_dir, instruments, start_time, end_time, mode)
 
         # extract feature and labels
         self.df = data_handler.process(instrument_dfs, mode=mode)
@@ -156,7 +139,7 @@ class TSDataset(Dataset):
         }  # sorted by date
         self._batch_slices = self._create_ts_slices(self._index, self.seq_len)
         for i, (code, date) in enumerate(self._index):
-            daily_slices[date].append((self._batch_slices[i], i, instrument_ids[code]))
+            daily_slices[date].append((self._batch_slices[i], i))
         self._daily_slices = list(daily_slices.values())
         self._daily_index = list(
             daily_slices.keys()
@@ -230,9 +213,9 @@ class TSDataset(Dataset):
             label = np.array(
                 [self._label[slice[0].stop - 1] for slice in self._daily_slices[i]]
             )
-            return index, inst_ids, feature, label
+            return index, feature, label
         else:
-            return index, inst_ids, feature
+            return index, feature
 
     def __len__(self):
         return len(self._daily_index)
@@ -279,7 +262,7 @@ class MarketTSDataset(TSDataset):
             )
 
         # load instrument's data
-        instrument_ids, instrument_dfs = load_instrument_data(data_dir, instruments, start_time, end_time, mode)
+        instrument_dfs = load_instruments_data(data_dir, instruments, start_time, end_time, mode)
 
         # load market data
         market_dfs = {}
@@ -319,7 +302,7 @@ class MarketTSDataset(TSDataset):
         }  # sorted by date
         self._batch_slices = self._create_ts_slices(self._index, self.seq_len)
         for i, (code, date) in enumerate(self._index):
-            daily_slices[date].append((self._batch_slices[i], i, instrument_ids[code]))
+            daily_slices[date].append((self._batch_slices[i], i))
         self._daily_slices = list(daily_slices.values())
         self._daily_index = list(
             daily_slices.keys()

@@ -53,15 +53,15 @@ def undiscretize(ids: torch.Tensor, bins: List[float]) -> torch.Tensor:
     return data
 
 
-def compute_discretized_class_counts(data_loader, class_boundaries):
+def count_samples_per_bin(data_loader, class_boundaries):
     num_classes = len(class_boundaries)  # 确定类别总数
     counts = torch.zeros(num_classes, dtype=torch.int64)  # 初始化统计张量
 
     for i, (_, batch_x, batch_y) in enumerate(data_loader):
         batch_y = batch_y.flatten().float()
-        batch_y_discrete = discretize(batch_y, bins=class_boundaries).long()
+        batch_discrete_y = discretize(batch_y, bins=class_boundaries).long()
 
-        current_counts = torch.bincount(batch_y_discrete, minlength=num_classes)
+        current_counts = torch.bincount(batch_discrete_y, minlength=num_classes)
         # 累计全局统计结果
         counts += current_counts.cpu()  # 确保在CPU上累加避免GPU内存问题
 

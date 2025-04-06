@@ -11,7 +11,7 @@ from transformers import get_scheduler
 
 from aiq.layers import DFT
 from aiq.losses import ClassBalancedLoss
-from aiq.utils.data import compute_discretized_class_counts
+from aiq.utils.data import count_samples_per_bin
 from aiq.utils.processing import discretize, undiscretize
 
 from .base import BaseModel
@@ -119,10 +119,10 @@ class DFTModel(BaseModel):
             )
             self.criterion = nn.CrossEntropyLoss(weight=class_weight)
         elif self.criterion_name == "CB":
-            samples_per_class = compute_discretized_class_counts(
+            count_per_class = count_samples_per_bin(
                 train_loader, self.class_boundaries
             )
-            self.criterion = ClassBalancedLoss(samples_per_class=samples_per_class)
+            self.criterion = ClassBalancedLoss(count_per_class=count_per_class)
         else:
             raise NotImplementedError
 
@@ -134,7 +134,7 @@ class DFTModel(BaseModel):
 
             self.model.train()
             epoch_time = time.time()
-            for i, (_, _, batch_x, batch_y) in enumerate(train_loader):
+            for i, (_, batch_x, batch_y) in enumerate(train_loader):
                 iter_count += 1
                 batch_x = batch_x.squeeze(0).float().to(self.device)
                 batch_y = batch_y.squeeze(0).float()
@@ -199,7 +199,7 @@ class DFTModel(BaseModel):
 
         total_loss = []
         with torch.no_grad():
-            for i, (_, _, batch_x, batch_y) in enumerate(val_loader):
+            for i, (_, batch_x, batch_y) in enumerate(val_loader):
                 batch_x = batch_x.squeeze(0).float().to(self.device)
                 batch_y = batch_y.squeeze(0).float()
 

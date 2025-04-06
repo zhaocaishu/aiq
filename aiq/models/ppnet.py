@@ -126,13 +126,12 @@ class PPNetModel(BaseModel):
 
             self.model.train()
             epoch_time = time.time()
-            for i, (_, inst_ids, batch_x, batch_y) in enumerate(train_loader):
+            for i, (_, batch_x, batch_y) in enumerate(train_loader):
                 iter_count += 1
-                inst_ids = inst_ids.squeeze(0)
                 batch_x = batch_x.squeeze(0).float().to(self.device)
                 batch_y = batch_y.squeeze(0).float()
 
-                outputs = self.model(batch_x, inst_ids)
+                outputs = self.model(batch_x)
 
                 if self.num_classes is not None:
                     batch_y = discretize(
@@ -191,12 +190,11 @@ class PPNetModel(BaseModel):
 
         total_loss = []
         with torch.no_grad():
-            for i, (_, inst_ids, batch_x, batch_y) in enumerate(val_loader):
-                inst_ids = inst_ids.squeeze(0)
+            for i, (_, batch_x, batch_y) in enumerate(val_loader):
                 batch_x = batch_x.squeeze(0).float().to(self.device)
                 batch_y = batch_y.squeeze(0).float()
 
-                outputs = self.model(batch_x, inst_ids)
+                outputs = self.model(batch_x)
 
                 if self.num_classes is not None:
                     batch_y = discretize(
@@ -222,13 +220,12 @@ class PPNetModel(BaseModel):
         num_samples = test_dataset.data.shape[0]
 
         preds = np.zeros((num_samples, self.pred_len))
-        for index, inst_ids, batch_x, *batch_y in test_loader:
+        for index, batch_x, *batch_y in test_loader:
             index = index.cpu().numpy()  # 确保索引为 numpy 数组
-            inst_ids = inst_ids.squeeze(0)
             batch_x = batch_x.squeeze(0).float().to(self.device)
             
             with torch.no_grad():
-                outputs = self.model(batch_x, inst_ids)
+                outputs = self.model(batch_x)
             
             if self.num_classes is not None:
                 for k, output in enumerate(outputs):
