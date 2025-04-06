@@ -161,7 +161,7 @@ class PPNet(nn.Module):
         self.n_head = t_nhead
 
         # industry embeddings
-        self.ind_embedding_dim = 32
+        self.ind_embedding_dim = 16
         self.ind_embedding = nn.Embedding(192, self.ind_embedding_dim)
 
         # market
@@ -205,6 +205,7 @@ class PPNet(nn.Module):
         self.fusion_layer = nn.Sequential(
             nn.Linear(d_model + self.ind_embedding_dim, d_model),
             nn.ReLU(),
+            nn.Linear(d_model, d_model),
             nn.Dropout(0.5)
         )
 
@@ -242,6 +243,7 @@ class PPNet(nn.Module):
         
         # 1. Categorical feature embedding
         ind_class = x[:, :, 0].long()  # Ensure index is long
+        assert ind_class.max() < self.ind_embedding.num_embeddings, "Index out of embedding range"
         cat_feats = self.ind_embedding(ind_class)  # Shape: (N, T, D_embed)
 
         # 2. Continuous feature processing
@@ -262,8 +264,8 @@ class PPNet(nn.Module):
         season_out = self.season_TC(season_feat)
 
         # 6. Fusion and temporal attention
-        fused_feat = trend_out + season_out
-        temporal_out = self.temporal_attn(fused_feat)
+        fused_out = trend_out + season_out
+        temporal_out = self.temporal_attn(fused_out)
 
         # 7. Final prediction
         output = self.fc(temporal_out)
