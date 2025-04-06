@@ -234,7 +234,7 @@ class PPNet(nn.Module):
             nn.Linear(d_model + self.ind_embedding_dim, d_model),
             nn.ReLU(),
             nn.Linear(d_model, d_model),
-            nn.Dropout(0.5)
+            nn.Dropout(dropout)
         )
         
         self.fc = nn.Linear(d_model, pred_len)

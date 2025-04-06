@@ -1,6 +1,7 @@
 from typing import List, Dict
 
 import pandas as pd
+import numpy as np
 
 from aiq.ops import (
     Greater,
@@ -657,5 +658,7 @@ class MarketAlpha158(Alpha158):
         market_feature_label_df.sort_index(inplace=True)
 
         assert feature_label_df.shape[0] == market_feature_label_df.shape[0]
+
+        market_feature_label_df.replace([np.inf, -np.inf], np.nan, inplace=True)
 
         return market_feature_label_df

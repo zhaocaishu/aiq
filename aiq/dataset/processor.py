@@ -25,10 +25,11 @@ def get_group_columns(df: pd.DataFrame, group: str = None, exclude_discrete: boo
         cols = df.columns[df.columns.get_loc(group)]
 
     if exclude_discrete:
-        continous_cols = cols[~cols.get_level_values(-1).str.contains('_CAT')]
-        return continous_cols
+        filtered_cols = cols[~cols.get_level_values(-1).str.endswith('_CAT')]
     else:
-        return cols
+        filtered_cols = cols
+
+    return filtered_cols
 
 
 class Processor(abc.ABC):
@@ -181,7 +182,7 @@ class CSRankNorm(Processor):
 
     def __call__(self, df):
         # try not modify original dataframe
-        cols = get_group_columns(df, self.fields_group, exclude_discrete=True)
+        cols = get_group_columns(df, self.fields_group)
         t = df[cols].groupby("Date").rank(pct=True)
         t -= 0.5
         t *= 3.46  # NOTE: towards unit std
@@ -197,7 +198,7 @@ class DropExtremeLabel(Processor):
         self.percentile = percentile
 
     def forward(self, df):
-        cols = get_group_columns(df, self.fields_group, exclude_discrete=True)
+        cols = get_group_columns(df, self.fields_group)
         rank_pct = df[cols].groupby(level="Date").rank(pct=True)
         condition = (rank_pct >= (1 - self.percentile)) & (rank_pct <= self.percentile)
         trimmed_df = df[condition.all(axis=1)]
