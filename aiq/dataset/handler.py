@@ -42,8 +42,8 @@ class Alpha158(DataHandler):
 
     def extract_features(self, df: pd.DataFrame = None):
         # fundamental data
-        mkt_class = df["Mkt_class"]
         ind_class = df["Ind_class"]
+        mkt_class = df["Mkt_class"]
         
         # adjusted prices
         adjusted_factor = df["Adj_factor"]
@@ -55,8 +55,8 @@ class Alpha158(DataHandler):
 
         # kbar
         features = [
-            mkt_class,
             ind_class,
+            mkt_class,
             (close - open) / open,
             (high - low) / open,
             (close - open) / (high - low + 1e-12),
@@ -68,8 +68,8 @@ class Alpha158(DataHandler):
             (2 * close - high - low) / (high - low + 1e-12),
         ]
         feature_names = [
-            "MKT_CLS_CAT",
             "IND_CLS_CAT",
+            "MKT_CLS_CAT",
             "KMID",
             "KLEN",
             "KMID2",
