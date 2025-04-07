@@ -46,7 +46,7 @@ model:
   class: DFTModel
   module_path: aiq.models.dft
   kwargs:
-    d_feat: 179
+    d_feat: 180
     d_model: 256
     t_nhead: 4
     s_nhead: 2
