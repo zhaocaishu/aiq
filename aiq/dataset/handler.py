@@ -51,7 +51,9 @@ class Alpha158(DataHandler):
         close = df["Close"] * adjusted_factor
         high = df["High"] * adjusted_factor
         low = df["Low"] * adjusted_factor
+        
         volume = df["Volume"]
+        turn = df["Turnover_rate_f"]
 
         # kbar
         features = [
@@ -103,7 +105,7 @@ class Alpha158(DataHandler):
         # rolling
         windows = [5, 10, 20, 30, 60]
         include = None
-        exclude = ["VALUE", "ILLIQ", "TURN"]
+        exclude = []
 
         def use(x):
             return x not in exclude and (include is None or x in include)
@@ -331,6 +333,16 @@ class Alpha158(DataHandler):
                     / (Sum(Abs(volume - Ref(volume, 1)), d) + 1e-12)
                 )
                 feature_names.append("VSUMD%d" % d)
+
+        if use("MTURN"):
+            for d in windows:
+                features.append(Mean(turn, d))
+                feature_names.append("MTURN%d" % d)
+
+        if use("STURN"):
+            for d in windows:
+                features.append(Std(turn, d))
+                feature_names.append("STURN%d" % d)
 
         # concat features
         self._feature_names = feature_names.copy()
