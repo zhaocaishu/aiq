@@ -44,6 +44,9 @@ class Alpha158(DataHandler):
         # fundamental data
         ind_class = df["Ind_class"]
         mkt_class = df["Mkt_class"]
+        pe = df["Pe_ttm"]
+        pb = df["Pb"]
+        mkt_cap = np.log(df["Total_mv"])
         
         # adjusted prices
         adjusted_factor = df["Adj_factor"]
@@ -59,6 +62,9 @@ class Alpha158(DataHandler):
         features = [
             ind_class,
             mkt_class,
+            pe,
+            pb,
+            mkt_cap,
             (close - open) / open,
             (high - low) / open,
             (close - open) / (high - low + 1e-12),
@@ -72,6 +78,9 @@ class Alpha158(DataHandler):
         feature_names = [
             "IND_CLS_CAT",
             "MKT_CLS_CAT",
+            "PE",
+            "PB",
+            "MKT_CAP",
             "KMID",
             "KLEN",
             "KMID2",
