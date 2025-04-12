@@ -9,7 +9,6 @@ from torch.utils.data import Dataset, DataLoader
 from transformers import get_scheduler
 
 from aiq.layers import PPNet
-from aiq.utils.processing import discretize, undiscretize
 
 from .base import BaseModel
 
