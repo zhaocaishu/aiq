@@ -98,7 +98,8 @@ class PPNetModel(BaseModel):
         )
         
         if self.criterion_name == "MSE":
-            self.criterion = nn.MSELoss()
+            # self.criterion = nn.MSELoss()
+            self.criterion = nn.SmoothL1Loss()
         else:
             raise NotImplementedError
     
