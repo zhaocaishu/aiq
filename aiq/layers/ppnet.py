@@ -8,6 +8,7 @@ from torch.nn.modules.normalization import LayerNorm
 
 from aiq.layers.dlinear import DLinear, DLinear_Init
 from aiq.layers.rwkv import Block, RWKV_Init
+from aiq.layers.gate import GatedFusion
 
 
 class SAttention(nn.Module):
@@ -144,15 +145,15 @@ class PPNet(nn.Module):
         self.market_linear = nn.Linear(d_feat, d_model)
 
         # instrument fundamental modules
+        self.num_industries = 192
         self.ind_embedding_dim = 16
-        self.ind_embedding = nn.Embedding(192, self.ind_embedding_dim)
+        self.ind_embedding = nn.Embedding(self.num_industries, self.ind_embedding_dim)
 
-        self.fund_in_dim = 4
-        self.fund_out_dim = 16
-        self.fund_linear = nn.Sequential(
-            nn.Linear(self.fund_in_dim, 64),
+        self.num_fund_features = 4
+        self.fund_encoder = nn.Sequential(
+            nn.Linear(self.num_fund_features + self.ind_embedding_dim, d_model),
             nn.ReLU(),
-            nn.Linear(64, self.fund_out_dim),
+            nn.Linear(d_model, d_model),
             nn.Dropout(dropout)
         )
 
@@ -215,12 +216,13 @@ class PPNet(nn.Module):
 
         self.temporal_attn = TemporalAttention(d_model=d_model)
 
-        self.fusion_layer = nn.Sequential(
-            nn.Linear(d_model + self.ind_embedding_dim + self.fund_out_dim, d_model),
-            nn.ReLU(),
-            nn.Linear(d_model, d_model),
-            nn.Dropout(dropout)
-        )
+        # self.fusion_layer = nn.Sequential(
+        #     nn.Linear(d_model, d_model),
+        #     nn.ReLU(),
+        #     nn.Linear(d_model, d_model),
+        #     nn.Dropout(dropout)
+        # )
+        self.fusion_layer = GatedFusion(d_model)
         
         self.out = nn.Linear(d_model, pred_len)
 
@@ -230,8 +232,8 @@ class PPNet(nn.Module):
         cat_feats = self.ind_embedding(ind_class)
 
         fund_feats = x[:, :, 1:5].mean(dim=1)
-        fund_feats = self.fund_linear(fund_feats)
         fund_feats = torch.cat([cat_feats, fund_feats], dim=1)
+        fund_feats = self.fund_encoder(fund_feats)
 
         cont_feats = x[:, :, 5:self.gate_input_start_index]
         cont_feats = self.feat_to_model(cont_feats)
@@ -246,8 +248,9 @@ class PPNet(nn.Module):
         fused_out = trend_out + season_out
         temporal_out = self.temporal_attn(fused_out)
 
-        fused_feats = torch.cat([fund_feats, temporal_out], dim=1)
-        fused_feats = self.fusion_layer(fused_feats)
+        # fused_feats = torch.cat([fund_feats, temporal_out], dim=1)
+        # fused_feats = self.fusion_layer(fused_feats)
+        fused_feats = self.fusion_layer(fund_feats, temporal_out)
 
         output = self.out(fused_feats)
         return output
