@@ -160,15 +160,29 @@ class PPNet(nn.Module):
         self.n_attn = d_model
         self.n_head = t_nhead
 
-        # industry embeddings
-        self.ind_embedding_dim = 16
-        self.ind_embedding = nn.Embedding(192, self.ind_embedding_dim)
-
         # market
         self.gate_input_start_index = gate_input_start_index
         self.gate_input_end_index = gate_input_end_index
         self.d_gate_input = gate_input_end_index - gate_input_start_index  # F'
         self.feature_gate = Filter(self.d_gate_input, self.d_feat, seq_len)
+
+        self.market_linear = nn.Linear(d_feat, d_model)
+
+        # instrument fundamental modules
+        self.ind_embedding_dim = 16
+        self.ind_embedding = nn.Embedding(192, self.ind_embedding_dim)
+
+        self.fund_in_dim = 4
+        self.fund_out_dim = 16
+        self.fund_linear = nn.Sequential(
+            nn.Linear(self.fund_in_dim, 64),
+            nn.ReLU(),
+            nn.Linear(64, self.fund_out_dim),
+            nn.Dropout(dropout)
+        )
+
+        # instrument price and volume modules
+        self.feat_to_model = nn.Linear(d_feat, d_model)
 
         self.rwkv_trend = Block(
             layer_id=0,
@@ -201,8 +215,6 @@ class PPNet(nn.Module):
             rwkv_emb_scale=1.0,
         )
 
-        self.feat_to_model = nn.Linear(d_feat, d_model)
-
         self.dlinear = DLinear(
             seq_len=seq_len,
             pred_len=seq_len,
@@ -226,23 +238,25 @@ class PPNet(nn.Module):
             ),  # Stock correlation
         )
 
-        self.market_linear = nn.Linear(d_feat, d_model)
-
         self.temporal_attn = TemporalAttention(d_model=d_model)
 
         self.fusion_layer = nn.Sequential(
-            nn.Linear(d_model + self.ind_embedding_dim, d_model),
+            nn.Linear(d_model + self.ind_embedding_dim + self.fund_out_dim, d_model),
             nn.ReLU(),
             nn.Linear(d_model, d_model),
             nn.Dropout(dropout)
         )
         
-        self.fc = nn.Linear(d_model, pred_len)
+        self.out = nn.Linear(d_model, pred_len)
 
     def forward(self, x):
         # x: [N, T, D]
         ind_class = x[:, -1, 0].long()
         cat_feats = self.ind_embedding(ind_class)
+
+        fund_feats = x[:, :, 1:5].mean(dim=1)
+        fund_feats = self.fund_linear(fund_feats)
+        fund_feats = torch.cat([cat_feats, fund_feats], dim=1)
 
         cont_feats = x[:, :, 1:self.gate_input_start_index]
         cont_feats = self.feat_to_model(cont_feats)
@@ -257,8 +271,8 @@ class PPNet(nn.Module):
         fused_out = trend_out + season_out
         temporal_out = self.temporal_attn(fused_out)
 
-        fused_feats = torch.cat([cat_feats, temporal_out], dim=1)
+        fused_feats = torch.cat([fund_feats, temporal_out], dim=1)
         fused_feats = self.fusion_layer(fused_feats)
 
-        output = self.fc(fused_feats)
+        output = self.out(fused_feats)
         return output
