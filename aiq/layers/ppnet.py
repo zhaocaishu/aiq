@@ -242,7 +242,6 @@ class PPNet(nn.Module):
     def forward(self, x):
         # x: [N, T, D]
         ind_class = x[:, -1, 0].long()
-        assert ind_class.max() < self.ind_embedding.num_embeddings, "Index out of embedding range"
         cat_feats = self.ind_embedding(ind_class)
 
         cont_feats = x[:, :, 1:self.gate_input_start_index]
