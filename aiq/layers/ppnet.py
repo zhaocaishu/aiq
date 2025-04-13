@@ -233,7 +233,7 @@ class PPNet(nn.Module):
         fund_feats = self.fund_linear(fund_feats)
         fund_feats = torch.cat([cat_feats, fund_feats], dim=1)
 
-        cont_feats = x[:, :, 1:self.gate_input_start_index]
+        cont_feats = x[:, :, 5:self.gate_input_start_index]
         cont_feats = self.feat_to_model(cont_feats)
         trend_feat, season_feat = self.dlinear(cont_feats)
 
