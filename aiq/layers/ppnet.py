@@ -113,31 +113,6 @@ class TemporalAttention(nn.Module):
         # [N, 1, T], [N, T, D] --> [N, 1, D]
         output = torch.matmul(lam, z).squeeze(1)
         return output
-    
-class GateNN(nn.Module):
-    def __init__(
-        self, 
-        input_dim,
-        hidden_dim=None,
-        output_dim=None,
-        dropout_rate=0.0,
-        batch_norm=False
-    ):
-        super(GateNN, self).__init__()
-        if hidden_dim is None:
-            hidden_dim = output_dim
-        gate_layers = [nn.Linear(input_dim, hidden_dim)]
-        if batch_norm:
-            gate_layers.append(nn.BatchNorm1d(hidden_dim))
-        gate_layers.append(nn.ReLU())
-        if dropout_rate > 0:
-            gate_layers.append(nn.Dropout(dropout_rate))
-        gate_layers.append(nn.Linear(hidden_dim, output_dim))
-        gate_layers.append(nn.Sigmoid())
-        self.gate = nn.Sequential(*gate_layers)
-
-    def forward(self, inputs):
-        return self.gate(inputs) * 2
 
 
 class PPNet(nn.Module):
