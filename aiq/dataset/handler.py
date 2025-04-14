@@ -44,8 +44,8 @@ class Alpha158(DataHandler):
         # fundamental data
         ind_class = df["Ind_class"]
         mkt_class = df["Mkt_class"]
-        pe = df["Pe_ttm"]
-        pb = df["Pb"]
+        pe = 1. / df["Pe_ttm"]
+        pb = 1. / df["Pb"]
         mkt_cap = np.log(df["Total_mv"])
         
         # adjusted prices

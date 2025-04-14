@@ -8,7 +8,6 @@ from torch.nn.modules.normalization import LayerNorm
 
 from aiq.layers.dlinear import DLinear, DLinear_Init
 from aiq.layers.rwkv import Block, RWKV_Init
-from aiq.layers.gate import GatedFusion
 
 
 class SAttention(nn.Module):
@@ -127,7 +126,7 @@ class PPNet(nn.Module):
         pred_len=1,
         dropout=0.5,
         gate_input_start_index=158,
-        gate_input_end_index=221
+        gate_input_end_index=221,
     ):
         super().__init__()
 
@@ -146,15 +145,16 @@ class PPNet(nn.Module):
 
         # instrument fundamental modules
         self.num_industries = 192
-        self.ind_embedding_dim = 16
+        self.ind_embedding_dim = 8
         self.ind_embedding = nn.Embedding(self.num_industries, self.ind_embedding_dim)
 
-        self.num_fund_features = 4
+        self.num_fund_features = 12
         self.fund_encoder = nn.Sequential(
-            nn.Linear(self.num_fund_features + self.ind_embedding_dim, d_model),
+            nn.Linear(self.num_fund_features, 4 * self.num_fund_features),
             nn.ReLU(),
-            nn.Linear(d_model, d_model),
-            nn.Dropout(dropout)
+            nn.Dropout(dropout),
+            nn.Linear(4 * self.num_fund_features, self.num_fund_features),
+            nn.Dropout(dropout),
         )
 
         # instrument price and volume modules
@@ -197,7 +197,7 @@ class PPNet(nn.Module):
             enc_in=self.d_model,
             kernel_size=3,
             individual=False,
-            merge_outputs=False
+            merge_outputs=False,
         )
         DLinear_Init(self.dlinear, min_val=-5e-2, max_val=8e-2)
 
@@ -216,15 +216,19 @@ class PPNet(nn.Module):
 
         self.temporal_attn = TemporalAttention(d_model=d_model)
 
-        # self.fusion_layer = nn.Sequential(
-        #     nn.Linear(d_model, d_model),
-        #     nn.ReLU(),
-        #     nn.Linear(d_model, d_model),
-        #     nn.Dropout(dropout)
-        # )
-        self.fusion_layer = GatedFusion(d_model)
-        
-        self.out = nn.Linear(d_model, pred_len)
+        self.fusion_layer = nn.Sequential(
+            nn.Linear(
+                d_model + self.num_fund_features, 4 * (d_model + self.num_fund_features)
+            ),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(
+                4 * (d_model + self.num_fund_features), d_model + self.num_fund_features
+            ),
+            nn.Dropout(dropout),
+        )
+
+        self.out = nn.Linear(d_model + self.num_fund_features, pred_len)
 
     def forward(self, x):
         # x: [N, T, D]
@@ -235,11 +239,11 @@ class PPNet(nn.Module):
         fund_feats = torch.cat([cat_feats, fund_feats], dim=1)
         fund_feats = self.fund_encoder(fund_feats)
 
-        cont_feats = x[:, :, 5:self.gate_input_start_index]
+        cont_feats = x[:, :, 5 : self.gate_input_start_index]
         cont_feats = self.feat_to_model(cont_feats)
         trend_feat, season_feat = self.dlinear(cont_feats)
 
-        gate_input = x[:, :, self.gate_input_start_index:self.gate_input_end_index]
+        gate_input = x[:, :, self.gate_input_start_index : self.gate_input_end_index]
         market_feat = self.feature_gate(gate_input)
 
         trend_out = self.trend_TC(trend_feat) + self.market_linear(market_feat)
@@ -248,9 +252,8 @@ class PPNet(nn.Module):
         fused_out = trend_out + season_out
         temporal_out = self.temporal_attn(fused_out)
 
-        # fused_feats = torch.cat([fund_feats, temporal_out], dim=1)
-        # fused_feats = self.fusion_layer(fused_feats)
-        fused_feats = self.fusion_layer(fund_feats, temporal_out)
+        fused_feats = torch.cat([fund_feats, temporal_out], dim=1)
+        fused_feats = self.fusion_layer(fused_feats)
 
         output = self.out(fused_feats)
         return output
