@@ -180,7 +180,7 @@ class DFTModel(BaseModel):
             train_loss = np.average(train_loss)
             val_loss = self.eval(val_dataset)
             self.logger.info(
-                "Epoch: {0}, cost time: {1:.4f}s, train loss: {2:.7f}, val loss: {3:.7f}".format(
+                "Epoch: {0}, cost time: {1:.4f}s, train loss: {2:.8f}, val loss: {3:.8f}".format(
                     epoch + 1, time.time() - epoch_time, train_loss, val_loss
                 )
             )
