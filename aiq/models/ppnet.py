@@ -33,6 +33,7 @@ class PPNetModel(BaseModel):
         lr_scheduler_type="cosine",
         learning_rate=0.01,
         criterion_name="MSE",
+        pretrained=None,
         save_dir=None,
         logger=None,
     ):
@@ -66,9 +67,18 @@ class PPNetModel(BaseModel):
             pred_len=self.pred_len,
             dropout=self.dropout,
             gate_input_start_index=self.gate_input_start_index,
-            gate_input_end_index=self.gate_input_end_index
-        ).to(self.device)
-        
+            gate_input_end_index=self.gate_input_end_index,
+        )
+
+        if pretrained is not None:
+            try:
+                state_dict = torch.load(pretrained)
+                self.model.load_state_dict(state_dict)
+            except Exception as e:
+                print(f"Error loading pretrained weights from {pretrained}: {e}")
+
+        self.model = self.model.to(self.device)
+
         self.save_dir = save_dir
 
         self.logger = logger
@@ -96,13 +106,13 @@ class PPNetModel(BaseModel):
             num_warmup_steps=num_warmup_steps,
             num_training_steps=num_training_steps,
         )
-        
+
         if self.criterion_name == "MSE":
             self.criterion = nn.MSELoss()
             # self.criterion = nn.SmoothL1Loss()
         else:
             raise NotImplementedError
-    
+
         for epoch in range(self.epochs):
             self.logger.info("=" * 20 + " Epoch {} ".format(epoch + 1) + "=" * 20)
 
@@ -191,12 +201,12 @@ class PPNetModel(BaseModel):
         for index, batch_x, *batch_y in test_loader:
             index = index.cpu().numpy()  # 确保索引为 numpy 数组
             batch_x = batch_x.squeeze(0).float().to(self.device)
-            
+
             with torch.no_grad():
                 outputs = self.model(batch_x)
-            
+
             preds[index] = outputs.cpu().numpy()
-        
+
         # 统一数据插入逻辑
         label_names = test_dataset.label_names or [str(i) for i in range(self.pred_len)]
         test_dataset.insert(cols=[f"PRED_{name}" for name in label_names], data=preds)

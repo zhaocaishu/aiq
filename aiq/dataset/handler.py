@@ -450,12 +450,16 @@ class Alpha158(DataHandler):
 class MarketAlpha158(Alpha158):
     def __init__(
         self,
+        benchmark: str = None,
         processors: List = None,
         market_processors: List = None,
     ):
         self._feature_names = None
         self._market_feature_names = None
         self._label_names = None
+
+        # benchmark
+        self.benchmark = benchmark
 
         # data processors
         self.processors = [init_instance_by_config(proc) for proc in processors]
@@ -618,7 +622,7 @@ class MarketAlpha158(Alpha158):
         mode: str = "train",
     ) -> pd.DataFrame:
         # extract feature and label from data
-        market_df = market_dfs.get("000300.SH", None)
+        market_df = market_dfs.get(self.benchmark, None)
         feature_label_dfs = [
             (
                 pd.concat(

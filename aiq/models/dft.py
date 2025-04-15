@@ -38,6 +38,7 @@ class DFTModel(BaseModel):
         criterion_name="MSE",
         class_boundaries=None,
         class_weight=None,
+        pretrained=None,
         save_dir=None,
         logger=None,
     ):
@@ -78,7 +79,16 @@ class DFTModel(BaseModel):
             gate_input_start_index=self.gate_input_start_index,
             gate_input_end_index=self.gate_input_end_index,
             num_classes=self.num_classes,
-        ).to(self.device)
+        )
+
+        if pretrained is not None:
+            try:
+                state_dict = torch.load(pretrained)
+                self.model.load_state_dict(state_dict)
+            except Exception as e:
+                print(f"Error loading pretrained weights from {pretrained}: {e}")
+
+        self.model = self.model.to(self.device)
 
         self.save_dir = save_dir
 
@@ -118,9 +128,7 @@ class DFTModel(BaseModel):
             )
             self.criterion = nn.CrossEntropyLoss(weight=class_weight)
         elif self.criterion_name == "CB":
-            count_per_class = count_samples_per_bin(
-                train_loader, self.class_boundaries
-            )
+            count_per_class = count_samples_per_bin(train_loader, self.class_boundaries)
             self.criterion = ClassBalancedLoss(count_per_class=count_per_class)
         else:
             raise NotImplementedError
@@ -230,23 +238,23 @@ class DFTModel(BaseModel):
 
         preds = np.zeros((num_samples, self.pred_len))
         pred_probs = pred_cls = None
-        
+
         if self.num_classes is not None:
             pred_probs = np.zeros((num_samples, self.pred_len, self.num_classes))
             pred_cls = np.zeros((num_samples, self.pred_len))
-        
+
         for index, _, batch_x, *batch_y in test_loader:
             index = index.cpu().numpy()  # 确保索引为 numpy 数组
             batch_x = batch_x.squeeze(0).float().to(self.device)
-            
+
             with torch.no_grad():
                 outputs = self.model(batch_x)
-            
+
             if self.num_classes is not None:
                 for k, output in enumerate(outputs):
                     probs = torch.softmax(output, dim=1)
                     cls_ids = torch.argmax(probs, dim=1)
-                    
+
                     pred_probs[index, k] = probs.cpu().numpy()
                     pred_cls[index, k] = cls_ids.cpu().numpy()
                     preds[index, k] = (
@@ -254,15 +262,20 @@ class DFTModel(BaseModel):
                     )
             else:
                 preds[index] = outputs.cpu().numpy()
-        
+
         # 统一数据插入逻辑
         label_names = test_dataset.label_names or [str(i) for i in range(self.pred_len)]
         test_dataset.insert(cols=[f"PRED_{name}" for name in label_names], data=preds)
-        
+
         if self.num_classes is not None:
-            test_dataset.insert(cols=[f"PRED_{name}_PROBS" for name in label_names], data=pred_probs.tolist())
-            test_dataset.insert(cols=[f"PRED_{name}_CLS" for name in label_names], data=pred_cls)
-        
+            test_dataset.insert(
+                cols=[f"PRED_{name}_PROBS" for name in label_names],
+                data=pred_probs.tolist(),
+            )
+            test_dataset.insert(
+                cols=[f"PRED_{name}_CLS" for name in label_names], data=pred_cls
+            )
+
         return test_dataset
 
     def save(self, model_name=None):

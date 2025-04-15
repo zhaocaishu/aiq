@@ -2,6 +2,7 @@ data_handler:
   class: MarketAlpha158
   module_path: aiq.dataset.handler
   kwargs:
+    benchmark: "000300.SH"
     processors:
       - class: Dropna
         module_path: aiq.dataset.processor
