@@ -8,6 +8,7 @@ from torch.nn.modules.normalization import LayerNorm
 
 from aiq.layers.dlinear import DLinear, DLinear_Init
 from aiq.layers.rwkv import Block, RWKV_Init
+from aiq.layers.gate import GateNN
 
 
 class SAttention(nn.Module):
@@ -145,10 +146,10 @@ class PPNet(nn.Module):
 
         # instrument fundamental modules
         self.num_industries = 192
-        self.ind_embedding_dim = 8
+        self.ind_embedding_dim = 16
         self.ind_embedding = nn.Embedding(self.num_industries, self.ind_embedding_dim)
 
-        self.num_fund_features = 12
+        self.num_fund_features = 20
         self.fund_encoder = nn.Sequential(
             nn.Linear(self.num_fund_features, 4 * self.num_fund_features),
             nn.ReLU(),
@@ -216,19 +217,23 @@ class PPNet(nn.Module):
 
         self.temporal_attn = TemporalAttention(d_model=d_model)
 
-        self.fusion_layer = nn.Sequential(
-            nn.Linear(
-                d_model + self.num_fund_features, 4 * (d_model + self.num_fund_features)
-            ),
+        self.gate_layer = GateNN(
+            input_dim=(d_model + self.num_fund_features),
+            hidden_dim=2 * d_model,
+            output_dim=d_model,
+            dropout_rate=dropout,
+            batch_norm=True,
+        )
+
+        self.mlp_layer = nn.Sequential(
+            nn.Linear(d_model, 4 * d_model),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(
-                4 * (d_model + self.num_fund_features), d_model + self.num_fund_features
-            ),
+            nn.Linear(4 * d_model, d_model),
             nn.Dropout(dropout),
         )
 
-        self.out = nn.Linear(d_model + self.num_fund_features, pred_len)
+        self.out = nn.Linear(d_model, pred_len)
 
     def forward(self, x):
         # x: [N, T, D]
@@ -252,8 +257,10 @@ class PPNet(nn.Module):
         fused_out = trend_out + season_out
         temporal_out = self.temporal_attn(fused_out)
 
-        fused_feats = torch.cat([fund_feats, temporal_out], dim=1)
-        fused_feats = self.fusion_layer(fused_feats)
+        gate_input = torch.cat([temporal_out.detach(), fund_feats], dim=-1)
+        hidden = temporal_out
+        gw = self.gate_layer(gate_input)
+        hidden = self.mlp_layer(hidden * gw)
 
-        output = self.out(fused_feats)
+        output = self.out(hidden)
         return output
