@@ -236,13 +236,13 @@ class PPNet(nn.Module):
         self.out = nn.Linear(d_model, pred_len)
 
     def forward(self, x):
-        # x: [N, T, D]
-        ind_class = x[:, -1, 0].long()
-        cat_feats = self.ind_embedding(ind_class)
+        # # x: [N, T, D]
+        # ind_class = x[:, -1, 0].long()
+        # cat_feats = self.ind_embedding(ind_class)
 
-        fund_feats = x[:, :, 1:5].mean(dim=1)
-        fund_feats = torch.cat([cat_feats, fund_feats], dim=1)
-        fund_feats = self.fund_encoder(fund_feats)
+        # fund_feats = x[:, :, 1:5].mean(dim=1)
+        # fund_feats = torch.cat([cat_feats, fund_feats], dim=1)
+        # fund_feats = self.fund_encoder(fund_feats)
 
         cont_feats = x[:, :, 5 : self.gate_input_start_index]
         cont_feats = self.feat_to_model(cont_feats)
@@ -257,10 +257,11 @@ class PPNet(nn.Module):
         fused_out = trend_out + season_out
         temporal_out = self.temporal_attn(fused_out)
 
-        gate_input = torch.cat([temporal_out.detach(), fund_feats], dim=-1)
-        hidden = temporal_out
-        gw = self.gate_layer(gate_input)
-        hidden = self.mlp_layer(hidden * gw)
+        # gate_input = torch.cat([temporal_out.detach(), fund_feats], dim=-1)
+        # hidden = temporal_out
+        # gw = self.gate_layer(gate_input)
+        # hidden = self.mlp_layer(hidden * gw)
 
-        output = self.out(hidden)
+        # output = self.out(hidden)
+        output = self.out(temporal_out)
         return output
