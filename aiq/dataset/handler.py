@@ -44,17 +44,17 @@ class Alpha158(DataHandler):
         # fundamental data
         ind_class = df["Ind_class"]
         mkt_class = df["Mkt_class"]
-        ep = 1. / df["Pe_ttm"]
-        bp = 1. / df["Pb"]
+        ep = 1.0 / df["Pe_ttm"]
+        bp = 1.0 / df["Pb"]
         mkt_cap = np.log(df["Total_mv"])
-        
+
         # adjusted prices
         adjusted_factor = df["Adj_factor"]
         open = df["Open"] * adjusted_factor
         close = df["Close"] * adjusted_factor
         high = df["High"] * adjusted_factor
         low = df["Low"] * adjusted_factor
-        
+
         volume = df["Volume"]
         turn = df["Turnover_rate_f"]
 
@@ -429,7 +429,7 @@ class Alpha158(DataHandler):
                     feature_label_df = processor(feature_label_df)
 
         feature_label_df.columns = feature_label_df.columns.droplevel()
-        
+
         return feature_label_df
 
     def process(
@@ -602,7 +602,8 @@ class MarketAlpha158(Alpha158):
         # labels
         self._label_names = ["RETN_5D"]
         labels = [
-            (Ref(close, -5) / Ref(close, -1) - 1) / (Ref(market_close, -5) / Ref(market_close, -1) - 1)
+            (Ref(close, -5) / Ref(close, -1) - 1)
+            / (Ref(market_close, -5) / Ref(market_close, -1) - 1)
             - 1,
         ]
         label_df = pd.concat(
@@ -644,7 +645,7 @@ class MarketAlpha158(Alpha158):
             .set_index(["Date", "Instrument"])
             .sort_index()
         )
-        
+
         # data preprocessing
         column_tuples = [
             ("feature", feature_name) for feature_name in self._feature_names
@@ -688,7 +689,9 @@ class MarketAlpha158(Alpha158):
             on="Date",
             how="inner",
         )
-        market_feature_label_df = market_feature_label_df.set_index(["Date", "Instrument"])
+        market_feature_label_df = market_feature_label_df.set_index(
+            ["Date", "Instrument"]
+        )
         market_feature_label_df.sort_index(inplace=True)
 
         assert feature_label_df.shape[0] == market_feature_label_df.shape[0]

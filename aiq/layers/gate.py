@@ -4,12 +4,12 @@ from torch import nn
 
 class GateNN(nn.Module):
     def __init__(
-        self, 
+        self,
         input_dim,
         hidden_dim=None,
         output_dim=None,
         dropout_rate=0.0,
-        batch_norm=False
+        batch_norm=False,
     ):
         super(GateNN, self).__init__()
         if hidden_dim is None:
@@ -27,7 +27,7 @@ class GateNN(nn.Module):
     def forward(self, inputs):
         return self.gate(inputs) * 2
 
-   
+
 class GatedFusion(nn.Module):
     def __init__(self, input_dim):
         super(GatedFusion, self).__init__()

@@ -1,4 +1,4 @@
 from .evaluator import Evaluator
 
 
-__all__ = ['Evaluator']
+__all__ = ["Evaluator"]

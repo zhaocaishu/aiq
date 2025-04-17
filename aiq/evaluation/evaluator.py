@@ -11,7 +11,7 @@ class Evaluator:
         label = df[self.label_col].values
         pred = df[self.pred_col].values
 
-        r2 = 1 - ((label - pred) ** 2).sum() / (label ** 2).sum()
+        r2 = 1 - ((label - pred) ** 2).sum() / (label**2).sum()
         return r2
 
     def evaluate(self, df):
@@ -24,6 +24,6 @@ class Evaluator:
         metrics = {
             "IC": np.mean(daily_ic),
             "ICIR": np.mean(daily_ic) / np.std(daily_ic),
-            "R2": r2
+            "R2": r2,
         }
         return metrics

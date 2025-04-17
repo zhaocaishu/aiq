@@ -6,7 +6,9 @@ import numpy as np
 from aiq.utils.processing import robust_zscore, zscore
 
 
-def get_group_columns(df: pd.DataFrame, group: str = None, exclude_discrete: bool=False):
+def get_group_columns(
+    df: pd.DataFrame, group: str = None, exclude_discrete: bool = False
+):
     """
     get a group of columns from multi-index columns DataFrame
 
@@ -25,7 +27,7 @@ def get_group_columns(df: pd.DataFrame, group: str = None, exclude_discrete: boo
         cols = df.columns[df.columns.get_loc(group)]
 
     if exclude_discrete:
-        filtered_cols = cols[~cols.get_level_values(-1).str.endswith('_CAT')]
+        filtered_cols = cols[~cols.get_level_values(-1).str.endswith("_CAT")]
     else:
         filtered_cols = cols
 

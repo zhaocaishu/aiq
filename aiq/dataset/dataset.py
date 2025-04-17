@@ -1,5 +1,3 @@
-import os
-import pickle
 from typing import List, Union
 
 import numpy as np
@@ -13,15 +11,12 @@ def load_instruments_data(data_dir, instruments, start_time, end_time):
     dfs = []
     for instrument in instruments:
         df = DataLoader.load_features(
-            data_dir,
-            instrument=instrument,
-            start_time=start_time,
-            end_time=end_time
+            data_dir, instrument=instrument, start_time=start_time, end_time=end_time
         )
 
         if df is None:
             continue
-        
+
         dfs.append(df)
     return dfs
 
@@ -49,7 +44,9 @@ class Dataset(torch.utils.data.Dataset):
             )
 
         # load instrument's data
-        instrument_dfs = load_instruments_data(data_dir, instruments, start_time, end_time)
+        instrument_dfs = load_instruments_data(
+            data_dir, instruments, start_time, end_time
+        )
 
         # extract feature and labels
         self.df = data_handler.process(instrument_dfs, mode=mode)
@@ -112,7 +109,9 @@ class TSDataset(Dataset):
             )
 
         # load instrument's data
-        instrument_dfs = load_instruments_data(data_dir, instruments, start_time, end_time)
+        instrument_dfs = load_instruments_data(
+            data_dir, instruments, start_time, end_time
+        )
 
         # extract feature and labels
         self.df = data_handler.process(instrument_dfs, mode=mode)
@@ -259,7 +258,9 @@ class MarketTSDataset(TSDataset):
             )
 
         # load instrument's data
-        instrument_dfs = load_instruments_data(data_dir, instruments, start_time, end_time)
+        instrument_dfs = load_instruments_data(
+            data_dir, instruments, start_time, end_time
+        )
 
         # load market data
         market_dfs = {}
@@ -273,9 +274,7 @@ class MarketTSDataset(TSDataset):
             market_dfs[market_name] = df
 
         # extract feature and labels
-        self.df = data_handler.process(
-            instrument_dfs, market_dfs=market_dfs, mode=mode
-        )
+        self.df = data_handler.process(instrument_dfs, market_dfs=market_dfs, mode=mode)
 
         self._feature_names = data_handler.feature_names
         self._label_names = label_cols

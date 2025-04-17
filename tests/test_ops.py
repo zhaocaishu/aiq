@@ -3,7 +3,7 @@ import pandas as pd
 from aiq.ops import Rolling, Ref, Resi, Log, Rank
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     input = pd.Series([1, 2, 3, 4])
 
     output = Ref(input, 2)

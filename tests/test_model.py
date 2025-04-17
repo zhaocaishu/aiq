@@ -36,7 +36,7 @@ if __name__ == "__main__":
         feature_cols=train_dataset.feature_names,
         label_cols=train_dataset.label_names,
         save_dir="./checkpoints",
-        logger=logger
+        logger=logger,
     )
 
     model.fit(train_dataset=train_dataset, val_dataset=val_dataset)

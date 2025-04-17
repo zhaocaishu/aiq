@@ -181,7 +181,7 @@ class DFT(nn.Module):
             enc_in=self.d_model,
             kernel_size=3,
             individual=False,
-            merge_outputs=False
+            merge_outputs=False,
         )
         DLinear_Init(self.dlinear, min_val=-5e-2, max_val=8e-2)
 
@@ -218,8 +218,12 @@ class DFT(nn.Module):
 
     def forward(self, x):
         # Slice input features
-        continuous_feats = x[:, :, 1:self.gate_input_start_index] # Continuous features (N, T, D_c)
-        gate_input_feats = x[:, :, self.gate_input_start_index:self.gate_input_end_index] # Gate-related features
+        continuous_feats = x[
+            :, :, 1 : self.gate_input_start_index
+        ]  # Continuous features (N, T, D_c)
+        gate_input_feats = x[
+            :, :, self.gate_input_start_index : self.gate_input_end_index
+        ]  # Gate-related features
 
         # Feature gating (e.g., market attention)
         market_signal = self.feature_gate(gate_input_feats)
@@ -229,7 +233,9 @@ class DFT(nn.Module):
         trend_component, season_component = self.dlinear(encoded_feats)
 
         # Apply trend/seasonal transformations
-        trend_component = self.trend_TC(trend_component) + self.market_linear(market_signal)
+        trend_component = self.trend_TC(trend_component) + self.market_linear(
+            market_signal
+        )
         season_component = self.season_TC(season_component)
 
         # Combine and generate output
