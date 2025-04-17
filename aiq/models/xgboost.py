@@ -56,6 +56,7 @@ class XGBModel(BaseModel):
         test_df = test_dataset.data[self._feature_cols]
         dtest = xgb.DMatrix(test_df.values)
         preds = self.model.predict(dtest)
+        preds = preds.reshape(-1, 1)
         test_dataset.insert(cols=["PRED"], data=preds)
         return test_dataset
 

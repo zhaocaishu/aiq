@@ -67,6 +67,7 @@ class LGBModel(BaseModel):
             raise ValueError("model is not fitted yet!")
         x_test = test_dataset.data[self._feature_cols].values
         preds = self.model.predict(x_test)
+        preds = preds.reshape(-1, 1)
         test_dataset.insert(cols=["PRED"], data=preds)
         return test_dataset
 
