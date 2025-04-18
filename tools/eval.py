@@ -87,6 +87,7 @@ def main():
 
     # prediction
     pred_df = model.predict(val_dataset).data
+    pred_df = pred_df.reset_index()
 
     # evaluation
     evaluator = Evaluator(pred_col=args.eval_pred_col, label_col=args.eval_label_col)
