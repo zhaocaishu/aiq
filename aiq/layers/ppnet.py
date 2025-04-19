@@ -218,7 +218,7 @@ class PPNet(nn.Module):
         self.temporal_attn = TemporalAttention(d_model=d_model)
 
         hidden_dim = d_model // 2
-        self.pred_layer = nn.Sequential(
+        self.regression_head = nn.Sequential(
             nn.Linear(d_model + self.num_fund_features, hidden_dim),
             nn.ReLU(),
             nn.Dropout(dropout),
@@ -246,6 +246,5 @@ class PPNet(nn.Module):
         temporal_out = self.temporal_attn(trend_out + season_out)
 
         fused_out = torch.cat([temporal_out, fund_feats], dim=-1)
-
-        output = self.pred_layer(fused_out)
+        output = self.regression_head(fused_out)
         return output

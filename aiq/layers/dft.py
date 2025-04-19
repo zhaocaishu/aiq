@@ -201,7 +201,7 @@ class DFT(nn.Module):
         self.market_linear = nn.Linear(d_feat, d_model)
 
         if num_classes is not None:
-            self.classifiers = nn.ModuleList(
+            self.classification_heads = nn.ModuleList(
                 [
                     nn.Sequential(
                         TemporalAttention(d_model=d_model),
@@ -211,7 +211,7 @@ class DFT(nn.Module):
                 ]
             )
         else:
-            self.decoder = nn.Sequential(
+            self.regression_head = nn.Sequential(
                 TemporalAttention(d_model=d_model),
                 nn.Linear(d_model, pred_len),
             )
@@ -241,8 +241,8 @@ class DFT(nn.Module):
         # Combine and generate output
         fused_component = trend_component + season_component
         if self.num_classes is not None:
-            outputs = [classifier(fused_component) for classifier in self.classifiers]
+            outputs = [classification_head(fused_component) for classification_head in self.classification_heads]
         else:
-            outputs = self.decoder(fused_component)
+            outputs = self.regression_head(fused_component)
 
         return outputs
