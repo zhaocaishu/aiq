@@ -217,23 +217,13 @@ class PPNet(nn.Module):
 
         self.temporal_attn = TemporalAttention(d_model=d_model)
 
-        self.gate_layer = GateNN(
-            input_dim=(d_model + self.num_fund_features),
-            hidden_dim=2 * d_model,
-            output_dim=d_model,
-            dropout_rate=dropout,
-            batch_norm=True,
-        )
-
-        self.mlp_layer = nn.Sequential(
-            nn.Linear(d_model, 4 * d_model),
+        hidden_dim = d_model // 2
+        self.pred_layer = nn.Sequential(
+            nn.Linear(d_model + self.num_fund_features, hidden_dim),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(4 * d_model, d_model),
-            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, pred_len)
         )
-
-        self.out = nn.Linear(d_model, pred_len)
 
     def forward(self, x):
         # x: [N, T, D]
@@ -253,14 +243,9 @@ class PPNet(nn.Module):
 
         trend_out = self.trend_TC(trend_feat) + self.market_linear(market_feat)
         season_out = self.season_TC(season_feat)
+        temporal_out = self.temporal_attn(trend_out + season_out)
 
-        fused_out = trend_out + season_out
-        temporal_out = self.temporal_attn(fused_out)
+        fused_out = torch.cat([temporal_out, fund_feats], dim=-1)
 
-        gate_input = torch.cat([temporal_out.detach(), fund_feats], dim=-1)
-        hidden = temporal_out
-        gw = self.gate_layer(gate_input)
-        hidden = self.mlp_layer(hidden * gw)
-
-        output = self.out(hidden)
+        output = self.pred_layer(fused_out)
         return output
