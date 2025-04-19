@@ -126,7 +126,7 @@ class PPNetModel(BaseModel):
                 iter_count += 1
 
                 if self.use_augmentation:
-                    mask_prob = 0.1
+                    mask_prob = 0.15
                     mask = torch.bernoulli(torch.full(batch_x.shape, 1 - mask_prob))
                     batch_x = batch_x * mask
 
