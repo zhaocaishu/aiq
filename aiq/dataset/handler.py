@@ -602,9 +602,9 @@ class MarketAlpha158(Alpha158):
         # labels
         self._label_names = ["RETN_5D"]
         labels = [
-            (Ref(close, -5) / Ref(close, -1) - 1)
-            / (Ref(market_close, -5) / Ref(market_close, -1) - 1)
-            - 1,
+            (Ref(close, -5) / Ref(close, -1))
+            / (Ref(market_close, -5) / Ref(market_close, -1))
+            - 1
         ]
         label_df = pd.concat(
             [
