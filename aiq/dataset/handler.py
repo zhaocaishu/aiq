@@ -682,7 +682,7 @@ class MarketAlpha158(Alpha158):
         market_feature_df = self.process_market_features(market_dfs, mode=mode)
         market_feature_df = market_feature_df.reset_index()
 
-        #  merge instrument features with market features on the Date column
+        # merge instrument features with market features on the Date column
         market_feature_label_df = pd.merge(
             feature_label_df,
             market_feature_df,
