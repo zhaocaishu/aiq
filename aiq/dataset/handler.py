@@ -409,7 +409,7 @@ class Alpha158(DataHandler):
             .sort_index()
         )
 
-        # data preprocess
+        # data preprocessing
         column_tuples = [
             ("feature", feature_name) for feature_name in self._feature_names
         ]
