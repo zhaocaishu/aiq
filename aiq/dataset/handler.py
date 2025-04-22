@@ -389,7 +389,7 @@ class Alpha158(DataHandler):
             .sort_index()
         )
 
-        # data preprocess
+        # data preprocessing
         column_tuples = [
             ("feature", feature_name) for feature_name in self._feature_names
         ]
@@ -650,15 +650,15 @@ class MarketAlpha158(Alpha158):
         market_dfs: Dict[str, pd.DataFrame] = None,
         mode: str = "train",
     ) -> pd.DataFrame:
-        # instrument feature and label
+        # instrument-level feature and label
         feature_label_df = self.process_feature_labels(dfs, market_dfs, mode=mode)
         feature_label_df = feature_label_df.reset_index()
 
-        # market information
+        # market features
         market_feature_df = self.process_market_features(market_dfs, mode=mode)
         market_feature_df = market_feature_df.reset_index()
 
-        # merge market information
+        # merge instrument features with market features on the Date column
         market_feature_label_df = pd.merge(
             feature_label_df,
             market_feature_df,
