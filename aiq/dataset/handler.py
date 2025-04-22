@@ -93,23 +93,13 @@ class Alpha158(DataHandler):
         ]
 
         # price
-        for field, price in zip(
-            ["Open", "High", "Low", "Close"], [open, high, low, close]
-        ):
-            for d in range(5):
+        for field, price in zip(["Open", "High", "Low"], [open, high, low]):
+            for d in range(1):
                 if d != 0:
                     features.append(Ref(price, d) / close)
                 else:
                     features.append(price / close)
                 feature_names.append(field.upper() + str(d))
-
-        # volume
-        for d in range(5):
-            if d != 0:
-                features.append(Ref(volume, d) / (volume + 1e-12))
-            else:
-                features.append(volume / (volume + 1e-12))
-            feature_names.append("VOLUME%d" % d)
 
         # rolling
         windows = [5, 10, 20, 30, 60]
@@ -342,16 +332,6 @@ class Alpha158(DataHandler):
                     / (Sum(Abs(volume - Ref(volume, 1)), d) + 1e-12)
                 )
                 feature_names.append("VSUMD%d" % d)
-
-        if use("MTURN"):
-            for d in windows:
-                features.append(Mean(turn, d))
-                feature_names.append("MTURN%d" % d)
-
-        if use("STURN"):
-            for d in windows:
-                features.append(Std(turn, d))
-                feature_names.append("STURN%d" % d)
 
         # concat features
         self._feature_names = feature_names.copy()
@@ -601,11 +581,7 @@ class MarketAlpha158(Alpha158):
 
         # labels
         self._label_names = ["RETN_5D"]
-        labels = [
-            (Ref(close, -5) / Ref(close, -1))
-            / (Ref(market_close, -5) / Ref(market_close, -1))
-            - 1
-        ]
+        labels = [Ref(close, -5) / Ref(close, -1) - 1]
         label_df = pd.concat(
             [
                 labels[i].rename(self._label_names[i])
