@@ -179,7 +179,7 @@ class TSDataset(Dataset):
 
     def padding_zeros(self, data, seq_len):
         """
-        padding zeros to the end of data
+        padding zeros to the beginning of data
 
         Args:
             data (np.ndarray): 2D array with shape (n, f) where n is sequence length and f is feature dimension
