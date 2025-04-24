@@ -32,9 +32,8 @@ def main():
 
     logger.info(cfg)
 
-    # saved directory
-    if not os.path.exists(args.save_dir):
-        os.makedirs(args.save_dir)
+    # save directory
+    os.makedirs(args.save_dir, exist_ok=True)
 
     # data handler
     data_handler = init_instance_by_config(cfg.data_handler)
