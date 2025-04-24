@@ -71,7 +71,7 @@ class Rolling(abc.ABC):
         # NOTE: remove all null check,
         # now it's user's responsibility to decide whether use features in null days
         # isnull = series.isnull() # NOTE: isnull = NaN, inf is not null
-        series = feature.copy(deep=True)
+        series = feature.copy()
         if isinstance(N, int) and N == 0:
             series = getattr(series.expanding(min_periods=1), self.func)()
         elif isinstance(N, float) and 0 < N < 1:
@@ -90,7 +90,7 @@ class Ref(Rolling):
         Args:
             N (int):  N = 0, current data; N > 0, retrieve data of N periods ago; N < 0, future data
         """
-        series = feature.copy(deep=True)
+        series = feature.copy()
         if series.empty:
             return series  # Pandas bug, see: https://github.com/pandas-dev/pandas/issues/21049
         series = series.shift(N)  # copy
@@ -153,11 +153,15 @@ class IdxMax(Rolling):
         super(IdxMax, self).__init__("idxmax")
 
     def __call__(self, feature: pd.Series, N):
-        series = feature.copy(deep=True)
+        series = feature.copy()
         if N == 0:
-            series = series.expanding(min_periods=1).apply(lambda x: x.argmax() + 1, raw=True)
+            series = series.expanding(min_periods=1).apply(
+                lambda x: x.argmax() + 1, raw=True
+            )
         else:
-            series = series.rolling(N, min_periods=1).apply(lambda x: x.argmax() + 1, raw=True)
+            series = series.rolling(N, min_periods=1).apply(
+                lambda x: x.argmax() + 1, raw=True
+            )
         return series
 
 
@@ -175,11 +179,15 @@ class IdxMin(Rolling):
         super(IdxMin, self).__init__("idxmin")
 
     def __call__(self, feature, N):
-        series = feature.copy(deep=True)
+        series = feature.copy()
         if N == 0:
-            series = series.expanding(min_periods=1).apply(lambda x: x.argmin() + 1, raw=True)
+            series = series.expanding(min_periods=1).apply(
+                lambda x: x.argmin() + 1, raw=True
+            )
         else:
-            series = series.rolling(N, min_periods=1).apply(lambda x: x.argmin() + 1, raw=True)
+            series = series.rolling(N, min_periods=1).apply(
+                lambda x: x.argmin() + 1, raw=True
+            )
         return series
 
 
@@ -190,7 +198,7 @@ class Quantile(Rolling):
         super(Quantile, self).__init__("quantile")
 
     def __call__(self, feature: pd.Series, N, qscore):
-        series = feature.copy(deep=True)
+        series = feature.copy()
         if N == 0:
             series = series.expanding(min_periods=1).quantile(qscore)
         else:
@@ -216,7 +224,7 @@ class Mad(Rolling):
             x1 = x[~np.isnan(x)]
             return np.mean(np.abs(x1 - x1.mean()))
 
-        series = feature.copy(deep=True)
+        series = feature.copy()
         if N == 0:
             series = series.expanding(min_periods=1).apply(mad, raw=True)
         else:
@@ -232,8 +240,12 @@ class Rank(Rolling):
 
     # for compatiblity of python 3.7, which doesn't support pandas 1.4.0+ which implements Rolling.rank
     def __call__(self, feature: pd.Series, N):
-        series = feature.copy(deep=True)
-        rolling_or_expending = series.expanding(min_periods=1) if N == 0 else series.rolling(N, min_periods=1)
+        series = feature.copy()
+        rolling_or_expending = (
+            series.expanding(min_periods=1)
+            if N == 0
+            else series.rolling(N, min_periods=1)
+        )
         return rolling_or_expending.rank(pct=True)
 
 
@@ -251,7 +263,7 @@ class Delta(Rolling):
         super(Delta, self).__init__("delta")
 
     def __call__(self, feature: pd.Series, N):
-        series = feature.copy(deep=True)
+        series = feature.copy()
         if N == 0:
             series = series - series.iloc[0]
         else:
@@ -268,7 +280,7 @@ class Slope(Rolling):
         super(Slope, self).__init__("slope")
 
     def __call__(self, feature: pd.Series, N):
-        series = feature.copy(deep=True)
+        series = feature.copy()
         if N == 0:
             series = pd.Series(expanding_slope(series.values), index=series.index)
         else:
@@ -283,12 +295,14 @@ class Rsquare(Rolling):
         super(Rsquare, self).__init__("rsquare")
 
     def __call__(self, feature: pd.Series, N):
-        series = feature.copy(deep=True)
+        series = feature.copy()
         if N == 0:
             series = pd.Series(expanding_rsquare(series.values), index=series.index)
         else:
             series = pd.Series(rolling_rsquare(series.values, N), index=series.index)
-            series.loc[np.isclose(series.rolling(N, min_periods=1).std(), 0, atol=2e-05)] = np.nan
+            series.loc[
+                np.isclose(series.rolling(N, min_periods=1).std(), 0, atol=2e-05)
+            ] = np.nan
         return series
 
 
@@ -299,7 +313,7 @@ class Resi(Rolling):
         super(Resi, self).__init__("resi")
 
     def __call__(self, feature: pd.Series, N):
-        series = feature.copy(deep=True)
+        series = feature.copy()
         if N == 0:
             series = pd.Series(expanding_resi(series.values), index=series.index)
         else:
@@ -319,7 +333,7 @@ class WMA(Rolling):
             w = w / w.sum()
             return np.nanmean(w * x)
 
-        series = feature.copy(deep=True)
+        series = feature.copy()
         if N == 0:
             series = series.expanding(min_periods=1).apply(weighted_mean, raw=True)
         else:
@@ -340,7 +354,7 @@ class EMA(Rolling):
             w /= w.sum()
             return np.nansum(w * x)
 
-        series = feature.copy(deep=True)
+        series = feature.copy()
         if N == 0:
             series = series.expanding(min_periods=1).apply(exp_weighted_mean, raw=True)
         elif 0 < N < 1:
@@ -358,9 +372,13 @@ class PairRolling(abc.ABC):
 
     def __call__(self, series_left: pd.Series, series_right: pd.Series, N):
         if N == 0:
-            series = getattr(series_left.expanding(min_periods=1), self.func)(series_right)
+            series = getattr(series_left.expanding(min_periods=1), self.func)(
+                series_right
+            )
         else:
-            series = getattr(series_left.rolling(N, min_periods=1), self.func)(series_right)
+            series = getattr(series_left.rolling(N, min_periods=1), self.func)(
+                series_right
+            )
         return series
 
 
@@ -375,7 +393,7 @@ class Corr(PairRolling):
         res.loc[
             np.isclose(series_left.rolling(N, min_periods=1).std(), 0, atol=2e-05)
             | np.isclose(series_right.rolling(N, min_periods=1).std(), 0, atol=2e-05)
-            ] = np.nan
+        ] = np.nan
         return res
 
 
@@ -386,7 +404,8 @@ class Cov(PairRolling):
         super(Cov, self).__init__("cov")
 
 
-# Cross Sectional Operators
 class CSRank(abc.ABC):
+    """Cross Sectional Operators"""
+
     def __call__(self, series):
         return series.groupby(level=0).rank(pct=True)

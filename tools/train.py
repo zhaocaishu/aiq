@@ -10,9 +10,18 @@ from aiq.utils.logging import get_logger
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train a model")
-    parser.add_argument("--cfg_file", type=str, required=True, help="Path to training config file")
-    parser.add_argument("--data_dir", type=str, required=True, help="Directory containing training data")
-    parser.add_argument("--save_dir", type=str, required=True, help="Directory to save model and data handler")
+    parser.add_argument(
+        "--cfg_file", type=str, required=True, help="Path to training config file"
+    )
+    parser.add_argument(
+        "--data_dir", type=str, required=True, help="Directory containing training data"
+    )
+    parser.add_argument(
+        "--save_dir",
+        type=str,
+        required=True,
+        help="Directory to save model and data handler",
+    )
     return parser.parse_args()
 
 
@@ -30,16 +39,10 @@ def setup_directories(save_dir: str) -> None:
 
 def load_datasets(data_dir: str, data_handler: Any) -> tuple:
     train_dataset = init_instance_by_config(
-        cfg.dataset,
-        data_dir=data_dir,
-        data_handler=data_handler,
-        mode="train"
+        cfg.dataset, data_dir=data_dir, data_handler=data_handler, mode="train"
     )
     val_dataset = init_instance_by_config(
-        cfg.dataset,
-        data_dir=data_dir,
-        data_handler=data_handler,
-        mode="valid"
+        cfg.dataset, data_dir=data_dir, data_handler=data_handler, mode="valid"
     )
     return train_dataset, val_dataset
 
@@ -49,7 +52,9 @@ def save_data_handler(handler: Any, save_path: str) -> None:
         pickle.dump(handler, f)
 
 
-def train_and_save_model(train_dataset: Any, val_dataset: Any, save_dir: str, logger: Any) -> None:
+def train_and_save_model(
+    train_dataset: Any, val_dataset: Any, save_dir: str, logger: Any
+) -> None:
     model = init_instance_by_config(
         cfg.model,
         feature_cols=train_dataset.feature_names,
@@ -76,8 +81,11 @@ def main():
 
         save_data_handler(data_handler, os.path.join(args.save_dir, "data_handler.pkl"))
 
-        logger.info("Loaded %d training and %d validation samples.",
-                    len(train_dataset), len(val_dataset))
+        logger.info(
+            "Loaded %d training and %d validation samples.",
+            len(train_dataset),
+            len(val_dataset),
+        )
 
         train_and_save_model(train_dataset, val_dataset, args.save_dir, logger)
 

@@ -143,8 +143,8 @@ class DFTModel(BaseModel):
             epoch_time = time.time()
             for i, (_, batch_x, batch_y) in enumerate(train_loader):
                 iter_count += 1
-                batch_x = batch_x.squeeze(0).float().to(self.device)
-                batch_y = batch_y.squeeze(0).float()
+                batch_x = batch_x.squeeze(0).to(self.device, dtype=torch.float)
+                batch_y = batch_y.squeeze(0).to(self.device, dtype=torch.float)
 
                 outputs = self.model(batch_x)
 

@@ -28,6 +28,17 @@ def zscore(x: Union[pd.Series, pd.DataFrame]):
     return (x - x.mean()).div(x.std() + 1e-12)
 
 
+def drop_extreme_label(x):
+    sorted_tensor, indices = x.sort()
+    N = x.shape[0]
+    percent_2_5 = int(0.025 * N)
+    # Exclude top 2.5% and bottom 2.5% values
+    filtered_indices = indices[percent_2_5:-percent_2_5]
+    mask = torch.zeros_like(x, device=x.device, dtype=torch.bool)
+    mask[filtered_indices] = True
+    return mask, x[mask]
+
+
 def discretize(data: torch.Tensor, bins: List[float]) -> torch.Tensor:
     """
     将连续数据离散化为指定的区间。

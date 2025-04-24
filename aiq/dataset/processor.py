@@ -190,24 +190,3 @@ class CSRankNorm(Processor):
         t *= 3.46  # NOTE: towards unit std
         df[cols] = t
         return df
-
-
-class DropExtremeLabel(Processor):
-    def __init__(self, fields_group="label", percentile: float = 0.975):
-        super().__init__()
-        self.fields_group = fields_group
-        assert 0 < percentile < 1, "percentile not allowed"
-        self.percentile = percentile
-
-    def forward(self, df):
-        cols = get_group_columns(df, self.fields_group)
-        rank_pct = df[cols].groupby(level="Date").rank(pct=True)
-        condition = (rank_pct >= (1 - self.percentile)) & (rank_pct <= self.percentile)
-        trimmed_df = df[condition.all(axis=1)]
-        return trimmed_df
-
-    def __call__(self, df):
-        return self.forward(df)
-
-    def is_for_infer(self):
-        return False

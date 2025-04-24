@@ -9,7 +9,7 @@ from torch.utils.data import Dataset, DataLoader
 from transformers import get_scheduler
 
 from aiq.layers import PPNet
-from aiq.losses import AdjMSELoss2
+from aiq.utils.processing import drop_extreme_label
 
 from .base import BaseModel
 
@@ -19,7 +19,7 @@ class PPNetModel(BaseModel):
         self,
         feature_cols=None,
         label_cols=None,
-        use_augmentation=True,
+        use_augmentation=False,
         d_feat=158,
         d_model=256,
         t_nhead=4,
@@ -112,8 +112,6 @@ class PPNetModel(BaseModel):
 
         if self.criterion_name == "MSE":
             self.criterion = nn.MSELoss()
-        elif self.criterion_name == "AdjMSE":
-            self.criterion = AdjMSELoss2()
         else:
             raise NotImplementedError
 
@@ -133,8 +131,12 @@ class PPNetModel(BaseModel):
                     mask = torch.bernoulli(torch.full(batch_x.shape, 1 - mask_prob))
                     batch_x = batch_x * mask
 
-                batch_x = batch_x.squeeze(0).float().to(self.device)
-                batch_y = batch_y.squeeze(0).float()
+                batch_x = batch_x.squeeze(0).to(self.device, dtype=torch.float)
+                batch_y = batch_y.squeeze(0).to(self.device, dtype=torch.float)
+
+                # drop extreme label
+                mask, batch_y = drop_extreme_label(batch_y)
+                batch_x = batch_x[mask]
 
                 assert not torch.isnan(batch_x).any(), "NaN at batch_x"
                 assert not torch.isnan(batch_y).any(), "NaN at batch_y"

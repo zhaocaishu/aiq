@@ -12,28 +12,47 @@ from aiq.evaluation import Evaluator
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate a model")
 
-    parser.add_argument("--cfg_file", type=str, default=None,
-                        help="Path to the configuration file for evaluation.")
-    parser.add_argument("--eval_pred_col", type=str, default="PRED",
-                        help="Column name representing model predictions.")
-    parser.add_argument("--eval_label_col", type=str, default="LABEL",
-                        help="Column name representing true labels.")
-    parser.add_argument("--data_dir", type=str, required=True,
-                        help="Directory path of evaluation data.")
-    parser.add_argument("--save_dir", type=str, required=True,
-                        help="Directory to save evaluation results.")
+    parser.add_argument(
+        "--cfg_file",
+        type=str,
+        default=None,
+        help="Path to the configuration file for evaluation.",
+    )
+    parser.add_argument(
+        "--eval_pred_col",
+        type=str,
+        default="PRED",
+        help="Column name representing model predictions.",
+    )
+    parser.add_argument(
+        "--eval_label_col",
+        type=str,
+        default="LABEL",
+        help="Column name representing true labels.",
+    )
+    parser.add_argument(
+        "--data_dir", type=str, required=True, help="Directory path of evaluation data."
+    )
+    parser.add_argument(
+        "--save_dir",
+        type=str,
+        required=True,
+        help="Directory to save evaluation results.",
+    )
 
     return parser.parse_args()
+
 
 def load_data_handler(save_dir: str, logger) -> object:
     handler_path = os.path.join(save_dir, "data_handler.pkl")
     if not os.path.exists(handler_path):
         logger.error(f"Data handler file not found: {handler_path}")
         raise FileNotFoundError(f"Missing file: {handler_path}")
-    
+
     with open(handler_path, "rb") as f:
         logger.info(f"Loading data handler from {handler_path}")
         return pickle.load(f)
+
 
 def load_model(cfg, val_dataset, save_dir: str, logger) -> object:
     logger.info("Initializing model...")
@@ -47,6 +66,7 @@ def load_model(cfg, val_dataset, save_dir: str, logger) -> object:
     model.load()
     logger.info("Model loaded successfully.")
     return model
+
 
 def main():
     args = parse_args()
@@ -78,6 +98,7 @@ def main():
     evaluator = Evaluator(pred_col=args.eval_pred_col, label_col=args.eval_label_col)
     metrics = evaluator.evaluate(pred_df)
     logger.info("Evaluation metrics:\n%s", metrics)
+
 
 if __name__ == "__main__":
     main()
