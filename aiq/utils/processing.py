@@ -70,9 +70,9 @@ def count_samples_per_bin(data_loader, class_boundaries):
 
     for i, (_, batch_x, batch_y) in enumerate(data_loader):
         batch_y = batch_y.flatten().float()
-        batch_discrete_y = discretize(batch_y, bins=class_boundaries).long()
+        discreted_batch_y = discretize(batch_y, bins=class_boundaries).long()
 
-        current_counts = torch.bincount(batch_discrete_y, minlength=num_classes)
+        current_counts = torch.bincount(discreted_batch_y, minlength=num_classes)
         # 累计全局统计结果
         counts += current_counts.cpu()  # 确保在CPU上累加避免GPU内存问题
 
