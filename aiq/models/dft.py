@@ -278,6 +278,13 @@ class DFTModel(BaseModel):
 
         return test_dataset
 
+    def load(self, model_name=None):
+        model_name = "model.pth" if model_name is None else model_name
+        model_file = os.path.join(self.save_dir, model_name)
+        self.model.load_state_dict(
+            torch.load(model_file, map_location=self.device, weights_only=True)
+        )
+
     def save(self, model_name=None):
         if not os.path.exists(self.save_dir):
             os.makedirs(self.save_dir)
@@ -285,10 +292,3 @@ class DFTModel(BaseModel):
         model_name = "model.pth" if model_name is None else model_name
         model_file = os.path.join(self.save_dir, model_name)
         torch.save(self.model.state_dict(), model_file)
-
-    def load(self, model_name=None):
-        model_name = "model.pth" if model_name is None else model_name
-        model_file = os.path.join(self.save_dir, model_name)
-        self.model.load_state_dict(
-            torch.load(model_file, map_location=self.device, weights_only=True)
-        )

@@ -132,7 +132,7 @@ class PPNetModel(BaseModel):
                     batch_x = batch_x * mask
 
                 batch_x = batch_x.squeeze(0).to(self.device, dtype=torch.float)
-                batch_y = batch_y.squeeze(0).to(self.device, dtype=torch.float)
+                batch_y = batch_y.squeeze().to(self.device, dtype=torch.float)
 
                 # drop extreme and zscore on label
                 mask, batch_y = drop_extreme_label(batch_y)
@@ -192,8 +192,11 @@ class PPNetModel(BaseModel):
         total_loss = []
         with torch.no_grad():
             for i, (_, batch_x, batch_y) in enumerate(val_loader):
-                batch_x = batch_x.squeeze(0).float().to(self.device)
-                batch_y = batch_y.squeeze(0).float()
+                batch_x = batch_x.squeeze(0).to(self.device, dtype=torch.float)
+                batch_y = batch_y.squeeze().to(self.device, dtype=torch.float)
+
+                # zscore on label
+                batch_y = zscore(batch_y)
 
                 outputs = self.model(batch_x)
 
@@ -213,7 +216,7 @@ class PPNetModel(BaseModel):
         preds = np.zeros((num_samples, self.pred_len))
         for index, batch_x, *batch_y in test_loader:
             index = index.cpu().numpy()  # 确保索引为 numpy 数组
-            batch_x = batch_x.squeeze(0).float().to(self.device)
+            batch_x = batch_x.squeeze(0).to(self.device, dtype=torch.float)
 
             with torch.no_grad():
                 outputs = self.model(batch_x)
@@ -225,6 +228,13 @@ class PPNetModel(BaseModel):
         test_dataset.insert(cols=[f"PRED_{name}" for name in label_names], data=preds)
         return test_dataset
 
+    def load(self, model_name=None):
+        model_name = "model.pth" if model_name is None else model_name
+        model_file = os.path.join(self.save_dir, model_name)
+        self.model.load_state_dict(
+            torch.load(model_file, map_location=self.device, weights_only=True)
+        )
+
     def save(self, model_name=None):
         if not os.path.exists(self.save_dir):
             os.makedirs(self.save_dir)
@@ -232,10 +242,3 @@ class PPNetModel(BaseModel):
         model_name = "model.pth" if model_name is None else model_name
         model_file = os.path.join(self.save_dir, model_name)
         torch.save(self.model.state_dict(), model_file)
-
-    def load(self, model_name=None):
-        model_name = "model.pth" if model_name is None else model_name
-        model_file = os.path.join(self.save_dir, model_name)
-        self.model.load_state_dict(
-            torch.load(model_file, map_location=self.device, weights_only=True)
-        )

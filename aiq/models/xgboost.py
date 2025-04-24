@@ -71,6 +71,10 @@ class XGBModel(BaseModel):
             ascending=False
         )
 
+    def load(self, model_name=None):
+        model_name = "model.json" if model_name is None else model_name
+        self.model = xgb.Booster(model_file=os.path.join(self.save_dir, model_name))
+
     def save(self, model_name=None):
         if not os.path.exists(self.save_dir):
             os.makedirs(self.save_dir)
@@ -78,7 +82,3 @@ class XGBModel(BaseModel):
         model_name = "model.json" if model_name is None else model_name
         model_file = os.path.join(self.save_dir, model_name)
         self.model.save_model(model_file)
-
-    def load(self, model_name=None):
-        model_name = "model.json" if model_name is None else model_name
-        self.model = xgb.Booster(model_file=os.path.join(self.save_dir, model_name))

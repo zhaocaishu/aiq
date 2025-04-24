@@ -54,21 +54,21 @@ class BaseModel(abc.ABC):
         """
         raise NotImplementedError()
 
-    def save(self, model_name):
-        """
-        Persistently saves the object's state to storage using the specified model name.
-
-        Args:
-            model_name: Unique identifier for the model in storage.
-        """
-        raise NotImplementedError()
-
     def load(self, model_name):
         """
         Loads object state from storage using the specified model name.
 
         Args:
             model_name: Unique identifier of the model to load from storage
+        """
+        raise NotImplementedError()
+
+    def save(self, model_name):
+        """
+        Persistently saves the object's state to storage using the specified model name.
+
+        Args:
+            model_name: Unique identifier for the model in storage.
         """
         raise NotImplementedError()
 
