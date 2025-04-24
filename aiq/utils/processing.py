@@ -24,7 +24,7 @@ def robust_zscore(x: pd.Series, zscore=False):
     return x
 
 
-def zscore(x: Union[pd.Series, pd.DataFrame]):
+def zscore(x: Union[pd.Series, pd.DataFrame, torch.Tensor]):
     return (x - x.mean()).div(x.std() + 1e-12)
 
 

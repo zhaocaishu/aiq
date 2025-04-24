@@ -9,7 +9,7 @@ from torch.utils.data import Dataset, DataLoader
 from transformers import get_scheduler
 
 from aiq.layers import PPNet
-from aiq.utils.processing import drop_extreme_label
+from aiq.utils.processing import drop_extreme_label, zscore
 
 from .base import BaseModel
 
@@ -134,9 +134,10 @@ class PPNetModel(BaseModel):
                 batch_x = batch_x.squeeze(0).to(self.device, dtype=torch.float)
                 batch_y = batch_y.squeeze(0).to(self.device, dtype=torch.float)
 
-                # drop extreme label
+                # drop extreme and zscore on label
                 mask, batch_y = drop_extreme_label(batch_y)
                 batch_x = batch_x[mask]
+                batch_y = zscore(batch_y)
 
                 assert not torch.isnan(batch_x).any(), "NaN at batch_x"
                 assert not torch.isnan(batch_y).any(), "NaN at batch_y"
