@@ -88,16 +88,12 @@ class Ref(Rolling):
     def __call__(self, feature: pd.Series, N):
         """
         Args:
-            N (int):  N = 0, retrieve the first data; N > 0, retrieve data of N periods ago; N < 0, future data
+            N (int):  N = 0, current data; N > 0, retrieve data of N periods ago; N < 0, future data
         """
-        # N = 0, return first day
         series = feature.copy(deep=True)
         if series.empty:
             return series  # Pandas bug, see: https://github.com/pandas-dev/pandas/issues/21049
-        elif N == 0:
-            series = pd.Series(series.iloc[0], index=series.index)
-        else:
-            series = series.shift(N)  # copy
+        series = series.shift(N)  # copy
         return series
 
 
