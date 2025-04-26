@@ -25,7 +25,10 @@ def robust_zscore(x: pd.Series, zscore=False):
 
 
 def zscore(x: Union[pd.Series, pd.DataFrame, np.array]):
-    return (x - x.mean()).div(x.std() + 1e-12)
+    if isinstance(x, np.array):
+        return (x - x.mean()) / (x.std() + 1e-12)
+    else:
+        return (x - x.mean()).div(x.std() + 1e-12)
 
 
 def drop_extreme_label(x: np.array):
