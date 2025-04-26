@@ -24,8 +24,8 @@ def robust_zscore(x: pd.Series, zscore=False):
     return x
 
 
-def zscore(x: Union[pd.Series, pd.DataFrame, np.array]):
-    if isinstance(x, np.array):
+def zscore(x: Union[pd.Series, pd.DataFrame, np.ndarray]):
+    if isinstance(x, np.ndarray):
         return (x - x.mean()) / (x.std() + 1e-12)
     else:
         return (x - x.mean()).div(x.std() + 1e-12)
