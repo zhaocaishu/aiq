@@ -1,7 +1,6 @@
 import os
 import argparse
 import pickle
-from typing import Optional
 
 from aiq.utils.config import config as cfg
 from aiq.utils.module import init_instance_by_config

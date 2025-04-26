@@ -265,16 +265,11 @@ class DFTModel(BaseModel):
 
         # 统一数据插入逻辑
         label_names = test_dataset.label_names or [str(i) for i in range(self.pred_len)]
-        test_dataset.insert(cols=[f"PRED_{name}" for name in label_names], data=preds)
+        test_dataset.data[[f"PRED_{name}" for name in label_names]] = preds
 
         if self.num_classes is not None:
-            test_dataset.insert(
-                cols=[f"PRED_{name}_PROBS" for name in label_names],
-                data=pred_probs.tolist(),
-            )
-            test_dataset.insert(
-                cols=[f"PRED_{name}_CLS" for name in label_names], data=pred_cls
-            )
+            test_dataset.data[[f"PRED_{name}_PROBS" for name in label_names]] = pred_probs.tolist()
+            test_dataset.data[[f"PRED_{name}_CLS" for name in label_names]] = pred_cls
 
         return test_dataset
 

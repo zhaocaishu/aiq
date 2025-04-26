@@ -132,12 +132,12 @@ class PPNetModel(BaseModel):
                     batch_x = batch_x * mask
 
                 batch_x = batch_x.squeeze(0).to(self.device, dtype=torch.float)
-                batch_y = batch_y.squeeze(0).to(self.device, dtype=torch.float)
+                batch_y = batch_y.squeeze().to(self.device, dtype=torch.float)
 
                 # drop extreme and zscore on label
                 mask, batch_y = drop_extreme_label(batch_y)
-                batch_x = batch_x[mask.squeeze()]
-                batch_y = zscore(batch_y)
+                batch_x = batch_x[mask]
+                batch_y = zscore(batch_y).unsqueeze(-1)
 
                 assert not torch.isnan(batch_x).any(), "NaN at batch_x"
                 assert not torch.isnan(batch_y).any(), "NaN at batch_y"
@@ -193,10 +193,10 @@ class PPNetModel(BaseModel):
         with torch.no_grad():
             for i, (_, batch_x, batch_y) in enumerate(val_loader):
                 batch_x = batch_x.squeeze(0).to(self.device, dtype=torch.float)
-                batch_y = batch_y.squeeze(0).to(self.device, dtype=torch.float)
+                batch_y = batch_y.squeeze().to(self.device, dtype=torch.float)
 
                 # zscore on label
-                batch_y = zscore(batch_y)
+                batch_y = zscore(batch_y).unsqueeze(-1)
 
                 outputs = self.model(batch_x)
 
@@ -225,7 +225,7 @@ class PPNetModel(BaseModel):
 
         # 统一数据插入逻辑
         label_names = test_dataset.label_names or [str(i) for i in range(self.pred_len)]
-        test_dataset.insert(cols=[f"PRED_{name}" for name in label_names], data=preds)
+        test_dataset.data[[f"PRED_{name}" for name in label_names]] = preds
         return test_dataset
 
     def load(self, model_name=None):
