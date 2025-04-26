@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import torch
 
+from aiq.utils.processing import drop_extreme_label, zscore
 from .loader import DataLoader
 
 
@@ -121,6 +122,10 @@ class TSDataset(Dataset):
             label = np.array(
                 [self._label[slice[0].stop - 1] for slice in self._daily_slices[i]]
             )
+            if self.mode == "train":
+                mask, label = drop_extreme_label(label)
+                feature = feature[mask]
+            label = zscore(label)
             return index, feature, label
         return index, feature
 

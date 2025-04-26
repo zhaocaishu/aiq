@@ -24,17 +24,16 @@ def robust_zscore(x: pd.Series, zscore=False):
     return x
 
 
-def zscore(x: Union[pd.Series, pd.DataFrame, torch.Tensor]):
+def zscore(x: Union[pd.Series, pd.DataFrame, np.array]):
     return (x - x.mean()).div(x.std() + 1e-12)
 
 
-def drop_extreme_label(x):
-    sorted_tensor, indices = x.sort()
+def drop_extreme_label(x: np.array):
+    sorted_indices = np.argsort(x)
     N = x.shape[0]
     percent_2_5 = int(0.025 * N)
-    # Exclude top 2.5% and bottom 2.5% values
-    filtered_indices = indices[percent_2_5:-percent_2_5]
-    mask = torch.zeros_like(x, device=x.device, dtype=torch.bool)
+    filtered_indices = sorted_indices[percent_2_5:-percent_2_5]
+    mask = np.zeros_like(x, dtype=bool)
     mask[filtered_indices] = True
     return mask, x[mask]
 

@@ -5,11 +5,9 @@ import numpy as np
 import torch
 from torch import nn, optim
 from torch.utils.data import Dataset, DataLoader
-
 from transformers import get_scheduler
 
 from aiq.layers import PPNet
-from aiq.utils.processing import drop_extreme_label, zscore
 
 from .base import BaseModel
 
@@ -132,12 +130,7 @@ class PPNetModel(BaseModel):
                     batch_x = batch_x * mask
 
                 batch_x = batch_x.squeeze(0).to(self.device, dtype=torch.float)
-                batch_y = batch_y.squeeze().to(self.device, dtype=torch.float)
-
-                # drop extreme and zscore on label
-                mask, batch_y = drop_extreme_label(batch_y)
-                batch_x = batch_x[mask]
-                batch_y = zscore(batch_y).unsqueeze(-1)
+                batch_y = batch_y.squeeze(0).to(self.device, dtype=torch.float)
 
                 assert not torch.isnan(batch_x).any(), "NaN at batch_x"
                 assert not torch.isnan(batch_y).any(), "NaN at batch_y"
@@ -193,10 +186,7 @@ class PPNetModel(BaseModel):
         with torch.no_grad():
             for i, (_, batch_x, batch_y) in enumerate(val_loader):
                 batch_x = batch_x.squeeze(0).to(self.device, dtype=torch.float)
-                batch_y = batch_y.squeeze().to(self.device, dtype=torch.float)
-
-                # zscore on label
-                batch_y = zscore(batch_y).unsqueeze(-1)
+                batch_y = batch_y.squeeze(0).to(self.device, dtype=torch.float)
 
                 outputs = self.model(batch_x)
 
@@ -213,18 +203,22 @@ class PPNetModel(BaseModel):
         )
         num_samples = test_dataset.data.shape[0]
 
+        labels = np.zeros((num_samples, self.pred_len))
         preds = np.zeros((num_samples, self.pred_len))
         for index, batch_x, *batch_y in test_loader:
             index = index.cpu().numpy()  # 确保索引为 numpy 数组
             batch_x = batch_x.squeeze(0).to(self.device, dtype=torch.float)
+            batch_y = batch_y.squeeze(0).to(self.device, dtype=torch.float)
 
             with torch.no_grad():
                 outputs = self.model(batch_x)
 
+            labels[index] = batch_y.cpu().numpy()
             preds[index] = outputs.cpu().numpy()
 
         # 统一数据插入逻辑
-        label_names = test_dataset.label_names or [str(i) for i in range(self.pred_len)]
+        label_names = test_dataset.label_names
+        test_dataset.data[label_names] = labels
         test_dataset.data[[f"PRED_{name}" for name in label_names]] = preds
         return test_dataset
 
