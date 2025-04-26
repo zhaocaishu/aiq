@@ -435,6 +435,7 @@ class PPNet(nn.Module):
         dropout,
         gate_input_start_index,
         gate_input_end_index,
+        seq_len,
         beta=5,
     ):
         super(PPNet, self).__init__()
