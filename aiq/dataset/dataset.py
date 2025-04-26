@@ -110,30 +110,33 @@ class TSDataset(Dataset):
             return np.concatenate([padding_zeros, data], axis=0)
         return data
 
-    def __getitem__(self, i):
-        index = np.array([slice[1] for slice in self._daily_slices[i]])
-        feature = np.array(
-            [
-                self.padding_zeros(self._feature[slice[0]], self.seq_len)
-                for slice in self._daily_slices[i]
-            ]
-        )
-        feature = np.stack(feature)
-        if self._label is not None:
-            label = np.array(
-                [self._label[slice[0].stop - 1] for slice in self._daily_slices[i]]
-            ).squeeze()
+    def __getitem__(self, index):
+        """根据索引获返回样本索引、特征和标准化后的标签（若存在）"""
+        daily_slices = self._daily_slices[index]
 
-            # Filter extreme labels and features in training mode
-            if self.mode == "train":
-                mask, label = drop_extreme_label(label)
-                feature = feature[mask]
-            
-            # Apply z-score normalization
-            label = zscore(label).reshape(-1, 1)
-            
-            return index, feature, label
-        return index, feature
+        sample_indices = np.array([slice[1] for slice in daily_slices])
+
+        features = [
+            self.padding_zeros(self._feature[slice[0]], self.seq_len)
+            for slice in daily_slices
+        ]
+        features = np.stack(features)
+
+        if self._label is None:
+            return sample_indices, features
+
+        labels = np.array(
+            [self._label[slice[0].stop - 1] for slice in daily_slices]
+        ).squeeze()
+
+        if self.mode == "train":
+            valid_mask, filtered_labels = drop_extreme_label(labels)
+            features = features[valid_mask]
+            labels = filtered_labels
+
+        normalized_labels = zscore(labels).reshape(-1, 1)
+
+        return sample_indices, features, normalized_labels
 
     def __len__(self):
         return len(self._daily_index)

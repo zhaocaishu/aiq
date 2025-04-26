@@ -210,16 +210,16 @@ class PPNetModel(BaseModel):
 
         labels = np.zeros((num_samples, self.pred_len))
         preds = np.zeros((num_samples, self.pred_len))
-        for i, (index, batch_x, batch_y) in enumerate(test_loader):
+        for i, (sample_indices, batch_x, batch_y) in enumerate(test_loader):
             batch_x = batch_x.squeeze(0).to(self.device, dtype=torch.float)
             batch_y = batch_y.squeeze(0).to(self.device, dtype=torch.float)
 
             with torch.no_grad():
                 outputs = self.model(batch_x)
 
-            index = index.cpu().numpy()  # 确保索引为 numpy 数组
-            labels[index] = batch_y.cpu().numpy()
-            preds[index] = outputs.cpu().numpy()
+            sample_indices = sample_indices.cpu().numpy()  # 确保索引为 numpy 数组
+            labels[sample_indices] = batch_y.cpu().numpy()
+            preds[sample_indices] = outputs.cpu().numpy()
 
         test_dataset.data[label_names] = labels
         test_dataset.data[[f"PRED_{name}" for name in label_names]] = preds
