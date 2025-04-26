@@ -218,7 +218,7 @@ class PPNetModel(BaseModel):
             with torch.no_grad():
                 outputs = self.model(batch_x)
 
-            sample_indices = sample_indices.cpu().numpy()  # 确保索引为 numpy 数组
+            sample_indices = sample_indices.squeeze(0).numpy()  # 确保索引为 numpy 数组
             labels[sample_indices] = batch_y.cpu().numpy()
             preds[sample_indices] = outputs.cpu().numpy()
 
