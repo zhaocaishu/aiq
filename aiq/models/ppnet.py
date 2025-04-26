@@ -2,6 +2,7 @@ import os
 import time
 
 import numpy as np
+import pandas as pd
 import torch
 from torch import nn, optim
 from torch.utils.data import Dataset, DataLoader
@@ -180,6 +181,7 @@ class PPNetModel(BaseModel):
 
     def eval(self, val_dataset: Dataset):
         self.model.eval()
+
         val_loader = DataLoader(val_dataset, batch_size=self.batch_size, shuffle=False)
 
         total_loss = []
@@ -198,10 +200,13 @@ class PPNetModel(BaseModel):
 
     def predict(self, test_dataset: Dataset) -> object:
         self.model.eval()
+
         test_loader = DataLoader(
             test_dataset, batch_size=self.batch_size, shuffle=False
         )
+
         num_samples = test_dataset.data.shape[0]
+        label_names = test_dataset.label_names
 
         labels = np.zeros((num_samples, self.pred_len))
         preds = np.zeros((num_samples, self.pred_len))
@@ -216,10 +221,9 @@ class PPNetModel(BaseModel):
             labels[index] = batch_y.cpu().numpy()
             preds[index] = outputs.cpu().numpy()
 
-        # 统一数据插入逻辑
-        label_names = test_dataset.label_names
-        test_dataset.data[label_names] = labels
-        test_dataset.data[[f"PRED_{name}" for name in label_names]] = preds
+        labels_df = pd.DataFrame(labels, columns=label_names)
+        preds_df = pd.DataFrame(preds, columns=[f"PRED_{name}" for name in label_names])
+        test_dataset.data = pd.concat([test_dataset.data, labels_df, preds_df], axis=1)
         return test_dataset
 
     def load(self, model_name=None):
