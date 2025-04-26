@@ -3,6 +3,7 @@ import pandas as pd
 import torch
 
 from aiq.utils.processing import drop_extreme_label, zscore
+
 from .loader import DataLoader
 
 
@@ -121,16 +122,15 @@ class TSDataset(Dataset):
         if self._label is not None:
             label = np.array(
                 [self._label[slice[0].stop - 1] for slice in self._daily_slices[i]]
-            )
+            ).squeeze()
 
             # Filter extreme labels and features in training mode
-            label = label.squeeze()
             if self.mode == "train":
                 mask, label = drop_extreme_label(label)
                 feature = feature[mask]
             
-            # Apply z-score normalization and add new axis
-            label = zscore(label)[:, np.newaxis]
+            # Apply z-score normalization
+            label = zscore(label).reshape(-1, 1)
             
             return index, feature, label
         return index, feature
