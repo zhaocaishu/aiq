@@ -185,16 +185,17 @@ class PPNetModel(BaseModel):
         val_loader = DataLoader(val_dataset, batch_size=self.batch_size, shuffle=False)
 
         total_loss = []
-        with torch.no_grad():
-            for i, (_, batch_x, batch_y) in enumerate(val_loader):
-                batch_x = batch_x.squeeze(0).to(self.device, dtype=torch.float)
-                batch_y = batch_y.squeeze(0).to(self.device, dtype=torch.float)
 
+        for i, (_, batch_x, batch_y) in enumerate(val_loader):
+            batch_x = batch_x.squeeze(0).to(self.device, dtype=torch.float)
+            batch_y = batch_y.squeeze(0).to(self.device, dtype=torch.float)
+
+            with torch.no_grad():
                 outputs = self.model(batch_x)
 
-                loss = self.criterion(outputs, batch_y)
+            loss = self.criterion(outputs, batch_y)
 
-                total_loss.append(loss.item())
+            total_loss.append(loss.item())
         total_loss = np.average(total_loss)
         return total_loss
 
