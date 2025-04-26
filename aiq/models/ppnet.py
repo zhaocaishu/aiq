@@ -221,9 +221,8 @@ class PPNetModel(BaseModel):
             labels[index] = batch_y.cpu().numpy()
             preds[index] = outputs.cpu().numpy()
 
-        labels_df = pd.DataFrame(labels, columns=label_names)
-        preds_df = pd.DataFrame(preds, columns=[f"PRED_{name}" for name in label_names])
-        test_dataset.data = pd.concat([test_dataset.data, labels_df, preds_df], axis=1)
+        test_dataset.data[label_names] = labels
+        test_dataset.data[[f"PRED_{name}" for name in label_names]] = preds
         return test_dataset
 
     def load(self, model_name=None):
