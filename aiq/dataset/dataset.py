@@ -122,10 +122,16 @@ class TSDataset(Dataset):
             label = np.array(
                 [self._label[slice[0].stop - 1] for slice in self._daily_slices[i]]
             )
+
+            # Filter extreme labels and features in training mode
+            label = label.squeeze()
             if self.mode == "train":
                 mask, label = drop_extreme_label(label)
                 feature = feature[mask]
-            label = zscore(label)
+            
+            # Apply z-score normalization and add new axis
+            label = zscore(label)[:, np.newaxis]
+            
             return index, feature, label
         return index, feature
 
