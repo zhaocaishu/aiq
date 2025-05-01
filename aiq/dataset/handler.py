@@ -412,12 +412,16 @@ class Alpha158(DataHandler):
         mode: str = "train",
     ) -> pd.DataFrame:
         # Extract feature and label from data
-        feature_df = df.groupby("Instrument", group_keys=False).apply(self.extract_instrument_features)
+        feature_df = df.groupby("Instrument", group_keys=False).apply(
+            self.extract_instrument_features
+        )
         if mode in ["train", "valid"]:
             label_df = df.groupby("Instrument", group_keys=False).apply(
                 lambda group: self.extract_instrument_labels(group, benchmark_df)
             )
-            feature_label_df = pd.merge(feature_df, label_df, on=["Date", "Instrument"], how="inner")
+            feature_label_df = pd.merge(
+                feature_df, label_df, on=["Date", "Instrument"], how="inner"
+            )
         else:
             feature_label_df = feature_df
 
