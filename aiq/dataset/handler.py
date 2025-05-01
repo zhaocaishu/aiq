@@ -345,7 +345,7 @@ class Alpha158(DataHandler):
         self._feature_names = feature_names.copy()
         feature_df = pd.concat(
             [
-                df[["Date", "Instrument"]],
+                df[["Instrument", "Date"]],
                 pd.concat(
                     [
                         features[i].rename(feature_names[i])
@@ -356,7 +356,6 @@ class Alpha158(DataHandler):
             ],
             axis=1,
         )
-        feature_df = feature_df.reset_index(drop=True)
 
         return feature_df
 
@@ -370,16 +369,21 @@ class Alpha158(DataHandler):
         labels = [Ref(close, -5) / Ref(close, -1) - 1]
         label_df = pd.concat(
             [
-                labels[i].rename(self._label_names[i])
-                for i in range(len(self._label_names))
+                df[["Instrument", "Date"]],
+                pd.concat(
+                    [
+                        labels[i].rename(self._label_names[i])
+                        for i in range(len(self._label_names))
+                    ],
+                    axis=1,
+                ).astype("float32"),
             ],
             axis=1,
-        ).astype("float32")
-        label_df = label_df.reset_index(drop=True)
+        )
 
         return label_df
 
-    def postprocess(
+    def transform(
         self,
         df: pd.DataFrame = None,
         feature_names: List[str] = [],
@@ -392,13 +396,10 @@ class Alpha158(DataHandler):
             column_tuples.extend([("label", label_name) for label_name in label_names])
         df.columns = pd.MultiIndex.from_tuples(column_tuples)
 
-        if mode == "train":
-            for processor in processors:
-                processor.fit(df)
-                df = processor(df)
-        else:
-            for processor in self.processors:
-                df = processor(df)
+        for proc in processors:
+            if mode == "train" and hasattr(proc, "fit"):
+                proc.fit(df)
+            df = proc(df)
 
         df.columns = df.columns.droplevel()
         df = df.reset_index()
@@ -410,24 +411,22 @@ class Alpha158(DataHandler):
         benchmark_df: pd.DataFrame = None,
         mode: str = "train",
     ) -> pd.DataFrame:
-        # extract feature and label from data
-        feature_df = df.groupby("Instrument").apply(self.extract_instrument_features)
+        # Extract feature and label from data
+        feature_df = df.groupby("Instrument", group_keys=False).apply(self.extract_instrument_features)
         if mode in ["train", "valid"]:
-            label_df = df.groupby("Instrument").apply(
+            label_df = df.groupby("Instrument", group_keys=False).apply(
                 lambda group: self.extract_instrument_labels(group, benchmark_df)
             )
-            feature_label_df = pd.concat([feature_df, label_df], ignore_index=True)
+            feature_label_df = pd.merge(feature_df, label_df, on=["Date", "Instrument"], how="inner")
         else:
             feature_label_df = feature_df
 
-        feature_label_df = (
-            feature_label_df.replace([np.inf, -np.inf], np.nan)
-            .set_index(["Date", "Instrument"])
-            .sort_index()
-        )
+        feature_label_df = feature_label_df.set_index(
+            ["Date", "Instrument"]
+        ).sort_index()
 
-        # preprocessing
-        feature_label_df = self.postprocess(
+        # Instrument-level feature transform
+        feature_label_df = self.transform(
             feature_label_df,
             self._feature_names,
             self._label_names,
@@ -488,7 +487,7 @@ class MarketAlpha158(Alpha158):
                 ]
             )
 
-        # concat features
+        # Concat features
         self._market_feature_names = feature_names.copy()
         feature_df = pd.concat(
             [
@@ -512,11 +511,11 @@ class MarketAlpha158(Alpha158):
         market_df: pd.DataFrame = None,
         mode: str = "train",
     ) -> pd.DataFrame:
-        # instrument-level feature and label
+        # Instrument-level feature and label extraction
         benchmark_df = market_df[market_df["Instrument"] == self.benchmark]
         feature_label_df = super().process(df, benchmark_df, mode)
 
-        # market-level feature and label
+        # Market-level feature extraction
         market_feature_df = pd.concat(
             [
                 self.extract_market_features(
@@ -539,8 +538,8 @@ class MarketAlpha158(Alpha158):
         self._market_feature_names = market_feature_df.columns.tolist()
         self._feature_names.extend(self._market_feature_names)
 
-        # Market-level postprocessing
-        market_feature_df = self.postprocess(
+        # Market-level feature transform
+        market_feature_df = self.transform(
             df=market_feature_df,
             feature_names=self._market_feature_names,
             processors=self.market_processors,
