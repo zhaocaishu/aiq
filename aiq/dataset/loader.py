@@ -226,7 +226,7 @@ class DataLoader:
     @staticmethod
     def load_instruments_features(
         data_dir, instruments, start_time, end_time
-    ) -> List[pd.DataFrame]:
+    ) -> pd.DataFrame:
         """
         Batch load feature data for multiple instruments.
 
@@ -237,12 +237,13 @@ class DataLoader:
             end_time (str): end time (YYYY-MM-DD)
 
         Returns:
-            List[pd.DataFrame]: list of feature DataFrames
+            pd.DataFrame: Concatenated feature DataFrame for all instruments
         """
         if isinstance(instruments, str):
             instruments = DataLoader.load_instruments(
                 data_dir, instruments, start_time, end_time
             )
+        
         dfs = []
         for instrument in instruments:
             df = DataLoader.load_instrument_features(
@@ -250,7 +251,14 @@ class DataLoader:
             )
             if df is not None:
                 dfs.append(df)
-        return dfs
+
+        if not dfs:
+            # Return an empty DataFrame if no data is loaded
+            return pd.DataFrame()
+
+        # Concatenate all DataFrames, reset index if necessary
+        combined_df = pd.concat(dfs, axis=0, ignore_index=True)
+        return combined_df
 
     @staticmethod
     def load_market_features(
@@ -342,12 +350,19 @@ class DataLoader:
             end_time (str): end time (YYYY-MM-DD)
 
         Returns:
-            Dict[str, pd.DataFrame]: dictionary of market data with market names as keys
+            pd.DataFrame: Concatenated feature DataFrame for all markets
         """
 
-        dfs = {}
+        dfs = []
         for market in markets:
             df = DataLoader.load_market_features(data_dir, market=market, start_time=start_time, end_time=end_time)
             if df is not None:
-                dfs[market] = df
-        return dfs
+                dfs.append(df)
+
+        if not dfs:
+            # Return an empty DataFrame if no data is loaded
+            return pd.DataFrame()
+
+        # Concatenate all DataFrames, reset index if necessary
+        combined_df = pd.concat(dfs, axis=0, ignore_index=True)
+        return combined_df

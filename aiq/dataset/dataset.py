@@ -60,10 +60,10 @@ class TSDataset(Dataset):
         self.seq_len = seq_len
         self.mode = mode
         start_time, end_time = segments[self.mode]
-        instrument_dfs = DataLoader.load_instruments_features(
+        instrument_df = DataLoader.load_instruments_features(
             data_dir, instruments, start_time, end_time
         )
-        self.df = data_handler.process(instrument_dfs, mode=mode)
+        self.df = data_handler.process(instrument_df, mode=mode)
         self.data_handler = data_handler
         self.label_cols = label_cols
         self._setup_time_series()
@@ -160,14 +160,14 @@ class MarketTSDataset(TSDataset):
         self.seq_len = seq_len
         self.mode = mode
         start_time, end_time = segments[self.mode]
-        instrument_dfs = DataLoader.load_instruments_features(
+        instrument_df = DataLoader.load_instruments_features(
             data_dir, instruments, start_time, end_time
         )
         market_names = ["000300.SH", "000903.SH", "000905.SH"]
-        market_dfs = DataLoader.load_markets_features(
+        market_df = DataLoader.load_markets_features(
             data_dir, market_names, start_time, end_time
         )
-        self.df = data_handler.process(instrument_dfs, market_dfs=market_dfs, mode=mode)
+        self.df = data_handler.process(instrument_df, market_df=market_df, mode=mode)
         self.data_handler = data_handler
         self.label_cols = label_cols
         self._setup_time_series()

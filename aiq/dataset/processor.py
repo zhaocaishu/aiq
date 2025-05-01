@@ -57,18 +57,6 @@ class Processor(abc.ABC):
             The raw_df of handler or result from previous processor.
         """
 
-    def is_for_infer(self) -> bool:
-        """
-        Is this processor usable for inference
-        Some processors are not usable for inference.
-
-        Returns
-        -------
-        bool:
-            if it is usable for infenrece.
-        """
-        return True
-
 
 class Dropna(Processor):
     def __init__(self, fields_group=None):
