@@ -2,16 +2,8 @@ data_handler:
   class: MarketAlpha158
   module_path: aiq.dataset.handler
   kwargs:
+    benchmark: "000300.SH"
     processors:
-      - class: Dropna
-        module_path: aiq.dataset.processor
-        kwargs:
-          fields_group: "label"
-      - class: DropExtremeLabel
-        module_path: aiq.dataset.processor
-        kwargs:
-          fields_group: "label"
-          percentile: 0.975
       - class: RobustZScoreNorm
         module_path: aiq.dataset.processor
         kwargs:
@@ -21,7 +13,7 @@ data_handler:
         module_path: aiq.dataset.processor
         kwargs:
           fields_group: "feature"
-      - class: CSZScoreNorm
+      - class: Dropna
         module_path: aiq.dataset.processor
         kwargs:
           fields_group: "label"
@@ -41,25 +33,25 @@ dataset:
   kwargs:
     instruments: "000300.SH"
     segments:
-      train: ["2008-01-01", "2020-03-31"]
-      valid: ["2020-04-01", "2020-06-30"]
-      test: ["2020-07-01", "2023-12-31"]
+      train: ["2008-01-01", "2022-06-30"]
+      valid: ["2022-07-01", "2022-12-31"]
+      test: ["2023-01-01", "2023-12-31"]
     seq_len: 8
     label_cols: ["RETN_5D"]
 model:
-  class: MATCCModel
-  module_path: aiq.models.matcc
+  class: PPNetModel
+  module_path: aiq.models.ppnet
   kwargs:
-    d_feat: 179
+    d_feat: 157
     d_model: 256
     t_nhead: 4
     s_nhead: 2
     seq_len: 8
     pred_len: 1
     dropout: 0.5
-    gate_input_start_index: 179
-    gate_input_end_index: 242
+    gate_input_start_index: 162
+    gate_input_end_index: 225
     epochs: 30
     batch_size: 1
-    learning_rate: 0.0003
+    learning_rate: 0.0001
     criterion_name: "MSE"

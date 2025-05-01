@@ -1,6 +1,7 @@
 from typing import List, Dict
 
 import pandas as pd
+import numpy as np
 
 from aiq.ops import (
     Greater,
@@ -40,16 +41,30 @@ class Alpha158(DataHandler):
         self.processors = [init_instance_by_config(proc) for proc in processors]
 
     def extract_features(self, df: pd.DataFrame = None):
+        # fundamental data
+        ind_class = df["Ind_class"]
+        mkt_class = df["Mkt_class"]
+        ep = 1.0 / df["Pe_ttm"]
+        bp = 1.0 / df["Pb"]
+        mkt_cap = np.log(df["Total_mv"])
+
         # adjusted prices
         adjusted_factor = df["Adj_factor"]
         open = df["Open"] * adjusted_factor
         close = df["Close"] * adjusted_factor
         high = df["High"] * adjusted_factor
         low = df["Low"] * adjusted_factor
+
         volume = df["Volume"]
+        turn = df["Turnover_rate_f"]
 
         # kbar
         features = [
+            ind_class,
+            mkt_class,
+            ep,
+            bp,
+            mkt_cap,
             (close - open) / open,
             (high - low) / open,
             (close - open) / (high - low + 1e-12),
@@ -61,6 +76,11 @@ class Alpha158(DataHandler):
             (2 * close - high - low) / (high - low + 1e-12),
         ]
         feature_names = [
+            "IND_CLS_CAT",
+            "MKT_CLS_CAT",
+            "EP",
+            "BP",
+            "MKT_CAP",
             "KMID",
             "KLEN",
             "KMID2",
@@ -73,28 +93,18 @@ class Alpha158(DataHandler):
         ]
 
         # price
-        for field, price in zip(
-            ["Open", "High", "Low", "Close"], [open, high, low, close]
-        ):
-            for d in range(5):
+        for field, price in zip(["Open", "High", "Low"], [open, high, low]):
+            for d in range(1):
                 if d != 0:
                     features.append(Ref(price, d) / close)
                 else:
                     features.append(price / close)
                 feature_names.append(field.upper() + str(d))
 
-        # volume
-        for d in range(5):
-            if d != 0:
-                features.append(Ref(volume, d) / (volume + 1e-12))
-            else:
-                features.append(volume / (volume + 1e-12))
-            feature_names.append("VOLUME%d" % d)
-
         # rolling
         windows = [5, 10, 20, 30, 60]
         include = None
-        exclude = ["VALUE", "ILLIQ", "TURN"]
+        exclude = []
 
         def use(x):
             return x not in exclude and (include is None or x in include)
@@ -372,12 +382,14 @@ class Alpha158(DataHandler):
             for df in dfs
         ]
 
-        feature_label_df = pd.concat(feature_label_dfs, ignore_index=True).set_index(
-            ["Date", "Instrument"]
+        feature_label_df = (
+            pd.concat(feature_label_dfs, ignore_index=True)
+            .replace([np.inf, -np.inf], np.nan)
+            .set_index(["Date", "Instrument"])
+            .sort_index()
         )
-        feature_label_df.sort_index(inplace=True)
 
-        # data preprocess
+        # data preprocessing
         column_tuples = [
             ("feature", feature_name) for feature_name in self._feature_names
         ]
@@ -397,7 +409,7 @@ class Alpha158(DataHandler):
                     feature_label_df = processor(feature_label_df)
 
         feature_label_df.columns = feature_label_df.columns.droplevel()
-        
+
         return feature_label_df
 
     def process(
@@ -418,12 +430,16 @@ class Alpha158(DataHandler):
 class MarketAlpha158(Alpha158):
     def __init__(
         self,
+        benchmark: str = None,
         processors: List = None,
         market_processors: List = None,
     ):
         self._feature_names = None
         self._market_feature_names = None
         self._label_names = None
+
+        # benchmark
+        self.benchmark = benchmark
 
         # data processors
         self.processors = [init_instance_by_config(proc) for proc in processors]
@@ -557,19 +573,15 @@ class MarketAlpha158(Alpha158):
             how="inner",
         )
 
+        assert merge_df.shape[0] == df.shape[0]
+
         adjusted_factor = merge_df["Adj_factor"]
         close = merge_df["Close"] * adjusted_factor
         market_close = merge_df["MKT_Close"]
 
         # labels
-        self._label_names = ["RETN_1D", "RETN_2D", "RETN_3D", "RETN_4D", "RETN_5D"]
-        labels = [
-            Ref(close, -1) / close - 1,
-            Ref(close, -2) / close - 1,
-            Ref(close, -3) / close - 1,
-            Ref(close, -4) / close - 1,
-            Ref(close, -5) / close - 1,
-        ]
+        self._label_names = ["RETN_5D"]
+        labels = [Ref(close, -5) / Ref(close, -1) - 1]
         label_df = pd.concat(
             [
                 labels[i].rename(self._label_names[i])
@@ -587,7 +599,7 @@ class MarketAlpha158(Alpha158):
         mode: str = "train",
     ) -> pd.DataFrame:
         # extract feature and label from data
-        market_df = market_dfs.get("000300.SH", None)
+        market_df = market_dfs.get(self.benchmark, None)
         feature_label_dfs = [
             (
                 pd.concat(
@@ -603,10 +615,12 @@ class MarketAlpha158(Alpha158):
             for df in dfs
         ]
 
-        feature_label_df = pd.concat(feature_label_dfs, ignore_index=True).set_index(
-            ["Date", "Instrument"]
+        feature_label_df = (
+            pd.concat(feature_label_dfs, ignore_index=True)
+            .replace([np.inf, -np.inf], np.nan)
+            .set_index(["Date", "Instrument"])
+            .sort_index()
         )
-        feature_label_df.sort_index(inplace=True)
 
         # data preprocessing
         column_tuples = [
@@ -636,22 +650,26 @@ class MarketAlpha158(Alpha158):
         market_dfs: Dict[str, pd.DataFrame] = None,
         mode: str = "train",
     ) -> pd.DataFrame:
-        # instrument feature and label
+        # instrument-level feature and label
         feature_label_df = self.process_feature_labels(dfs, market_dfs, mode=mode)
         feature_label_df = feature_label_df.reset_index()
 
-        # market information
+        # market features
         market_feature_df = self.process_market_features(market_dfs, mode=mode)
         market_feature_df = market_feature_df.reset_index()
 
-        # merge market information
-        feature_label_df = pd.merge(
+        # merge instrument features with market features on the Date column
+        market_feature_label_df = pd.merge(
             feature_label_df,
             market_feature_df,
             on="Date",
             how="inner",
         )
-        feature_label_df = feature_label_df.set_index(["Date", "Instrument"])
-        feature_label_df.sort_index(inplace=True)
+        market_feature_label_df = market_feature_label_df.set_index(
+            ["Date", "Instrument"]
+        )
+        market_feature_label_df.sort_index(inplace=True)
 
-        return feature_label_df
+        assert feature_label_df.shape[0] == market_feature_label_df.shape[0]
+
+        return market_feature_label_df

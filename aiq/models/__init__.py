@@ -1,6 +1,5 @@
 from .xgboost import XGBModel
 from .lightgbm import LGBModel
-from .matcc import MATCCModel
-from .master import MASTERModel
+from .ppnet import PPNetModel
 
-__all__ = ['XGBModel', 'LGBModel', 'MATCCModel', 'MASTERModel']
+__all__ = ["XGBModel", "LGBModel", "PPNetModel"]

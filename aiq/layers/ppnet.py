@@ -115,7 +115,7 @@ class TemporalAttention(nn.Module):
         return output
 
 
-class DFT(nn.Module):
+class PPNet(nn.Module):
     def __init__(
         self,
         d_feat=158,
@@ -127,7 +127,6 @@ class DFT(nn.Module):
         dropout=0.5,
         gate_input_start_index=158,
         gate_input_end_index=221,
-        num_classes=None,
     ):
         super().__init__()
 
@@ -135,13 +134,31 @@ class DFT(nn.Module):
         self.d_model = d_model
         self.n_attn = d_model
         self.n_head = t_nhead
-        self.num_classes = num_classes
 
         # market
         self.gate_input_start_index = gate_input_start_index
         self.gate_input_end_index = gate_input_end_index
         self.d_gate_input = gate_input_end_index - gate_input_start_index  # F'
         self.feature_gate = Filter(self.d_gate_input, self.d_feat, seq_len)
+
+        self.market_linear = nn.Linear(d_feat, d_model)
+
+        # instrument fundamental modules
+        self.num_industries = 192
+        self.ind_embedding_dim = 16
+        self.ind_embedding = nn.Embedding(self.num_industries, self.ind_embedding_dim)
+
+        self.num_fund_features = 20
+        self.fund_encoder = nn.Sequential(
+            nn.Linear(self.num_fund_features, 4 * self.num_fund_features),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(4 * self.num_fund_features, self.num_fund_features),
+            nn.Dropout(dropout),
+        )
+
+        # instrument price and volume modules
+        self.feat_to_model = nn.Linear(d_feat, d_model)
 
         self.rwkv_trend = Block(
             layer_id=0,
@@ -174,14 +191,13 @@ class DFT(nn.Module):
             rwkv_emb_scale=1.0,
         )
 
-        self.feat_to_model = nn.Linear(d_feat, d_model)
         self.dlinear = DLinear(
             seq_len=seq_len,
             pred_len=seq_len,
             enc_in=self.d_model,
             kernel_size=3,
             individual=False,
-            merge_outputs=False
+            merge_outputs=False,
         )
         DLinear_Init(self.dlinear, min_val=-5e-2, max_val=8e-2)
 
@@ -198,36 +214,38 @@ class DFT(nn.Module):
             ),  # Stock correlation
         )
 
-        self.market_linear = nn.Linear(d_feat, d_model)
+        self.temporal_attn = TemporalAttention(d_model=d_model)
 
-        if num_classes is not None:
-            self.decoders = nn.ModuleList(
-                [
-                    nn.Sequential(
-                        TemporalAttention(d_model=d_model),
-                        nn.Linear(d_model, num_classes),
-                    )
-                    for _ in range(pred_len)
-                ]
-            )
-        else:
-            self.decoder = nn.Sequential(
-                TemporalAttention(d_model=d_model),
-                nn.Linear(d_model, pred_len),
-            )
+        hidden_dim = d_model // 2
+        self.regression_head = nn.Sequential(
+            # nn.Linear(d_model + self.num_fund_features, hidden_dim),
+            nn.Linear(d_model, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, pred_len)
+        )
 
     def forward(self, x):
-        src = x[:, :, : self.gate_input_start_index]  # N, T, D
+        # x: [N, T, D]
+        ind_class = x[:, -1, 0].long()
+        cat_feats = self.ind_embedding(ind_class)
+
+        fund_feats = x[:, :, 1:5].mean(dim=1)
+        fund_feats = torch.cat([cat_feats, fund_feats], dim=1)
+        fund_feats = self.fund_encoder(fund_feats)
+
+        cont_feats = x[:, :, 5 : self.gate_input_start_index]
+        cont_feats = self.feat_to_model(cont_feats)
+        trend_feat, season_feat = self.dlinear(cont_feats)
+
         gate_input = x[:, :, self.gate_input_start_index : self.gate_input_end_index]
-        market = self.feature_gate.forward(gate_input)
+        market_feat = self.feature_gate(gate_input)
 
-        src_model = self.feat_to_model(src)
-        src_trend, src_season = self.dlinear(src_model)
-        src_trend = self.trend_TC(src_trend) + self.market_linear(market)
-        src_season = self.season_TC(src_season)
+        trend_out = self.trend_TC(trend_feat) + self.market_linear(market_feat)
+        season_out = self.season_TC(season_feat)
+        temporal_out = self.temporal_attn(trend_out + season_out)
 
-        if self.num_classes is not None:
-            outputs = [decoder(src_trend + src_season) for decoder in self.decoders]
-        else:
-            outputs = self.decoder(src_trend + src_season)
-        return outputs
+        # fused_out = torch.cat([temporal_out, fund_feats], dim=-1)
+        # output = self.regression_head(fused_out)
+        output = self.regression_head(temporal_out)
+        return output

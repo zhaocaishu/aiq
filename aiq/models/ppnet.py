@@ -2,24 +2,23 @@ import os
 import time
 
 import numpy as np
+import pandas as pd
 import torch
 from torch import nn, optim
 from torch.utils.data import Dataset, DataLoader
-
 from transformers import get_scheduler
 
-from aiq.layers import MATCC
-from aiq.losses import ClassBalancedLoss
-from aiq.utils.discretize import discretize, undiscretize
+from aiq.layers import PPNet
 
 from .base import BaseModel
 
 
-class MATCCModel(BaseModel):
+class PPNetModel(BaseModel):
     def __init__(
         self,
         feature_cols=None,
         label_cols=None,
+        use_augmentation=False,
         d_feat=158,
         d_model=256,
         t_nhead=4,
@@ -35,13 +34,14 @@ class MATCCModel(BaseModel):
         lr_scheduler_type="cosine",
         learning_rate=0.01,
         criterion_name="MSE",
-        class_boundaries=None,
-        class_weight=None,
+        pretrained=None,
+        save_dir=None,
         logger=None,
     ):
         # input parameters
         self._feature_cols = feature_cols
         self._label_cols = label_cols
+        self.use_augmentation = use_augmentation
 
         self.d_feat = d_feat
         self.d_model = d_model
@@ -58,14 +58,9 @@ class MATCCModel(BaseModel):
         self.lr_scheduler_type = lr_scheduler_type
         self.learning_rate = learning_rate
         self.criterion_name = criterion_name
-        self.class_boundaries = class_boundaries
-        self.num_classes = (
-            len(class_boundaries) if self.class_boundaries is not None else None
-        )
-        self.class_weight = class_weight
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-        self.model = MATCC(
+        self.model = PPNet(
             d_feat=self.d_feat,
             d_model=self.d_model,
             t_nhead=self.t_nhead,
@@ -75,8 +70,18 @@ class MATCCModel(BaseModel):
             dropout=self.dropout,
             gate_input_start_index=self.gate_input_start_index,
             gate_input_end_index=self.gate_input_end_index,
-            num_classes=self.num_classes,
-        ).to(self.device)
+        )
+
+        if pretrained is not None:
+            try:
+                state_dict = torch.load(pretrained)
+                self.model.load_state_dict(state_dict)
+            except Exception as e:
+                print(f"Error loading pretrained weights from {pretrained}: {e}")
+
+        self.model = self.model.to(self.device)
+
+        self.save_dir = save_dir
 
         self.logger = logger
 
@@ -103,19 +108,12 @@ class MATCCModel(BaseModel):
             num_warmup_steps=num_warmup_steps,
             num_training_steps=num_training_steps,
         )
-        
+
         if self.criterion_name == "MSE":
             self.criterion = nn.MSELoss()
-        elif self.criterion_name == "CE":
-            class_weight = (
-                torch.Tensor(self.class_weight)
-                if self.class_weight is not None
-                else None
-            )
-            self.criterion = nn.CrossEntropyLoss(weight=class_weight)
         else:
             raise NotImplementedError
-    
+
         for epoch in range(self.epochs):
             self.logger.info("=" * 20 + " Epoch {} ".format(epoch + 1) + "=" * 20)
 
@@ -126,22 +124,21 @@ class MATCCModel(BaseModel):
             epoch_time = time.time()
             for i, (_, batch_x, batch_y) in enumerate(train_loader):
                 iter_count += 1
-                batch_x = batch_x.squeeze(0).float().to(self.device)
-                batch_y = batch_y.squeeze(0).float()
+
+                if self.use_augmentation:
+                    mask_prob = 0.15
+                    mask = torch.bernoulli(torch.full(batch_x.shape, 1 - mask_prob))
+                    batch_x = batch_x * mask
+
+                batch_x = batch_x.squeeze(0).to(self.device, dtype=torch.float)
+                batch_y = batch_y.squeeze(0).to(self.device, dtype=torch.float)
+
+                assert not torch.isnan(batch_x).any(), "NaN at batch_x"
+                assert not torch.isnan(batch_y).any(), "NaN at batch_y"
 
                 outputs = self.model(batch_x)
 
-                if self.num_classes is not None:
-                    batch_y = discretize(
-                        batch_y,
-                        bins=self.class_boundaries,
-                    )
-                    loss = sum(
-                        self.criterion(outputs[k], batch_y[:, k])
-                        for k in range(len(outputs))
-                    )
-                else:
-                    loss = self.criterion(outputs, batch_y)
+                loss = self.criterion(outputs, batch_y)
 
                 train_loss.append(loss.item())
 
@@ -149,7 +146,7 @@ class MATCCModel(BaseModel):
                     speed = (time.time() - time_now) / iter_count
                     left_time = speed * ((self.epochs - epoch) * train_steps_epoch - i)
                     self.logger.info(
-                        "Epoch: {0}, step: {1}, lr: {2:.5f} train loss: {3:.7f}, speed: {4:.4f}s/iter, left time: {5:.4f}s".format(
+                        "Epoch: {0}, step: {1}, lr: {2:.8f} train loss: {3:.8f}, speed: {4:.4f}s/iter, left time: {5:.4f}s".format(
                             epoch + 1,
                             i + 1,
                             lr_scheduler.get_last_lr()[0],
@@ -170,86 +167,76 @@ class MATCCModel(BaseModel):
             train_loss = np.average(train_loss)
             val_loss = self.eval(val_dataset)
             self.logger.info(
-                "Epoch: {0}, cost time: {1:.4f}s, train loss: {2:.7f}, val loss: {3:.7f}".format(
+                "Epoch: {0}, cost time: {1:.4f}s, train loss: {2:.8f}, val loss: {3:.8f}".format(
                     epoch + 1, time.time() - epoch_time, train_loss, val_loss
                 )
             )
 
             # save checkpoints
-            checkpoints_dir = "./checkpoints"
-            os.makedirs(checkpoints_dir, exist_ok=True)
+            os.makedirs(self.save_dir, exist_ok=True)
             model_file = os.path.join(
-                checkpoints_dir, "model_epoch_{}.pth".format(epoch + 1)
+                self.save_dir, "model_epoch_{}.pth".format(epoch + 1)
             )
             torch.save(self.model.state_dict(), model_file)
 
     def eval(self, val_dataset: Dataset):
         self.model.eval()
+
         val_loader = DataLoader(val_dataset, batch_size=self.batch_size, shuffle=False)
 
         total_loss = []
-        with torch.no_grad():
-            for i, (_, batch_x, batch_y) in enumerate(val_loader):
-                batch_x = batch_x.squeeze(0).float().to(self.device)
-                batch_y = batch_y.squeeze(0).float()
 
+        for i, (_, batch_x, batch_y) in enumerate(val_loader):
+            batch_x = batch_x.squeeze(0).to(self.device, dtype=torch.float)
+            batch_y = batch_y.squeeze(0).to(self.device, dtype=torch.float)
+
+            with torch.no_grad():
                 outputs = self.model(batch_x)
 
-                if self.num_classes is not None:
-                    batch_y = discretize(
-                        batch_y,
-                        bins=self.class_boundaries,
-                    )
-                    loss = sum(
-                        self.criterion(outputs[k], batch_y[:, k])
-                        for k in range(len(outputs))
-                    )
-                else:
-                    loss = self.criterion(outputs, batch_y)
+            loss = self.criterion(outputs, batch_y)
 
-                total_loss.append(loss.item())
+            total_loss.append(loss.item())
         total_loss = np.average(total_loss)
         return total_loss
 
     def predict(self, test_dataset: Dataset) -> object:
         self.model.eval()
+
         test_loader = DataLoader(
             test_dataset, batch_size=self.batch_size, shuffle=False
         )
-        num_samples = test_dataset.data.shape[0]
 
+        num_samples = test_dataset.data.shape[0]
+        label_names = test_dataset.label_names
+
+        labels = np.zeros((num_samples, self.pred_len))
         preds = np.zeros((num_samples, self.pred_len))
-        for index, batch_x, *batch_y in test_loader:
-            index = index.cpu().numpy()  # 确保索引为 numpy 数组
-            batch_x = batch_x.squeeze(0).float().to(self.device)
-            
+        for i, (sample_indices, batch_x, batch_y) in enumerate(test_loader):
+            sample_indices = sample_indices.squeeze(0).numpy()  # 确保索引为 numpy 数组
+            batch_x = batch_x.squeeze(0).to(self.device, dtype=torch.float)
+            batch_y = batch_y.squeeze(0).to(self.device, dtype=torch.float)
+
             with torch.no_grad():
                 outputs = self.model(batch_x)
-            
-            if self.num_classes is not None:
-                for k, output in enumerate(outputs):
-                    probs = torch.softmax(output, dim=1)
-                    cls_ids = torch.argmax(probs, dim=1)
-                    preds[index, k] = (
-                        undiscretize(cls_ids, bins=self.class_boundaries).cpu().numpy()
-                    )
-            else:
-                preds[index] = outputs.cpu().numpy()
-        
-        # 统一数据插入逻辑
-        label_names = test_dataset.label_names or [str(i) for i in range(self.pred_len)]
-        test_dataset.insert(cols=[f"PRED_{name}" for name in label_names], data=preds)
+
+            labels[sample_indices] = batch_y.cpu().numpy()
+            preds[sample_indices] = outputs.cpu().numpy()
+
+        test_dataset.data[label_names] = labels
+        test_dataset.data[[f"PRED_{name}" for name in label_names]] = preds
         return test_dataset
 
-    def save(self, model_dir):
-        if not os.path.exists(model_dir):
-            os.makedirs(model_dir)
-
-        model_file = os.path.join(model_dir, "model.pth")
-        torch.save(self.model.state_dict(), model_file)
-
-    def load(self, model_dir):
-        model_file = os.path.join(model_dir, "model.pth")
+    def load(self, model_name=None):
+        model_name = "model.pth" if model_name is None else model_name
+        model_file = os.path.join(self.save_dir, model_name)
         self.model.load_state_dict(
             torch.load(model_file, map_location=self.device, weights_only=True)
         )
+
+    def save(self, model_name=None):
+        if not os.path.exists(self.save_dir):
+            os.makedirs(self.save_dir)
+
+        model_name = "model.pth" if model_name is None else model_name
+        model_file = os.path.join(self.save_dir, model_name)
+        torch.save(self.model.state_dict(), model_file)

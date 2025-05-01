@@ -152,4 +152,4 @@ Thumbs.db
 .idea
 .vscode
 
-temp/
+checkpoints/

@@ -18,5 +18,5 @@ if __name__ == "__main__":
     )
     print(df)
 
-    cszscore_norm = CSZScoreNorm(fields_group='feature')
+    cszscore_norm = CSZScoreNorm(fields_group="feature")
     print(cszscore_norm(df))

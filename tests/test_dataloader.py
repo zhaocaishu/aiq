@@ -2,7 +2,7 @@ from aiq.dataset.loader import DataLoader
 
 
 if __name__ == "__main__":
-    instruments = DataLoader.load_instruments(
+    instruments = DataLoader.load_market_instruments(
         data_dir=None,
         market="000300.SH",
         start_time="2025-01-01",
@@ -10,7 +10,7 @@ if __name__ == "__main__":
     )
     print(instruments)
 
-    features = DataLoader.load_features(
+    features = DataLoader.load_instrument_features(
         data_dir=None,
         instrument="002081.SZ",
         start_time="2025-01-21",

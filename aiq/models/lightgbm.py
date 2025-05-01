@@ -67,7 +67,7 @@ class LGBModel(BaseModel):
             raise ValueError("model is not fitted yet!")
         x_test = test_dataset.data[self._feature_cols].values
         preds = self.model.predict(x_test)
-        test_dataset.insert(cols=["PRED"], data=preds)
+        test_dataset.data[f"PRED_{self._label_cols[0]}"] = preds
         return test_dataset
 
     def get_feature_importance(self, *args, **kwargs) -> pd.Series:
@@ -81,12 +81,14 @@ class LGBModel(BaseModel):
             ascending=False
         )
 
-    def save(self, model_dir):
-        if not os.path.exists(model_dir):
-            os.makedirs(model_dir)
+    def load(self, model_name=None):
+        model_name = "model.json" if model_name is None else model_name
+        self.model = lgb.Booster(model_file=os.path.join(self.save_dir, model_name))
 
-        model_file = os.path.join(model_dir, "model.json")
+    def save(self, model_name=None):
+        if not os.path.exists(self.save_dir):
+            os.makedirs(self.save_dir)
+
+        model_name = "model.json" if model_name is None else model_name
+        model_file = os.path.join(self.save_dir, model_name)
         self.model.save_model(model_file)
-
-    def load(self, model_dir):
-        self.model = lgb.Booster(model_file=os.path.join(model_dir, "model.json"))

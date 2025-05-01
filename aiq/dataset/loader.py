@@ -1,5 +1,5 @@
 import os
-from typing import List
+from typing import List, Dict
 
 import pandas as pd
 
@@ -12,8 +12,12 @@ class DataLoader:
     """
 
     @staticmethod
-    def load_instruments(data_dir, market, start_time=None, end_time=None) -> List[str]:
+    def load_instruments(
+        data_dir, market, start_time=None, end_time=None
+    ) -> List[str]:
         """
+        Load constituent instruments of a specific market/index.
+
         Args:
             data_dir (str): dataset directory
             market (str): market name
@@ -61,13 +65,58 @@ class DataLoader:
             finally:
                 db_connection.close()
 
-        for _, row in df.iterrows():
-            instruments.add(row["Instrument"])
-
+        instruments = df["Instrument"].unique().tolist()
         return list(instruments)
 
     @staticmethod
-    def load_features(
+    def load_calendars(
+        data_dir, timestamp_col="Trade_date", start_time=None, end_time=None
+    ) -> List[str]:
+        """
+
+        Args:
+            data_dir (str): dataset directory
+            timestamp_col (str): column name of timestamp
+            start_time (str): start of the time range.
+            end_time (str): end of the time range.
+
+        Returns:
+
+        """
+        if data_dir is not None:
+            file_path = os.path.join(data_dir, "calendars", "day.csv")
+            if not os.path.exists(file_path):
+                return None
+            df = pd.read_csv(file_path)
+            if start_time is not None:
+                df = df[(df[timestamp_col] >= start_time)]
+            if end_time is not None:
+                df = df[(df[timestamp_col] <= end_time)]
+        else:
+            db_connection = init_db_connection()
+            try:
+                with db_connection.cursor() as cursor:
+                    query = (
+                        "SELECT DISTINCT exchange, DATE_FORMAT(cal_date, '%Y-%m-%d') FROM ts_basic_trade_cal "
+                        "WHERE is_open=1 AND cal_date >= %s AND cal_date <= %s"
+                    )
+
+                    cursor.execute(
+                        query,
+                        (start_time.replace("-", ""), end_time.replace("-", "")),
+                    )
+
+                    # Fetch all rows and create a DataFrame
+                    data = cursor.fetchall()
+                    df = pd.DataFrame(data, columns=["Exchange", "Trade_date"])
+            finally:
+                db_connection.close()
+
+        trade_dates = df[df["Exchange"] == "SSE"]["Trade_date"].tolist()
+        return trade_dates
+
+    @staticmethod
+    def load_instrument_features(
         data_dir,
         instrument,
         timestamp_col="Date",
@@ -76,6 +125,8 @@ class DataLoader:
         column_names=None,
     ) -> pd.DataFrame:
         """
+        Load feature data for a single instrument.
+
         Args:
             data_dir (str): dataset directory
             instrument (str):  instrument's name
@@ -173,9 +224,38 @@ class DataLoader:
         return df
 
     @staticmethod
-    def load_index_features(
+    def load_instruments_features(
+        data_dir, instruments, start_time, end_time
+    ) -> List[pd.DataFrame]:
+        """
+        Batch load feature data for multiple instruments.
+
+        Args:
+            data_dir (str): dataset directory
+            instruments: single or list of instrument symbols
+            start_time (str): start time (YYYY-MM-DD)
+            end_time (str): end time (YYYY-MM-DD)
+
+        Returns:
+            List[pd.DataFrame]: list of feature DataFrames
+        """
+        if isinstance(instruments, str):
+            instruments = DataLoader.load_instruments(
+                data_dir, instruments, start_time, end_time
+            )
+        dfs = []
+        for instrument in instruments:
+            df = DataLoader.load_instrument_features(
+                data_dir, instrument=instrument, start_time=start_time, end_time=end_time
+            )
+            if df is not None:
+                dfs.append(df)
+        return dfs
+
+    @staticmethod
+    def load_market_features(
         data_dir,
-        instrument,
+        market,
         timestamp_col="Date",
         start_time=None,
         end_time=None,
@@ -184,7 +264,7 @@ class DataLoader:
         """
         Args:
             data_dir (str): dataset directory
-            instrument (str):  instrument's name
+            market (str):  market name
             timestamp_col (str): column name of timestamp
             start_time (str): start of the time range.
             end_time (str): end of the time range.
@@ -194,7 +274,7 @@ class DataLoader:
             pd.DataFrame: dataset load from the files
         """
         if data_dir is not None:
-            file_path = os.path.join(data_dir, "features", instrument + ".csv")
+            file_path = os.path.join(data_dir, "features", market + ".csv")
             if not os.path.exists(file_path):
                 return None
             df = pd.read_csv(file_path)
@@ -210,7 +290,7 @@ class DataLoader:
                     cursor.execute(
                         query,
                         (
-                            instrument,
+                            market,
                             start_time.replace("-", ""),
                             end_time.replace("-", ""),
                         ),
@@ -249,48 +329,25 @@ class DataLoader:
         return df
 
     @staticmethod
-    def load_calendars(
-        data_dir, timestamp_col="Trade_date", start_time=None, end_time=None
-    ) -> List[str]:
+    def load_markets_features(
+        data_dir, markets, start_time, end_time
+    ) -> Dict[str, pd.DataFrame]:
         """
+        Batch load feature data for multiple markets.
 
         Args:
             data_dir (str): dataset directory
-            timestamp_col (str): column name of timestamp
-            start_time (str): start of the time range.
-            end_time (str): end of the time range.
+            markets (List[str]): market names
+            start_time (str): start time (YYYY-MM-DD)
+            end_time (str): end time (YYYY-MM-DD)
 
         Returns:
-
+            Dict[str, pd.DataFrame]: dictionary of market data with market names as keys
         """
-        if data_dir is not None:
-            file_path = os.path.join(data_dir, "calendars", "day.csv")
-            if not os.path.exists(file_path):
-                return None
-            df = pd.read_csv(file_path)
-            if start_time is not None:
-                df = df[(df[timestamp_col] >= start_time)]
-            if end_time is not None:
-                df = df[(df[timestamp_col] <= end_time)]
-        else:
-            db_connection = init_db_connection()
-            try:
-                with db_connection.cursor() as cursor:
-                    query = (
-                        "SELECT DISTINCT exchange, DATE_FORMAT(cal_date, '%Y-%m-%d') FROM ts_basic_trade_cal "
-                        "WHERE is_open=1 AND cal_date >= %s AND cal_date <= %s"
-                    )
 
-                    cursor.execute(
-                        query,
-                        (start_time.replace("-", ""), end_time.replace("-", "")),
-                    )
-
-                    # Fetch all rows and create a DataFrame
-                    data = cursor.fetchall()
-                    df = pd.DataFrame(data, columns=["Exchange", "Trade_date"])
-            finally:
-                db_connection.close()
-
-        trade_dates = df[df["Exchange"] == "SSE"]["Trade_date"].tolist()
-        return trade_dates
+        dfs = {}
+        for market in markets:
+            df = DataLoader.load_market_features(data_dir, market=market, start_time=start_time, end_time=end_time)
+            if df is not None:
+                dfs[market] = df
+        return dfs
