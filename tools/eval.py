@@ -20,13 +20,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--eval_pred_col",
         type=str,
-        default="PRED",
+        default="PRED_RETN_5D",
         help="Column name representing model predictions.",
     )
     parser.add_argument(
         "--eval_label_col",
         type=str,
-        default="LABEL",
+        default="RETN_5D",
         help="Column name representing true labels.",
     )
     parser.add_argument(
@@ -78,12 +78,13 @@ def main():
     logger.info("Starting evaluation with config:\n%s", cfg)
 
     data_handler = load_data_handler(args.save_dir, logger)
+    data = data_handler.setup_data(mode="valid")
 
     # Load dataset
     val_dataset = init_instance_by_config(
         cfg.dataset,
-        data_dir=args.data_dir,
-        data_handler=data_handler,
+        data=data,
+        feature_names=data_handler.feature_names,
         mode="valid",
     )
     logger.info("Validation dataset loaded: %d samples", len(val_dataset))

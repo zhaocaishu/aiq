@@ -4,34 +4,27 @@ import torch
 
 from aiq.utils.processing import drop_extreme_label, zscore
 
-from .loader import DataLoader
-
 
 class Dataset(torch.utils.data.Dataset):
     """
     Preparing data for model training and inference.
     """
 
-    def __init__(
-        self, data_dir, instruments, segments, data_handler=None, mode="train"
-    ):
+    def __init__(self, segments, data, feature_names, label_names, mode="train"):
         start_time, end_time = segments[mode]
-        instrument_dfs = DataLoader.load_instruments_features(
-            data_dir, instruments, start_time, end_time
-        )
-        self.df = data_handler.process(instrument_dfs, mode=mode)
-        self._feature_names = data_handler.feature_names
-        self._label_names = data_handler.label_names
+        self._data = data[(data["Date"] >= start_time) & (data["Date"] <= end_time)]
+        self._feature_names = feature_names
+        self._label_names = label_names
 
     def __getitem__(self, index):
-        return self.df.iloc[[index]]
+        return self._data.iloc[[index]]
 
     def __len__(self):
-        return self.df.shape[0]
+        return self._data.shape[0]
 
     @property
     def data(self):
-        return self.df
+        return self._data
 
     @property
     def feature_names(self):
@@ -49,43 +42,41 @@ class TSDataset(Dataset):
 
     def __init__(
         self,
-        data_dir,
-        instruments,
+        data,
         segments,
         seq_len,
-        label_cols=None,
-        data_handler=None,
+        feature_names=None,
+        label_names=None,
         mode="train",
     ):
         self.seq_len = seq_len
         self.mode = mode
-        start_time, end_time = segments[self.mode]
-        instrument_df = DataLoader.load_instruments_features(
-            data_dir, instruments, start_time, end_time
-        )
-        self.df = data_handler.process(instrument_df, mode=mode)
-        self.data_handler = data_handler
-        self.label_cols = label_cols
+        self.start_time, self.end_time = segments[self.mode]
+        self._feature_names = feature_names
+        self._label_names = label_names
+        self._data = data.copy()
         self._setup_time_series()
 
     def _setup_time_series(self):
-        self._feature_names = self.data_handler.feature_names
-        self._label_names = self.label_cols
-        self.df.index = self.df.index.swaplevel()
-        self.df.sort_index(inplace=True)
-        self._feature = self.df[self._feature_names].values.astype("float32")
+        self._data.index = self._data.index.swaplevel()
+        self._data.sort_index(inplace=True)
+        self._feature = self._data[self._feature_names].values.astype("float32")
         self._label = (
-            self.df[self._label_names].values.astype("float32")
+            self._data[self._label_names].values.astype("float32")
             if self._label_names is not None
             else None
         )
-        self._index = self.df.index
+        self._index = self._data.index
         daily_slices = {date: [] for date in sorted(self._index.unique(level=1))}
         self._batch_slices = self._create_ts_slices(self._index, self.seq_len)
         for i, (code, date) in enumerate(self._index):
             daily_slices[date].append((self._batch_slices[i], i))
-        self._daily_slices = list(daily_slices.values())
-        self._daily_index = list(daily_slices.keys())
+        self._daily_slices = np.array(list(daily_slices.values()), dtype="object")
+        self._daily_index = pd.Series(list(daily_slices.keys()))
+
+        mask = (self._daily_index.values >= self.start_time) & (self._daily_index.values <= self.end_time)
+        self._daily_slices = self._daily_slices[mask]
+        self._daily_index = self._daily_index[mask]
 
     def _create_ts_slices(self, index, seq_len):
         assert isinstance(index, pd.MultiIndex), "unsupported index type"
@@ -130,9 +121,8 @@ class TSDataset(Dataset):
         ).squeeze()
 
         if self.mode == "train":
-            valid_mask, filtered_labels = drop_extreme_label(labels)
-            features = features[valid_mask]
-            labels = filtered_labels
+            mask, labels = drop_extreme_label(labels)
+            features = features[mask]
 
         normalized_labels = zscore(labels).reshape(-1, 1)
 
@@ -140,34 +130,3 @@ class TSDataset(Dataset):
 
     def __len__(self):
         return len(self._daily_index)
-
-
-class MarketTSDataset(TSDataset):
-    """
-    Time series dataset with market data.
-    """
-
-    def __init__(
-        self,
-        data_dir,
-        instruments,
-        segments,
-        seq_len,
-        label_cols=None,
-        data_handler=None,
-        mode="train",
-    ):
-        self.seq_len = seq_len
-        self.mode = mode
-        start_time, end_time = segments[self.mode]
-        instrument_df = DataLoader.load_instruments_features(
-            data_dir, instruments, start_time, end_time
-        )
-        market_names = ["000300.SH", "000903.SH", "000905.SH"]
-        market_df = DataLoader.load_markets_features(
-            data_dir, market_names, start_time, end_time
-        )
-        self.df = data_handler.process(instrument_df, market_df=market_df, mode=mode)
-        self.data_handler = data_handler
-        self.label_cols = label_cols
-        self._setup_time_series()

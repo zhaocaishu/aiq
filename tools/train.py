@@ -1,7 +1,7 @@
 import os
 import argparse
 import pickle
-from typing import Any
+from typing import List, Any
 
 from aiq.utils.config import config as cfg
 from aiq.utils.module import init_instance_by_config
@@ -37,12 +37,20 @@ def setup_directories(save_dir: str) -> None:
     os.makedirs(save_dir, exist_ok=True)
 
 
-def load_datasets(data_dir: str, data_handler: Any) -> tuple:
+def load_datasets(data: str, feature_names: List[str]) -> tuple:
+    # train dataset
     train_dataset = init_instance_by_config(
-        cfg.dataset, data_dir=data_dir, data_handler=data_handler, mode="train"
+        cfg.dataset,
+        data=data,
+        feature_names=feature_names,
+        mode="train",
     )
+
     val_dataset = init_instance_by_config(
-        cfg.dataset, data_dir=data_dir, data_handler=data_handler, mode="valid"
+        cfg.dataset,
+        data=data,
+        feature_names=feature_names,
+        mode="valid",
     )
     return train_dataset, val_dataset
 
@@ -76,10 +84,12 @@ def main():
 
         setup_directories(args.save_dir)
 
-        data_handler = init_instance_by_config(cfg.data_handler)
-        train_dataset, val_dataset = load_datasets(args.data_dir, data_handler)
-
+        data_handler = init_instance_by_config(cfg.data_handler, data_dir=args.data_dir)
+        data = data_handler.setup_data()
+        
         save_data_handler(data_handler, os.path.join(args.save_dir, "data_handler.pkl"))
+
+        train_dataset, val_dataset = load_datasets(data, data_handler.feature_names)
 
         logger.info(
             "Loaded %d training and %d validation samples.",

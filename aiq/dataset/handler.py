@@ -25,30 +25,57 @@ from aiq.ops import (
 )
 from aiq.utils.module import init_instance_by_config
 
+from .loader import DataLoader
 from .processor import Processor
 
 
 class DataHandler:
-    def __init__(self, processors: List = None):
-        self.processors = processors
+    def __init__(
+        self,
+        data_dir,
+        instruments,
+        start_time=None,
+        end_time=None,
+        fit_start_time=None,
+        fit_end_time=None,
+        processors: List = None,
+    ):
+        self.data_dir = data_dir
+        self.instruments = instruments
+        self.start_time = start_time
+        self.end_time = end_time
+        self.fit_start_time = fit_start_time
+        self.fit_end_time = fit_end_time
+        self.processors = [init_instance_by_config(proc) for proc in processors]
 
-    def process(self, df: pd.DataFrame = None, mode: str = "train") -> pd.DataFrame:
-        if df is None:
-            raise ValueError("Input DataFrame cannot be None.")
-
-        for processor in self.processors:
-            df = processor(df, mode)
-
-        return df
+    def process(self) -> pd.DataFrame:
+        raise NotImplementedError
 
 
 class Alpha158(DataHandler):
-    def __init__(self, processors: List = None):
+    def __init__(
+        self,
+        data_dir,
+        instruments,
+        start_time=None,
+        end_time=None,
+        fit_start_time=None,
+        fit_end_time=None,
+        processors=None,
+    ):
+        super().__init__(
+            data_dir,
+            instruments,
+            start_time,
+            end_time,
+            fit_start_time,
+            fit_end_time,
+            processors,
+        )
         self._feature_names = None
         self._label_names = None
-        self.processors = [init_instance_by_config(proc) for proc in processors]
 
-    def extract_instrument_features(self, df: pd.DataFrame = None):
+    def extract_instrument_features(self, df):
         # fundamental data
         ind_class = df["Ind_class"]
         mkt_class = df["Mkt_class"]
@@ -64,7 +91,6 @@ class Alpha158(DataHandler):
         low = df["Low"] * adjusted_factor
 
         volume = df["Volume"]
-        turn = df["Turnover_rate_f"]
 
         # kbar
         features = [
@@ -359,9 +385,7 @@ class Alpha158(DataHandler):
 
         return feature_df
 
-    def extract_instrument_labels(
-        self, df: pd.DataFrame = None, benchmark_df: pd.DataFrame = None
-    ):
+    def extract_instrument_labels(self, df):
         adjusted_factor = df["Adj_factor"]
         close = df["Close"] * adjusted_factor
 
@@ -383,7 +407,7 @@ class Alpha158(DataHandler):
 
         return label_df
 
-    def transform(
+    def process(
         self,
         df: pd.DataFrame = None,
         feature_names: List[str] = [],
@@ -396,46 +420,43 @@ class Alpha158(DataHandler):
             column_tuples.extend([("label", label_name) for label_name in label_names])
         df.columns = pd.MultiIndex.from_tuples(column_tuples)
 
+        fit_df = df.loc[self.fit_start_time : self.fit_end_time]
         for proc in processors:
             if mode == "train" and hasattr(proc, "fit"):
-                proc.fit(df)
+                proc.fit(fit_df)
             df = proc(df)
 
         df.columns = df.columns.droplevel()
         df = df.reset_index()
         return df
 
-    def process(
-        self,
-        df: pd.DataFrame = None,
-        benchmark_df: pd.DataFrame = None,
-        mode: str = "train",
-    ) -> pd.DataFrame:
+    def setup_data(self, mode="train") -> pd.DataFrame:
+        # Load data
+        df = DataLoader.load_instruments_features(
+            self.data_dir, self.instruments, self.start_time, self.end_time
+        )
+
         # Extract feature and label from data
         feature_df = df.groupby("Instrument", group_keys=False).apply(
             self.extract_instrument_features
         )
-        if mode in ["train", "valid"]:
-            label_df = df.groupby("Instrument", group_keys=False).apply(
-                lambda group: self.extract_instrument_labels(group, benchmark_df)
-            )
-            feature_label_df = pd.merge(
-                feature_df, label_df, on=["Date", "Instrument"], how="inner"
-            )
-        else:
-            feature_label_df = feature_df
-
+        label_df = df.groupby("Instrument", group_keys=False).apply(
+            lambda group: self.extract_instrument_labels(group)
+        )
+        feature_label_df = pd.merge(
+            feature_df, label_df, on=["Date", "Instrument"], how="inner"
+        )
         feature_label_df = feature_label_df.set_index(
             ["Date", "Instrument"]
         ).sort_index()
 
-        # Instrument-level feature transform
-        feature_label_df = self.transform(
-            feature_label_df,
-            self._feature_names,
-            self._label_names,
-            self.processors,
-            mode,
+        # Instrument-level feature processing
+        feature_label_df = self.process(
+            df=feature_label_df,
+            feature_names=self._feature_names,
+            label_names=self._label_names,
+            processors=self.processors,
+            mode=mode,
         )
 
         return feature_label_df
@@ -452,16 +473,29 @@ class Alpha158(DataHandler):
 class MarketAlpha158(Alpha158):
     def __init__(
         self,
-        benchmark: str = None,
+        data_dir,
+        instruments,
+        start_time=None,
+        end_time=None,
+        fit_start_time=None,
+        fit_end_time=None,
         processors: List = None,
         market_processors: List = None,
     ):
-        super().__init__(processors)
-        self.benchmark = benchmark
-        self._market_feature_names = None
+        super().__init__(
+            data_dir,
+            instruments,
+            start_time,
+            end_time,
+            fit_start_time,
+            fit_end_time,
+            processors,
+        )
+
         self.market_processors = [
             init_instance_by_config(proc) for proc in market_processors
         ]
+        self._market_feature_names = None
 
     def extract_market_features(self, df: pd.DataFrame = None):
         close = df["Close"]
@@ -509,15 +543,17 @@ class MarketAlpha158(Alpha158):
 
         return feature_df
 
-    def process(
-        self,
-        df: pd.DataFrame = None,
-        market_df: pd.DataFrame = None,
-        mode: str = "train",
-    ) -> pd.DataFrame:
+    def setup_data(self, mode="train") -> pd.DataFrame:
         # Instrument-level feature and label extraction
-        benchmark_df = market_df[market_df["Instrument"] == self.benchmark]
-        feature_label_df = super().process(df, benchmark_df, mode)
+        feature_label_df = super().setup_data(mode=mode)
+
+        # Load market data
+        market_df = DataLoader.load_markets_features(
+            self.data_dir,
+            ["000300.SH", "000903.SH", "000905.SH"],
+            self.start_time,
+            self.end_time,
+        )
 
         # Market-level feature extraction
         market_feature_df = pd.concat(
@@ -542,8 +578,8 @@ class MarketAlpha158(Alpha158):
         self._market_feature_names = market_feature_df.columns.tolist()
         self._feature_names.extend(self._market_feature_names)
 
-        # Market-level feature transform
-        market_feature_df = self.transform(
+        # Market-level feature processing
+        market_feature_df = self.process(
             df=market_feature_df,
             feature_names=self._market_feature_names,
             processors=self.market_processors,
