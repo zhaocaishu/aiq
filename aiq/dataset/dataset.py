@@ -12,7 +12,7 @@ class Dataset(torch.utils.data.Dataset):
 
     def __init__(self, segments, data, feature_names, label_names, mode="train"):
         start_time, end_time = segments[mode]
-        self._data = data.loc[(data["Date"] >= start_time) & (data["Date"] <= end_time)]
+        self._data = data.loc[start_time:end_time].copy()
         self._feature_names = feature_names
         self._label_names = label_names
 
@@ -54,7 +54,7 @@ class TSDataset(Dataset):
         self._feature_names = feature_names
         self._label_names = label_names
         start_time, end_time = segments[self.mode]
-        self._data = data.loc[(data["Date"] >= start_time) & (data["Date"] <= end_time)]
+        self._data = data.loc[start_time:end_time].copy()
         self._setup_time_series()
 
     def _setup_time_series(self):
