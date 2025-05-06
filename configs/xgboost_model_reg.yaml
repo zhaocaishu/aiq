@@ -24,6 +24,7 @@ dataset:
       train: ["2017-01-01", "2022-06-30"]
       valid: ["2022-07-01", "2022-12-31"]
       test: ["2023-01-01", "2023-06-30"]
+    label_names: ["RETN_5D"]
 model:
   class: XGBModel
   module_path: aiq.models.xgboost
