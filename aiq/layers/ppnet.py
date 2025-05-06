@@ -205,7 +205,7 @@ class PPNet(nn.Module):
             SAttention(d_model=d_model, nhead=s_nhead, dropout=dropout),
             TemporalAttention(d_model=d_model),
             # decoder
-            nn.Linear(d_model, 1),
+            nn.Linear(d_model, pred_len),
         )
 
     def forward(self, x):
