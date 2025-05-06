@@ -19,8 +19,8 @@ from .base import BaseModel
 class DFTModel(BaseModel):
     def __init__(
         self,
-        feature_cols=None,
-        label_cols=None,
+        feature_names=None,
+        label_names=None,
         d_feat=158,
         d_model=256,
         t_nhead=4,
@@ -43,8 +43,8 @@ class DFTModel(BaseModel):
         logger=None,
     ):
         # input parameters
-        self._feature_cols = feature_cols
-        self._label_cols = label_cols
+        self._feature_names = feature_names
+        self._label_names = label_names
 
         self.d_feat = d_feat
         self.d_model = d_model

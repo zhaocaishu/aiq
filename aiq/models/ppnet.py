@@ -15,8 +15,8 @@ from .base import BaseModel
 class PPNetModel(BaseModel):
     def __init__(
         self,
-        feature_cols=None,
-        label_cols=None,
+        feature_names=None,
+        label_names=None,
         use_augmentation=False,
         d_feat=158,
         d_model=256,
@@ -38,8 +38,8 @@ class PPNetModel(BaseModel):
         logger=None,
     ):
         # input parameters
-        self._feature_cols = feature_cols
-        self._label_cols = label_cols
+        self._feature_names = feature_names
+        self._label_names = label_names
         self.use_augmentation = use_augmentation
 
         self.d_feat = d_feat
