@@ -427,7 +427,6 @@ class Alpha158(DataHandler):
             df = proc(df)
 
         df.columns = df.columns.droplevel()
-        df = df.reset_index()
         return df
 
     def setup_data(self, mode="train") -> pd.DataFrame:
@@ -546,6 +545,7 @@ class MarketAlpha158(Alpha158):
     def setup_data(self, mode="train") -> pd.DataFrame:
         # Instrument-level feature and label extraction
         feature_label_df = super().setup_data(mode=mode)
+        feature_label_df = feature_label_df.reset_index()
 
         # Load market data
         market_df = DataLoader.load_markets_features(
@@ -585,6 +585,7 @@ class MarketAlpha158(Alpha158):
             processors=self.market_processors,
             mode=mode,
         )
+        market_feature_df = market_feature_df.reset_index()
 
         # Merge with instrument features
         market_feature_label_df = (

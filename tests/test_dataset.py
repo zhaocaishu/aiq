@@ -14,7 +14,6 @@ if __name__ == "__main__":
     train_dataset = init_instance_by_config(
         cfg.dataset,
         feature_names=data_handler.feature_names,
-        label_names=data_handler.label_names,
         data=data,
         mode="train",
     )
@@ -22,7 +21,6 @@ if __name__ == "__main__":
     val_dataset = init_instance_by_config(
         cfg.dataset,
         feature_names=data_handler.feature_names,
-        label_names=data_handler.label_names,
         data=data,
         mode="valid",
     )
