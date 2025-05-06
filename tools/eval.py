@@ -57,8 +57,8 @@ def load_model(cfg, val_dataset, save_dir: str, logger) -> object:
     logger.info("Initializing model...")
     model = init_instance_by_config(
         cfg.model,
-        feature_cols=val_dataset.feature_names,
-        label_cols=val_dataset.label_names,
+        feature_names=val_dataset.feature_names,
+        label_names=val_dataset.label_names,
         save_dir=save_dir,
         logger=logger,
     )
@@ -71,8 +71,7 @@ def main():
     args = parse_args()
 
     # Load config
-    if args.cfg_file:
-        cfg.from_file(args.cfg_file)
+    cfg.from_file(args.cfg_file)
 
     logger = get_logger("EVALUATION")
     logger.info("Starting evaluation with config:\n%s", cfg)

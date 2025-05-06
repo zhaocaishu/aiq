@@ -65,8 +65,8 @@ def train_and_save_model(
 ) -> None:
     model = init_instance_by_config(
         cfg.model,
-        feature_cols=train_dataset.feature_names,
-        label_cols=train_dataset.label_names,
+        feature_names=train_dataset.feature_names,
+        label_names=train_dataset.label_names,
         save_dir=save_dir,
         logger=logger,
     )
