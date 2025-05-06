@@ -1,5 +1,4 @@
 import os
-import json
 
 import lightgbm as lgb
 import pandas as pd

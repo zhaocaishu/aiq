@@ -268,7 +268,9 @@ class DFTModel(BaseModel):
         test_dataset.data[[f"PRED_{name}" for name in label_names]] = preds
 
         if self.num_classes is not None:
-            test_dataset.data[[f"PRED_{name}_PROBS" for name in label_names]] = pred_probs.tolist()
+            test_dataset.data[[f"PRED_{name}_PROBS" for name in label_names]] = (
+                pred_probs.tolist()
+            )
             test_dataset.data[[f"PRED_{name}_CLS" for name in label_names]] = pred_cls
 
         return test_dataset
