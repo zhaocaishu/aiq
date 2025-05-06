@@ -10,7 +10,7 @@ class Dataset(torch.utils.data.Dataset):
     Preparing data for model training and inference.
     """
 
-    def __init__(self, segments, data, feature_names, label_names, mode="train"):
+    def __init__(self, data, segments, feature_names, label_names, mode="train"):
         start_time, end_time = segments[mode]
         self._data = data.loc[start_time:end_time].copy()
         self._feature_names = feature_names
