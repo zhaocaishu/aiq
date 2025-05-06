@@ -38,7 +38,7 @@ class DataHandler:
         end_time=None,
         fit_start_time=None,
         fit_end_time=None,
-        processors: List = None,
+        processors=None,
     ):
         self.data_dir = data_dir
         self.instruments = instruments
@@ -48,7 +48,7 @@ class DataHandler:
         self.fit_end_time = fit_end_time
         self.processors = [init_instance_by_config(proc) for proc in processors]
 
-    def process(self) -> pd.DataFrame:
+    def setup_data(self, mode="train") -> pd.DataFrame:
         raise NotImplementedError
 
 
@@ -479,8 +479,8 @@ class MarketAlpha158(Alpha158):
         end_time=None,
         fit_start_time=None,
         fit_end_time=None,
-        processors: List = None,
-        market_processors: List = None,
+        processors=None,
+        market_processors=None,
     ):
         super().__init__(
             data_dir,

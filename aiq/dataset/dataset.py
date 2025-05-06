@@ -12,7 +12,7 @@ class Dataset(torch.utils.data.Dataset):
 
     def __init__(self, segments, data, feature_names, label_names, mode="train"):
         start_time, end_time = segments[mode]
-        self._data = data[(data["Date"] >= start_time) & (data["Date"] <= end_time)]
+        self._data = data.loc[(data["Date"] >= start_time) & (data["Date"] <= end_time)]
         self._feature_names = feature_names
         self._label_names = label_names
 
@@ -51,10 +51,10 @@ class TSDataset(Dataset):
     ):
         self.seq_len = seq_len
         self.mode = mode
-        self.start_time, self.end_time = segments[self.mode]
         self._feature_names = feature_names
         self._label_names = label_names
-        self._data = data.copy()
+        start_time, end_time = segments[self.mode]
+        self._data = data.loc[(data["Date"] >= start_time) & (data["Date"] <= end_time)]
         self._setup_time_series()
 
     def _setup_time_series(self):
@@ -67,16 +67,14 @@ class TSDataset(Dataset):
             else None
         )
         self._index = self._data.index
-        daily_slices = {date: [] for date in sorted(self._index.unique(level=1))}
-        self._batch_slices = self._create_ts_slices(self._index, self.seq_len)
-        for i, (code, date) in enumerate(self._index):
-            daily_slices[date].append((self._batch_slices[i], i))
-        self._daily_slices = np.array(list(daily_slices.values()), dtype="object")
-        self._daily_index = pd.Series(list(daily_slices.keys()))
 
-        mask = (self._daily_index.values >= self.start_time) & (self._daily_index.values <= self.end_time)
-        self._daily_slices = self._daily_slices[mask]
-        self._daily_index = self._daily_index[mask]
+        daily_slices = {date: [] for date in sorted(self._index.unique(level=1))}
+        batch_slices = self._create_ts_slices(self._index, self.seq_len)
+        for i, (code, date) in enumerate(self._index):
+            daily_slices[date].append((batch_slices[i], i))
+
+        self._daily_slices = list(daily_slices.values())
+        self._daily_index = list(daily_slices.keys())
 
     def _create_ts_slices(self, index, seq_len):
         assert isinstance(index, pd.MultiIndex), "unsupported index type"
