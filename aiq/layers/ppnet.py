@@ -1,9 +1,9 @@
+import math
 import torch
 from torch import nn
 from torch.nn.modules.linear import Linear
 from torch.nn.modules.dropout import Dropout
 from torch.nn.modules.normalization import LayerNorm
-import math
 
 
 class PositionalEncoding(nn.Module):
