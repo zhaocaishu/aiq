@@ -9,14 +9,14 @@ class BaseModel(abc.ABC):
 
     def __init__(
         self,
-        feature_cols=None,
-        label_cols=None,
+        feature_names=None,
+        label_names=None,
         model_params=None,
         save_dir=None,
         logger=None,
     ):
-        self._feature_cols = feature_cols
-        self._label_cols = label_cols
+        self._feature_names = feature_names
+        self._label_names = label_names
 
         if model_params is not None:
             self.model_params = copy.deepcopy(dict(model_params))
@@ -73,9 +73,9 @@ class BaseModel(abc.ABC):
         raise NotImplementedError()
 
     @property
-    def feature_cols(self):
-        return self._feature_cols
+    def feature_names(self):
+        return self._feature_names
 
     @property
-    def label_col(self):
-        return self._label_cols
+    def label_names(self):
+        return self._label_names
