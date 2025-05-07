@@ -1,5 +1,4 @@
 import numpy as np
-import pandas as pd
 from scipy.stats import spearmanr
 
 
@@ -79,7 +78,7 @@ class Evaluator:
             raise ValueError(f"DataFrame must contain groupby column: {groupby_col}")
 
         # 计算每日 IC
-        daily_ic = df.groupby(groupby_col).apply(self.compute_ic, include_groups=True)
+        daily_ic = df.groupby(groupby_col).apply(self.compute_ic)
 
         # 过滤 NaN 并计算 IC 和 ICIR
         daily_ic = daily_ic.dropna()

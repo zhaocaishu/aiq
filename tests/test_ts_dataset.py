@@ -1,6 +1,6 @@
 from aiq.utils.config import config as cfg
 from aiq.utils.module import init_instance_by_config
-from aiq.dataset.dataset import MarketTSDataset
+from aiq.dataset.dataset import TSDataset
 
 
 if __name__ == "__main__":
@@ -8,16 +8,16 @@ if __name__ == "__main__":
     cfg.from_file("./configs/ppnet_model_reg.yaml")
 
     # data handler
-    data_handler = init_instance_by_config(cfg.data_handler)
+    data_handler = init_instance_by_config(cfg.data_handler, data_dir="./data")
+    data = data_handler.setup_data()
 
     # train dataset
-    train_dataset = MarketTSDataset(
-        data_dir="./data",
-        instruments="000300.SH",
+    train_dataset = TSDataset(
+        data=data,
         segments=cfg.dataset.kwargs.segments,
         seq_len=8,
-        label_cols=["RETN_5D"],
-        data_handler=data_handler,
+        feature_names=data_handler.feature_names,
+        label_names=["RETN_5D"],
         mode="train",
     )
 

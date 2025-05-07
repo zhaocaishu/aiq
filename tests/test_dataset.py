@@ -7,20 +7,21 @@ if __name__ == "__main__":
     cfg.from_file("./configs/xgboost_model_reg.yaml")
 
     # data handler
-    data_handler = init_instance_by_config(cfg.data_handler)
+    data_handler = init_instance_by_config(cfg.data_handler, data_dir="./data")
+    data = data_handler.setup_data()
 
     # train and validation dataset
     train_dataset = init_instance_by_config(
         cfg.dataset,
-        data_dir="./data",
-        data_handler=data_handler,
+        feature_names=data_handler.feature_names,
+        data=data,
         mode="train",
     )
 
     val_dataset = init_instance_by_config(
         cfg.dataset,
-        data_dir="./data",
-        data_handler=data_handler,
+        feature_names=data_handler.feature_names,
+        data=data,
         mode="valid",
     )
 

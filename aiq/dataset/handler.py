@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List
 
 import pandas as pd
 import numpy as np
@@ -25,22 +25,57 @@ from aiq.ops import (
 )
 from aiq.utils.module import init_instance_by_config
 
+from .loader import DataLoader
+from .processor import Processor
+
 
 class DataHandler:
-    def __init__(self, processors: List = None):
-        pass
+    def __init__(
+        self,
+        data_dir,
+        instruments,
+        start_time=None,
+        end_time=None,
+        fit_start_time=None,
+        fit_end_time=None,
+        processors=None,
+    ):
+        self.data_dir = data_dir
+        self.instruments = instruments
+        self.start_time = start_time
+        self.end_time = end_time
+        self.fit_start_time = fit_start_time
+        self.fit_end_time = fit_end_time
+        self.processors = [init_instance_by_config(proc) for proc in processors]
 
-    def process(self, df: pd.DataFrame = None, mode: str = "train") -> pd.DataFrame:
-        pass
+    def setup_data(self, mode="train") -> pd.DataFrame:
+        raise NotImplementedError
 
 
 class Alpha158(DataHandler):
-    def __init__(self, processors: List = None):
+    def __init__(
+        self,
+        data_dir,
+        instruments,
+        start_time=None,
+        end_time=None,
+        fit_start_time=None,
+        fit_end_time=None,
+        processors=None,
+    ):
+        super().__init__(
+            data_dir,
+            instruments,
+            start_time,
+            end_time,
+            fit_start_time,
+            fit_end_time,
+            processors,
+        )
         self._feature_names = None
         self._label_names = None
-        self.processors = [init_instance_by_config(proc) for proc in processors]
 
-    def extract_features(self, df: pd.DataFrame = None):
+    def extract_instrument_features(self, df):
         # fundamental data
         ind_class = df["Ind_class"]
         mkt_class = df["Mkt_class"]
@@ -56,7 +91,6 @@ class Alpha158(DataHandler):
         low = df["Low"] * adjusted_factor
 
         volume = df["Volume"]
-        turn = df["Turnover_rate_f"]
 
         # kbar
         features = [
@@ -337,7 +371,7 @@ class Alpha158(DataHandler):
         self._feature_names = feature_names.copy()
         feature_df = pd.concat(
             [
-                df[["Date", "Instrument"]],
+                df[["Instrument", "Date"]],
                 pd.concat(
                     [
                         features[i].rename(feature_names[i])
@@ -348,11 +382,10 @@ class Alpha158(DataHandler):
             ],
             axis=1,
         )
-        feature_df = feature_df.reset_index(drop=True)
 
         return feature_df
 
-    def extract_labels(self, df: pd.DataFrame = None):
+    def extract_instrument_labels(self, df):
         adjusted_factor = df["Adj_factor"]
         close = df["Close"] * adjusted_factor
 
@@ -360,62 +393,71 @@ class Alpha158(DataHandler):
         labels = [Ref(close, -5) / Ref(close, -1) - 1]
         label_df = pd.concat(
             [
-                labels[i].rename(self._label_names[i])
-                for i in range(len(self._label_names))
+                df[["Instrument", "Date"]],
+                pd.concat(
+                    [
+                        labels[i].rename(self._label_names[i])
+                        for i in range(len(self._label_names))
+                    ],
+                    axis=1,
+                ).astype("float32"),
             ],
             axis=1,
-        ).astype("float32")
-        label_df = label_df.reset_index(drop=True)
+        )
 
         return label_df
 
-    def process_feature_labels(
-        self, dfs: List[pd.DataFrame] = None, mode: str = "train"
-    ) -> pd.DataFrame:
-        # extract feature and label from data
-        feature_label_dfs = [
-            (
-                pd.concat([self.extract_features(df), self.extract_labels(df)], axis=1)
-                if mode in ["train", "valid"]
-                else self.extract_features(df)
-            )
-            for df in dfs
-        ]
+    def process(
+        self,
+        df: pd.DataFrame = None,
+        feature_names: List[str] = [],
+        label_names: List[str] = [],
+        processors: List[Processor] = [],
+        mode: str = "train",
+    ):
+        column_tuples = [("feature", feature_name) for feature_name in feature_names]
+        if label_names:
+            column_tuples.extend([("label", label_name) for label_name in label_names])
+        df.columns = pd.MultiIndex.from_tuples(column_tuples)
 
-        feature_label_df = (
-            pd.concat(feature_label_dfs, ignore_index=True)
-            .replace([np.inf, -np.inf], np.nan)
-            .set_index(["Date", "Instrument"])
-            .sort_index()
+        fit_df = df.loc[self.fit_start_time : self.fit_end_time]
+        for proc in processors:
+            if mode == "train" and hasattr(proc, "fit"):
+                proc.fit(fit_df)
+            df = proc(df)
+
+        df.columns = df.columns.droplevel()
+        return df
+
+    def setup_data(self, mode="train") -> pd.DataFrame:
+        # Load data
+        df = DataLoader.load_instruments_features(
+            self.data_dir, self.instruments, self.start_time, self.end_time
         )
 
-        # data preprocessing
-        column_tuples = [
-            ("feature", feature_name) for feature_name in self._feature_names
-        ]
-        if self._label_names:
-            column_tuples.extend(
-                [("label", label_name) for label_name in self._label_names]
-            )
-        feature_label_df.columns = pd.MultiIndex.from_tuples(column_tuples)
+        # Extract feature and label from data
+        feature_df = df.groupby("Instrument", group_keys=False).apply(
+            self.extract_instrument_features
+        )
+        label_df = df.groupby("Instrument", group_keys=False).apply(
+            lambda group: self.extract_instrument_labels(group)
+        )
+        feature_label_df = pd.merge(
+            feature_df, label_df, on=["Date", "Instrument"], how="inner"
+        )
+        feature_label_df = feature_label_df.set_index(
+            ["Date", "Instrument"]
+        ).sort_index()
 
-        if mode == "train":
-            for processor in self.processors:
-                processor.fit(feature_label_df)
-                feature_label_df = processor(feature_label_df)
-        else:
-            for processor in self.processors:
-                if processor.is_for_infer():
-                    feature_label_df = processor(feature_label_df)
+        # Instrument-level feature processing
+        feature_label_df = self.process(
+            df=feature_label_df,
+            feature_names=self._feature_names,
+            label_names=self._label_names,
+            processors=self.processors,
+            mode=mode,
+        )
 
-        feature_label_df.columns = feature_label_df.columns.droplevel()
-
-        return feature_label_df
-
-    def process(
-        self, dfs: List[pd.DataFrame] = None, mode: str = "train"
-    ) -> pd.DataFrame:
-        feature_label_df = self.process_feature_labels(dfs, mode=mode)
         return feature_label_df
 
     @property
@@ -430,77 +472,59 @@ class Alpha158(DataHandler):
 class MarketAlpha158(Alpha158):
     def __init__(
         self,
-        benchmark: str = None,
-        processors: List = None,
-        market_processors: List = None,
+        data_dir,
+        instruments,
+        start_time=None,
+        end_time=None,
+        fit_start_time=None,
+        fit_end_time=None,
+        processors=None,
+        market_processors=None,
     ):
-        self._feature_names = None
-        self._market_feature_names = None
-        self._label_names = None
+        super().__init__(
+            data_dir,
+            instruments,
+            start_time,
+            end_time,
+            fit_start_time,
+            fit_end_time,
+            processors,
+        )
 
-        # benchmark
-        self.benchmark = benchmark
-
-        # data processors
-        self.processors = [init_instance_by_config(proc) for proc in processors]
         self.market_processors = [
             init_instance_by_config(proc) for proc in market_processors
         ]
+        self._market_feature_names = None
 
     def extract_market_features(self, df: pd.DataFrame = None):
-        # prices
         close = df["Close"]
         amount = df["AMount"]
+        returns = close / Ref(close, 1) - 1
 
-        # features
-        features = [
-            close / Ref(close, 1) - 1,
-            Mean(close / Ref(close, 1) - 1, 5),
-            Std(close / Ref(close, 1) - 1, 5),
-            Mean(amount, 5) / amount,
-            Std(amount, 5) / amount,
-            Mean(close / Ref(close, 1) - 1, 10),
-            Std(close / Ref(close, 1) - 1, 10),
-            Mean(amount, 10) / amount,
-            Std(amount, 10) / amount,
-            Mean(close / Ref(close, 1) - 1, 20),
-            Std(close / Ref(close, 1) - 1, 20),
-            Mean(amount, 20) / amount,
-            Std(amount, 20) / amount,
-            Mean(close / Ref(close, 1) - 1, 30),
-            Std(close / Ref(close, 1) - 1, 30),
-            Mean(amount, 30) / amount,
-            Std(amount, 30) / amount,
-            Mean(close / Ref(close, 1) - 1, 60),
-            Std(close / Ref(close, 1) - 1, 60),
-            Mean(amount, 60) / amount,
-            Std(amount, 60) / amount,
-        ]
-        feature_names = [
-            "MKT_RETURN_1D",
-            "MKT_RETURN_MEAN_5D",
-            "MKT_RETURN_STD_5D",
-            "MKT_AMOUNT_MEAN_5D",
-            "MKT_AMOUNT_STD_5D",
-            "MKT_RETURN_MEAN_10D",
-            "MKT_RETURN_STD_10D",
-            "MKT_AMOUNT_MEAN_10D",
-            "MKT_AMOUNT_STD_10D",
-            "MKT_RETURN_MEAN_20D",
-            "MKT_RETURN_STD_20D",
-            "MKT_AMOUNT_MEAN_20D",
-            "MKT_AMOUNT_STD_20D",
-            "MKT_RETURN_MEAN_30D",
-            "MKT_RETURN_STD_30D",
-            "MKT_AMOUNT_MEAN_30D",
-            "MKT_AMOUNT_STD_30D",
-            "MKT_RETURN_MEAN_60D",
-            "MKT_RETURN_STD_60D",
-            "MKT_AMOUNT_MEAN_60D",
-            "MKT_AMOUNT_STD_60D",
-        ]
+        # Define window sizes and compute features systematically
+        windows = [5, 10, 20, 30, 60]
+        features = [returns]
+        feature_names = ["MKT_RETURN_1D"]
 
-        # concat features
+        for window in windows:
+            features.extend(
+                [
+                    Mean(returns, window),
+                    Std(returns, window),
+                    Mean(amount, window) / amount,
+                    Std(amount, window) / amount,
+                ]
+            )
+            feature_names.extend(
+                [
+                    f"MKT_RETURN_MEAN_{window}D",
+                    f"MKT_RETURN_STD_{window}D",
+                    f"MKT_AMOUNT_MEAN_{window}D",
+                    f"MKT_AMOUNT_STD_{window}D",
+                ]
+            )
+
+        # Concat features
         self._market_feature_names = feature_names.copy()
         feature_df = pd.concat(
             [
@@ -518,158 +542,65 @@ class MarketAlpha158(Alpha158):
 
         return feature_df
 
-    def process_market_features(
-        self,
-        dfs: Dict[str, pd.DataFrame] = None,
-        mode: str = "train",
-    ) -> pd.DataFrame:
-        # extract and rename features for different markets, then merge them into a new DataFrame
-        feature_df = pd.concat(
+    def setup_data(self, mode="train") -> pd.DataFrame:
+        # Instrument-level feature and label extraction
+        feature_label_df = super().setup_data(mode=mode)
+        feature_label_df = feature_label_df.reset_index()
+
+        # Load market data
+        market_df = DataLoader.load_markets_features(
+            self.data_dir,
+            ["000300.SH", "000903.SH", "000905.SH"],
+            self.start_time,
+            self.end_time,
+        )
+
+        # Market-level feature extraction
+        market_feature_df = pd.concat(
             [
-                self.extract_market_features(df)
+                self.extract_market_features(
+                    market_df[market_df["Instrument"] == market_name]
+                )
                 .rename(
                     columns={
-                        feature_name: f"{df_name}_{feature_name}"
+                        feature_name: f"{market_name}_{feature_name}"
                         for feature_name in self._market_feature_names
                     }
                 )
                 .drop(columns=["Instrument"])
                 .set_index("Date")
-                for df_name, df in dfs.items()
+                for market_name in market_df["Instrument"].unique()
             ],
             axis=1,
             join="inner",
         )
 
-        self._feature_names.extend(feature_df.columns.tolist())
+        self._market_feature_names = market_feature_df.columns.tolist()
+        self._feature_names.extend(self._market_feature_names)
 
-        column_tuples = [
-            ("feature", feature_name) for feature_name in feature_df.columns.tolist()
-        ]
-        feature_df.columns = pd.MultiIndex.from_tuples(column_tuples)
-
-        # data preprocessing
-        if mode == "train":
-            for processor in self.market_processors:
-                processor.fit(feature_df)
-                feature_df = processor(feature_df)
-        else:
-            for processor in self.market_processors:
-                if processor.is_for_infer():
-                    feature_df = processor(feature_df)
-
-        feature_df.columns = feature_df.columns.droplevel()
-        feature_df = feature_df.reset_index()
-
-        return feature_df
-
-    def extract_labels(self, df: pd.DataFrame = None, market_df: pd.DataFrame = None):
-        merge_df = pd.merge(
-            df,
-            market_df[["Date", "Close"]].rename(
-                columns={"Close": "MKT_Close"}
-            ),  # 动态重命名
-            on="Date",
-            how="inner",
+        # Market-level feature processing
+        market_feature_df = self.process(
+            df=market_feature_df,
+            feature_names=self._market_feature_names,
+            processors=self.market_processors,
+            mode=mode,
         )
+        market_feature_df = market_feature_df.reset_index()
 
-        assert merge_df.shape[0] == df.shape[0]
-
-        adjusted_factor = merge_df["Adj_factor"]
-        close = merge_df["Close"] * adjusted_factor
-        market_close = merge_df["MKT_Close"]
-
-        # labels
-        self._label_names = ["RETN_5D"]
-        labels = [Ref(close, -5) / Ref(close, -1) - 1]
-        label_df = pd.concat(
-            [
-                labels[i].rename(self._label_names[i])
-                for i in range(len(self._label_names))
-            ],
-            axis=1,
-        ).astype("float32")
-
-        return label_df
-
-    def process_feature_labels(
-        self,
-        dfs: List[pd.DataFrame] = None,
-        market_dfs: Dict[str, pd.DataFrame] = None,
-        mode: str = "train",
-    ) -> pd.DataFrame:
-        # extract feature and label from data
-        market_df = market_dfs.get(self.benchmark, None)
-        feature_label_dfs = [
-            (
-                pd.concat(
-                    [
-                        self.extract_features(df),
-                        self.extract_labels(df, market_df),
-                    ],
-                    axis=1,
-                )
-                if mode in ["train", "valid"]
-                else self.extract_features(df)
+        # Merge with instrument features
+        market_feature_label_df = (
+            pd.merge(
+                feature_label_df,
+                market_feature_df,
+                on="Date",
+                how="inner",
             )
-            for df in dfs
-        ]
-
-        feature_label_df = (
-            pd.concat(feature_label_dfs, ignore_index=True)
-            .replace([np.inf, -np.inf], np.nan)
             .set_index(["Date", "Instrument"])
             .sort_index()
         )
 
-        # data preprocessing
-        column_tuples = [
-            ("feature", feature_name) for feature_name in self._feature_names
-        ]
-        if self._label_names:
-            column_tuples.extend(
-                [("label", label_name) for label_name in self._label_names]
-            )
-        feature_label_df.columns = pd.MultiIndex.from_tuples(column_tuples)
-
-        if mode == "train":
-            for processor in self.processors:
-                processor.fit(feature_label_df)
-                feature_label_df = processor(feature_label_df)
-        else:
-            for processor in self.processors:
-                if processor.is_for_infer():
-                    feature_label_df = processor(feature_label_df)
-
-        feature_label_df.columns = feature_label_df.columns.droplevel()
-        return feature_label_df
-
-    def process(
-        self,
-        dfs: List[pd.DataFrame] = None,
-        market_dfs: Dict[str, pd.DataFrame] = None,
-        mode: str = "train",
-    ) -> pd.DataFrame:
-        # instrument-level feature and label
-        feature_label_df = self.process_feature_labels(dfs, market_dfs, mode=mode)
-        feature_label_df = feature_label_df.reset_index()
-
-        # market features
-        market_feature_df = self.process_market_features(market_dfs, mode=mode)
-        market_feature_df = market_feature_df.reset_index()
-
-        # merge instrument features with market features on the Date column
-        market_feature_label_df = pd.merge(
-            feature_label_df,
-            market_feature_df,
-            on="Date",
-            how="inner",
-        )
-        market_feature_label_df = market_feature_label_df.set_index(
-            ["Date", "Instrument"]
-        )
-        market_feature_label_df.sort_index(inplace=True)
-
-        assert feature_label_df.shape[0] == market_feature_label_df.shape[0]
+        assert (
+            feature_label_df.shape[0] == market_feature_label_df.shape[0]
+        ), "Mismatch in row counts after merging."
 
         return market_feature_label_df

@@ -2,6 +2,11 @@ data_handler:
   class: Alpha158
   module_path: aiq.dataset.handler
   kwargs:
+    instruments: "000300.SH"
+    start_time: "2017-01-01"
+    end_time: "2023-06-30"
+    fit_start_time: "2017-01-01"
+    fit_end_time: "2022-06-30"
     processors:
       - class: Dropna
         module_path: aiq.dataset.processor
@@ -15,11 +20,11 @@ dataset:
   class: Dataset
   module_path: aiq.dataset.dataset
   kwargs:
-    instruments: "000300.SH"
     segments:
-      train: ["2008-01-01", "2022-06-30"]
+      train: ["2017-01-01", "2022-06-30"]
       valid: ["2022-07-01", "2022-12-31"]
-      test: ["2023-01-01", "2023-12-31"]
+      test: ["2023-01-01", "2023-06-30"]
+    label_names: ["RETN_5D"]
 model:
   class: XGBModel
   module_path: aiq.models.xgboost

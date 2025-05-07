@@ -20,13 +20,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--eval_pred_col",
         type=str,
-        default="PRED",
+        default="PRED_RETN_5D",
         help="Column name representing model predictions.",
     )
     parser.add_argument(
         "--eval_label_col",
         type=str,
-        default="LABEL",
+        default="RETN_5D",
         help="Column name representing true labels.",
     )
     parser.add_argument(
@@ -57,8 +57,8 @@ def load_model(cfg, val_dataset, save_dir: str, logger) -> object:
     logger.info("Initializing model...")
     model = init_instance_by_config(
         cfg.model,
-        feature_cols=val_dataset.feature_names,
-        label_cols=val_dataset.label_names,
+        feature_names=val_dataset.feature_names,
+        label_names=val_dataset.label_names,
         save_dir=save_dir,
         logger=logger,
     )
@@ -71,19 +71,19 @@ def main():
     args = parse_args()
 
     # Load config
-    if args.cfg_file:
-        cfg.from_file(args.cfg_file)
+    cfg.from_file(args.cfg_file)
 
     logger = get_logger("EVALUATION")
     logger.info("Starting evaluation with config:\n%s", cfg)
 
     data_handler = load_data_handler(args.save_dir, logger)
+    data = data_handler.setup_data(mode="valid")
 
     # Load dataset
     val_dataset = init_instance_by_config(
         cfg.dataset,
-        data_dir=args.data_dir,
-        data_handler=data_handler,
+        data=data,
+        feature_names=data_handler.feature_names,
         mode="valid",
     )
     logger.info("Validation dataset loaded: %d samples", len(val_dataset))

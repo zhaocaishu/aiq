@@ -1,23 +1,26 @@
 import os
 import time
+import math
 
 import numpy as np
 import torch
 from torch import nn, optim
 from torch.utils.data import Dataset, DataLoader
+
 from transformers import get_scheduler
 
-from aiq.layers import PPNet
+from aiq.layers import DFT
+from aiq.losses import ClassBalancedLoss
+from aiq.utils.processing import discretize, undiscretize, count_samples_per_bin
 
 from .base import BaseModel
 
 
-class PPNetModel(BaseModel):
+class DFTModel(BaseModel):
     def __init__(
         self,
         feature_names=None,
         label_names=None,
-        use_augmentation=False,
         d_feat=158,
         d_model=256,
         t_nhead=4,
@@ -33,6 +36,8 @@ class PPNetModel(BaseModel):
         lr_scheduler_type="cosine",
         learning_rate=0.01,
         criterion_name="MSE",
+        class_boundaries=None,
+        class_weight=None,
         pretrained=None,
         save_dir=None,
         logger=None,
@@ -40,7 +45,6 @@ class PPNetModel(BaseModel):
         # input parameters
         self._feature_names = feature_names
         self._label_names = label_names
-        self.use_augmentation = use_augmentation
 
         self.d_feat = d_feat
         self.d_model = d_model
@@ -57,9 +61,14 @@ class PPNetModel(BaseModel):
         self.lr_scheduler_type = lr_scheduler_type
         self.learning_rate = learning_rate
         self.criterion_name = criterion_name
+        self.class_boundaries = class_boundaries
+        self.num_classes = (
+            len(class_boundaries) if self.class_boundaries is not None else None
+        )
+        self.class_weight = class_weight
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-        self.model = PPNet(
+        self.model = DFT(
             d_feat=self.d_feat,
             d_model=self.d_model,
             t_nhead=self.t_nhead,
@@ -69,6 +78,7 @@ class PPNetModel(BaseModel):
             dropout=self.dropout,
             gate_input_start_index=self.gate_input_start_index,
             gate_input_end_index=self.gate_input_end_index,
+            num_classes=self.num_classes,
         )
 
         if pretrained is not None:
@@ -110,6 +120,16 @@ class PPNetModel(BaseModel):
 
         if self.criterion_name == "MSE":
             self.criterion = nn.MSELoss()
+        elif self.criterion_name == "CE":
+            class_weight = (
+                torch.Tensor(self.class_weight)
+                if self.class_weight is not None
+                else None
+            )
+            self.criterion = nn.CrossEntropyLoss(weight=class_weight)
+        elif self.criterion_name == "CB":
+            count_per_class = count_samples_per_bin(train_loader, self.class_boundaries)
+            self.criterion = ClassBalancedLoss(count_per_class=count_per_class)
         else:
             raise NotImplementedError
 
@@ -123,21 +143,23 @@ class PPNetModel(BaseModel):
             epoch_time = time.time()
             for i, (_, batch_x, batch_y) in enumerate(train_loader):
                 iter_count += 1
-
-                if self.use_augmentation:
-                    mask_prob = 0.15
-                    mask = torch.bernoulli(torch.full(batch_x.shape, 1 - mask_prob))
-                    batch_x = batch_x * mask
-
                 batch_x = batch_x.squeeze(0).to(self.device, dtype=torch.float)
                 batch_y = batch_y.squeeze(0).to(self.device, dtype=torch.float)
 
-                assert not torch.isnan(batch_x).any(), "NaN at batch_x"
-                assert not torch.isnan(batch_y).any(), "NaN at batch_y"
-
                 outputs = self.model(batch_x)
 
-                loss = self.criterion(outputs, batch_y)
+                if self.num_classes is not None:
+                    batch_y = discretize(
+                        batch_y,
+                        bins=self.class_boundaries,
+                    )
+                    loss = sum(
+                        self.criterion(outputs[k], batch_y[:, k])
+                        * math.pow(0.8, self.pred_len - 1 - k)
+                        for k in range(len(outputs))
+                    )
+                else:
+                    loss = self.criterion(outputs, batch_y)
 
                 train_loss.append(loss.item())
 
@@ -180,49 +202,77 @@ class PPNetModel(BaseModel):
 
     def eval(self, val_dataset: Dataset):
         self.model.eval()
-
         val_loader = DataLoader(val_dataset, batch_size=self.batch_size, shuffle=False)
 
         total_loss = []
+        with torch.no_grad():
+            for i, (_, batch_x, batch_y) in enumerate(val_loader):
+                batch_x = batch_x.squeeze(0).float().to(self.device)
+                batch_y = batch_y.squeeze(0).float()
 
-        for i, (_, batch_x, batch_y) in enumerate(val_loader):
-            batch_x = batch_x.squeeze(0).to(self.device, dtype=torch.float)
-            batch_y = batch_y.squeeze(0).to(self.device, dtype=torch.float)
-
-            with torch.no_grad():
                 outputs = self.model(batch_x)
 
-            loss = self.criterion(outputs, batch_y)
+                if self.num_classes is not None:
+                    batch_y = discretize(
+                        batch_y,
+                        bins=self.class_boundaries,
+                    )
+                    loss = sum(
+                        self.criterion(outputs[k], batch_y[:, k])
+                        * math.pow(0.8, self.pred_len - 1 - k)
+                        for k in range(len(outputs))
+                    )
+                else:
+                    loss = self.criterion(outputs, batch_y)
 
-            total_loss.append(loss.item())
+                total_loss.append(loss.item())
         total_loss = np.average(total_loss)
         return total_loss
 
     def predict(self, test_dataset: Dataset) -> object:
         self.model.eval()
-
         test_loader = DataLoader(
             test_dataset, batch_size=self.batch_size, shuffle=False
         )
-
         num_samples = test_dataset.data.shape[0]
-        label_names = test_dataset.label_names
 
-        labels = np.zeros((num_samples, self.pred_len))
         preds = np.zeros((num_samples, self.pred_len))
-        for i, (sample_indices, batch_x, batch_y) in enumerate(test_loader):
-            sample_indices = sample_indices.squeeze(0).numpy()  # 确保索引为 numpy 数组
-            batch_x = batch_x.squeeze(0).to(self.device, dtype=torch.float)
-            batch_y = batch_y.squeeze(0).to(self.device, dtype=torch.float)
+        pred_probs = pred_cls = None
+
+        if self.num_classes is not None:
+            pred_probs = np.zeros((num_samples, self.pred_len, self.num_classes))
+            pred_cls = np.zeros((num_samples, self.pred_len))
+
+        for index, _, batch_x, *batch_y in test_loader:
+            index = index.cpu().numpy()  # 确保索引为 numpy 数组
+            batch_x = batch_x.squeeze(0).float().to(self.device)
 
             with torch.no_grad():
                 outputs = self.model(batch_x)
 
-            labels[sample_indices] = batch_y.cpu().numpy()
-            preds[sample_indices] = outputs.cpu().numpy()
+            if self.num_classes is not None:
+                for k, output in enumerate(outputs):
+                    probs = torch.softmax(output, dim=1)
+                    cls_ids = torch.argmax(probs, dim=1)
 
-        test_dataset.data[label_names] = labels
+                    pred_probs[index, k] = probs.cpu().numpy()
+                    pred_cls[index, k] = cls_ids.cpu().numpy()
+                    preds[index, k] = (
+                        undiscretize(cls_ids, bins=self.class_boundaries).cpu().numpy()
+                    )
+            else:
+                preds[index] = outputs.cpu().numpy()
+
+        # 统一数据插入逻辑
+        label_names = test_dataset.label_names
         test_dataset.data[[f"PRED_{name}" for name in label_names]] = preds
+
+        if self.num_classes is not None:
+            test_dataset.data[[f"PRED_{name}_PROBS" for name in label_names]] = (
+                pred_probs.tolist()
+            )
+            test_dataset.data[[f"PRED_{name}_CLS" for name in label_names]] = pred_cls
+
         return test_dataset
 
     def load(self, model_name=None):

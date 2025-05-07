@@ -11,20 +11,21 @@ if __name__ == "__main__":
     logger = get_logger("TEST_MODEL")
 
     # data handler
-    data_handler = init_instance_by_config(cfg.data_handler)
+    data_handler = init_instance_by_config(cfg.data_handler, data_dir="./data")
+    data = data_handler.setup_data()
 
-    # train and validation dataset
+    # train dataset
     train_dataset = init_instance_by_config(
         cfg.dataset,
-        data_dir="./data",
-        data_handler=data_handler,
+        data=data,
+        feature_names=data_handler.feature_names,
         mode="train",
     )
 
     val_dataset = init_instance_by_config(
         cfg.dataset,
-        data_dir="./data",
-        data_handler=data_handler,
+        data=data,
+        feature_names=data_handler.feature_names,
         mode="valid",
     )
 
