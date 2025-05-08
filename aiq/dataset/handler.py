@@ -109,7 +109,7 @@ class Alpha158(DataHandler):
             (2 * close - high - low) / open,
             (2 * close - high - low) / (high - low + 1e-12),
             Log(high / low),
-            open / Ref(close, 1)
+            Log(open / Ref(close, 1))
         ]
         feature_names = [
             "IND_CLS_CAT",
