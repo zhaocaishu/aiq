@@ -108,6 +108,8 @@ class Alpha158(DataHandler):
             (Less(open, close) - low) / (high - low + 1e-12),
             (2 * close - high - low) / open,
             (2 * close - high - low) / (high - low + 1e-12),
+            Log(high / low),
+            open / Ref(close, 1)
         ]
         feature_names = [
             "IND_CLS_CAT",
@@ -124,6 +126,8 @@ class Alpha158(DataHandler):
             "KLOW2",
             "KSFT",
             "KSFT2",
+            "KHL",
+            "KOC"
         ]
 
         # price
@@ -138,7 +142,7 @@ class Alpha158(DataHandler):
         # rolling
         windows = [5, 10, 20, 30, 60]
         include = None
-        exclude = []
+        exclude = ["SUMN", "CNTN", "VSUMN"]
 
         def use(x):
             return x not in exclude and (include is None or x in include)
