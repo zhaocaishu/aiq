@@ -91,6 +91,7 @@ class Alpha158(DataHandler):
         low = df["Low"] * adjusted_factor
 
         volume = df["Volume"]
+        turn = df["Turnover_rate_f"]
 
         # kbar
         features = [
@@ -108,7 +109,7 @@ class Alpha158(DataHandler):
             (Less(open, close) - low) / (high - low + 1e-12),
             (2 * close - high - low) / open,
             (2 * close - high - low) / (high - low + 1e-12),
-            Log(open / Ref(close, 1))
+            Log(open / Ref(close, 1)),
         ]
         feature_names = [
             "IND_CLS_CAT",
@@ -125,7 +126,7 @@ class Alpha158(DataHandler):
             "KLOW2",
             "KSFT",
             "KSFT2",
-            "KOC"
+            "KOC",
         ]
 
         # price
@@ -334,7 +335,7 @@ class Alpha158(DataHandler):
             for d in windows:
                 features.append(
                     Std((close / Ref(close, 1) - 1) * Log(1 + volume), d)
-                    / (Mean((close / Ref(close, 1) - 1) *  Log(1 + volume), d) + 1e-12)
+                    / (Mean((close / Ref(close, 1) - 1) * Log(1 + volume), d) + 1e-12)
                 )
                 feature_names.append("WVMA%d" % d)
 
@@ -368,6 +369,13 @@ class Alpha158(DataHandler):
                     / (Sum(Abs(volume - Ref(volume, 1)), d) + 1e-12)
                 )
                 feature_names.append("VSUMD%d" % d)
+
+        if use("TURN"):
+            for d in windows:
+                features.append(Mean(turn, d))
+                features.append(Std(turn, d))
+                feature_names.append("TURN_%dD" % d)
+                feature_names.append("STD_TURN_%dD" % d)
 
         # concat features
         self._feature_names = feature_names.copy()
