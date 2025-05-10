@@ -55,11 +55,6 @@ def load_datasets(data: str, feature_names: List[str]) -> tuple:
     return train_dataset, val_dataset
 
 
-def save_data_handler(handler: Any, save_path: str) -> None:
-    with open(save_path, "wb") as f:
-        pickle.dump(handler, f)
-
-
 def train_and_save_model(
     train_dataset: Any, val_dataset: Any, save_dir: str, logger: Any
 ) -> None:
@@ -86,8 +81,6 @@ def main():
 
         data_handler = init_instance_by_config(cfg.data_handler, data_dir=args.data_dir)
         data = data_handler.setup_data()
-        
-        save_data_handler(data_handler, os.path.join(args.save_dir, "data_handler.pkl"))
 
         train_dataset, val_dataset = load_datasets(data, data_handler.feature_names)
 
