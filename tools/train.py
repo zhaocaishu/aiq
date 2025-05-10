@@ -1,6 +1,5 @@
 import os
 import argparse
-import pickle
 from typing import List, Any
 
 from aiq.utils.config import config as cfg
@@ -27,14 +26,6 @@ def parse_args() -> argparse.Namespace:
 
 def setup_logger(name: str = "TRAINING") -> Any:
     return get_logger(name)
-
-
-def setup_config(cfg_file: str) -> None:
-    cfg.from_file(cfg_file)
-
-
-def setup_directories(save_dir: str) -> None:
-    os.makedirs(save_dir, exist_ok=True)
 
 
 def load_datasets(data: str, feature_names: List[str]) -> tuple:
@@ -71,31 +62,29 @@ def train_and_save_model(
 
 def main():
     args = parse_args()
-    logger = setup_logger()
 
-    try:
-        setup_config(args.cfg_file)
-        logger.info("Configuration loaded:\n%s", cfg)
+    # Load config
+    cfg.from_file(args.cfg_file)
 
-        setup_directories(args.save_dir)
+    logger = get_logger("TRAINING")
+    logger.info("Configuration loaded:\n%s", cfg)
 
-        data_handler = init_instance_by_config(cfg.data_handler, data_dir=args.data_dir)
-        data = data_handler.setup_data()
-        data_handler.save(os.path.join(args.data_dir, "data_handler.pkl"))
+    os.makedirs(args.save_dir, exist_ok=True)
 
-        train_dataset, val_dataset = load_datasets(data, data_handler.feature_names)
-        logger.info(
-            "Loaded %d training and %d validation samples.",
-            len(train_dataset),
-            len(val_dataset),
-        )
+    data_handler = init_instance_by_config(cfg.data_handler, data_dir=args.data_dir)
+    data = data_handler.setup_data()
+    data_handler.save(os.path.join(args.save_dir, "data_handler.pkl"))
 
-        train_and_save_model(train_dataset, val_dataset, args.save_dir, logger)
+    train_dataset, val_dataset = load_datasets(data, data_handler.feature_names)
+    logger.info(
+        "Loaded %d training and %d validation samples.",
+        len(train_dataset),
+        len(val_dataset),
+    )
 
-        logger.info("Model training completed successfully!")
+    train_and_save_model(train_dataset, val_dataset, args.save_dir, logger)
 
-    except Exception as e:
-        logger.exception("Training failed due to an error: %s", str(e))
+    logger.info("Model training completed successfully!")
 
 
 if __name__ == "__main__":
