@@ -84,7 +84,6 @@ def main():
         data_handler.save(os.path.join(args.data_dir, "data_handler.pkl"))
 
         train_dataset, val_dataset = load_datasets(data, data_handler.feature_names)
-
         logger.info(
             "Loaded %d training and %d validation samples.",
             len(train_dataset),
