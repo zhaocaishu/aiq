@@ -1,4 +1,5 @@
 from typing import List
+import pickle
 
 import pandas as pd
 import numpy as np
@@ -50,6 +51,25 @@ class DataHandler:
 
     def setup_data(self, mode="train") -> pd.DataFrame:
         raise NotImplementedError
+
+    def load(self, filepath: str):
+        try:
+            with open(filepath, "rb") as f:
+                loaded_components = pickle.load(f)
+                self.processors = loaded_components.get("processors", [])
+        except FileNotFoundError:
+            print(f"Error: File not found at {filepath}")
+        except Exception as e:
+            print(f"Error loading processing components from {filepath}: {e}")
+
+    def save(self, filepath: str):
+        components_to_save = {"processors": self.processors}
+        try:
+            with open(filepath, "wb") as f:
+                pickle.dump(components_to_save, f)
+            print(f"Processing components successfully saved to {filepath}")
+        except Exception as e:
+            print(f"Error saving processing components to {filepath}: {e}")
 
 
 class Alpha158(DataHandler):
@@ -614,3 +634,26 @@ class MarketAlpha158(Alpha158):
         ), "Mismatch in row counts after merging."
 
         return market_feature_label_df
+
+    def load(self, filepath: str):
+        try:
+            with open(filepath, "rb") as f:
+                loaded_components = pickle.load(f)
+                self.processors = loaded_components.get("processors", [])
+                self.market_processors = loaded_components.get("market_processors", [])
+        except FileNotFoundError:
+            print(f"Error: File not found at {filepath}")
+        except Exception as e:
+            print(f"Error loading processing components from {filepath}: {e}")
+
+    def save(self, filepath: str):
+        components_to_save = {
+            "processors": self.processors,
+            "market_processors": self.market_processors,
+        }
+        try:
+            with open(filepath, "wb") as f:
+                pickle.dump(components_to_save, f)
+            print(f"Processing components successfully saved to {filepath}")
+        except Exception as e:
+            print(f"Error saving processing components to {filepath}: {e}")
