@@ -420,8 +420,7 @@ class Alpha158(DataHandler):
         close = df["Close"] * adjusted_factor
 
         self._label_names = ["RETN_5D"]
-        # labels = [Ref(close, -5) / Ref(close, -1) - 1]
-        labels = [Log(Ref(close, -5) / Ref(close, -1))]
+        labels = [Ref(close, -5) / Ref(close, -1) - 1]
         label_df = pd.concat(
             [
                 df[["Instrument", "Date"]],
