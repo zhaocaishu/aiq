@@ -81,7 +81,7 @@ class DataLoader:
             end_time (str): end of the time range.
 
         Returns:
-
+            List[str]: trading dates
         """
         if data_dir is not None:
             file_path = os.path.join(data_dir, "calendars", "day.csv")
