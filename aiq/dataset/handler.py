@@ -97,7 +97,7 @@ class Alpha158(DataHandler):
 
     def extract_instrument_features(self, df):
         # fundamental data
-        ind_class = df["Ind_class"]
+        ind_class = df["Ind_class_l2"]
         mkt_class = df["Mkt_class"]
         ep = 1.0 / df["Pe_ttm"]
         bp = 1.0 / df["Pb"]
