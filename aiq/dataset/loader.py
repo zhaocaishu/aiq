@@ -22,7 +22,7 @@ class DataLoader:
             data_dir (str): dataset directory
             market (str): market name
             start_time (str): start time
-            end_time (str): end_time
+            end_time (str): end time
 
         Returns:
             List[str]: list of instrument's name
