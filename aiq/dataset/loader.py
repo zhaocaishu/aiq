@@ -40,9 +40,10 @@ class DataLoader:
             try:
                 with db_connection.cursor() as cursor:
                     query = (
-                        "SELECT DISTINCT ts_code, trade_date "
+                        "SELECT ts_code, trade_date "
                         "FROM ts_idx_index_weight "
-                        "WHERE index_code=%s AND trade_date>=%s AND trade_date<=%s"
+                        "WHERE index_code=%s AND trade_date>=%s AND trade_date<=%s "
+                        "GROUP BY ts_code, trade_date"
                     )
                     cursor.execute(
                         query,
