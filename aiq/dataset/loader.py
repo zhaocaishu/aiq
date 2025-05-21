@@ -232,7 +232,7 @@ class DataLoader:
 
         Args:
             data_dir (str): dataset directory
-            instruments: single or list of instrument symbols
+            instruments: single or list of instruments
             start_time (str): start time (YYYY-MM-DD)
             end_time (str): end time (YYYY-MM-DD)
 
