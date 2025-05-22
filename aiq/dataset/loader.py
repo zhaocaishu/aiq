@@ -10,16 +10,17 @@ class DataLoader:
     """Utility class for loading financial datasets from local directory or database."""
 
     @staticmethod
-    def _read_csv(
-        file_path: str, timestamp_col: str, start: str, end: str
-    ) -> Optional[pd.DataFrame]:
+    def _read_csv(file_path: str, timestamp_col: str, start: str, end: str) -> Optional[pd.DataFrame]:
         if not os.path.exists(file_path):
             return None
         df = pd.read_csv(file_path)
+
+        # 根据start和end日期过滤数据
         if start:
             df = df[df[timestamp_col] >= start]
         if end:
             df = df[df[timestamp_col] <= end]
+
         return df
 
     @staticmethod
@@ -145,8 +146,15 @@ class DataLoader:
             )
 
         if df is not None:
+            # 根据filter_list_date过滤上市前3个月的数据
+            if "List_date" in df.columns:
+                list_date = pd.to_datetime(df["List_date"].iloc[0])
+                min_date = (list_date + pd.DateOffset(months=3)).strftime("%Y-%m-%d")
+                df = df[df[timestamp_col] >= min_date]
+
             if column_names:
                 df = df[column_names]
+            
             df = df.sort_values(by=timestamp_col)
         return df
 
