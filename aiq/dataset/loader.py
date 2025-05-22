@@ -13,6 +13,7 @@ class DataLoader:
     def _read_csv(file_path: str, timestamp_col: str, start: str, end: str) -> Optional[pd.DataFrame]:
         if not os.path.exists(file_path):
             return None
+        
         df = pd.read_csv(file_path)
 
         # 根据start和end日期过滤数据
