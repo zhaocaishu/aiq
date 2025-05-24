@@ -192,14 +192,13 @@ class PPNet(nn.Module):
     ):
         super(PPNet, self).__init__()
 
-        self.revin_layer = RevIN(d_feat)
-
         # market
         self.gate_input_start_index = gate_input_start_index
         self.gate_input_end_index = gate_input_end_index
         self.d_gate_input = gate_input_end_index - gate_input_start_index  # F'
         self.feature_gate = Gate(self.d_gate_input, d_feat, beta=beta)
 
+        # instrument
         self.layers = nn.Sequential(
             # feature layer
             nn.Linear(d_feat, d_model),
@@ -212,6 +211,9 @@ class PPNet(nn.Module):
             # decoder
             nn.Linear(d_model, pred_len),
         )
+
+        # normalize layer
+        self.revin_layer = RevIN(d_feat + self.d_gate_input)
 
     def forward(self, x):
         x[:, :, 5:] = self.revin_layer(x[:, :, 5:])
