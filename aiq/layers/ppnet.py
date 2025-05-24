@@ -5,6 +5,8 @@ from torch.nn.modules.linear import Linear
 from torch.nn.modules.dropout import Dropout
 from torch.nn.modules.normalization import LayerNorm
 
+from aiq.layers.revin import RevIN
+
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=100):
@@ -189,6 +191,9 @@ class PPNet(nn.Module):
         beta=5,
     ):
         super(PPNet, self).__init__()
+
+        self.revin_layer = RevIN(d_feat)
+
         # market
         self.gate_input_start_index = gate_input_start_index
         self.gate_input_end_index = gate_input_end_index
@@ -209,6 +214,7 @@ class PPNet(nn.Module):
         )
 
     def forward(self, x):
+        x[:, :, 5:] = self.revin_layer(x[:, :, 5:])
         src = x[:, :, 5 : self.gate_input_start_index]  # N, T, D
         gate_input = x[:, -1, self.gate_input_start_index : self.gate_input_end_index]
         src = src * torch.unsqueeze(self.feature_gate(gate_input), dim=1)
