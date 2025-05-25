@@ -130,6 +130,7 @@ class Alpha158(DataHandler):
             (2 * close - high - low) / open,
             (2 * close - high - low) / (high - low + 1e-12),
             Log(open / Ref(close, 1)),
+            turn
         ]
         feature_names = [
             "IND_CLS_CAT",
@@ -147,6 +148,7 @@ class Alpha158(DataHandler):
             "KSFT",
             "KSFT2",
             "KOC",
+            "TURN"
         ]
 
         # price
@@ -391,7 +393,7 @@ class Alpha158(DataHandler):
                 feature_names.append("VSUMD%d" % d)
 
         if use("TURN"):
-            for d in windows:
+            for d in [5, 20, 60]:
                 features.append(Mean(turn, d))
                 features.append(Std(turn, d))
                 feature_names.append("TURN_%dD" % d)
