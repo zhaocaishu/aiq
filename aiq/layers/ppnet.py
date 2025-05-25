@@ -93,60 +93,39 @@ class TAttention(nn.Module):
         super().__init__()
         self.d_model = d_model
         self.nhead = nhead
-        self.qtrans = nn.Linear(d_model, d_model, bias=False)
-        self.ktrans = nn.Linear(d_model, d_model, bias=False)
-        self.vtrans = nn.Linear(d_model, d_model, bias=False)
 
-        self.attn_dropout = []
-        if dropout > 0:
-            for i in range(nhead):
-                self.attn_dropout.append(Dropout(p=dropout))
-            self.attn_dropout = nn.ModuleList(self.attn_dropout)
-
-        # input LayerNorm
-        self.norm1 = LayerNorm(d_model, eps=1e-5)
-        # FFN layerNorm
-        self.norm2 = LayerNorm(d_model, eps=1e-5)
-        # FFN
-        self.ffn = nn.Sequential(
-            Linear(d_model, d_model),
-            nn.ReLU(),
-            Dropout(p=dropout),
-            Linear(d_model, d_model),
-            Dropout(p=dropout),
+        self.norm1 = nn.LayerNorm(d_model, eps=1e-5)
+        self.multihead_attn = nn.MultiheadAttention(
+            d_model, nhead, dropout=dropout, bias=False, batch_first=True
         )
+        self.dropout_attn = nn.Dropout(dropout)  # Attention 后的 Dropout
 
-    def forward(self, x):
-        x = self.norm1(x)
-        q = self.qtrans(x)
-        k = self.ktrans(x)
-        v = self.vtrans(x)
+        self.norm2 = nn.LayerNorm(d_model, eps=1e-5)
+        self.ffn = nn.Sequential(
+            nn.Linear(d_model, 4 * d_model),
+            nn.ReLU(inplace=True),
+            nn.Dropout(p=dropout),
+            nn.Linear(4 * d_model, d_model),
+        )
+        self.dropout_ffn = nn.Dropout(dropout)
 
-        dim = int(self.d_model / self.nhead)
-        att_output = []
-        for i in range(self.nhead):
-            if i == self.nhead - 1:
-                qh = q[:, :, i * dim :]
-                kh = k[:, :, i * dim :]
-                vh = v[:, :, i * dim :]
-            else:
-                qh = q[:, :, i * dim : (i + 1) * dim]
-                kh = k[:, :, i * dim : (i + 1) * dim]
-                vh = v[:, :, i * dim : (i + 1) * dim]
-            atten_ave_matrixh = torch.softmax(
-                torch.matmul(qh, kh.transpose(1, 2)), dim=-1
-            )
-            if self.attn_dropout:
-                atten_ave_matrixh = self.attn_dropout[i](atten_ave_matrixh)
-            att_output.append(torch.matmul(atten_ave_matrixh, vh))
-        att_output = torch.concat(att_output, dim=-1)
+    def forward(self, src):  # (batch_size, seq_len, d_model)
+        x_residual1 = src
 
-        # FFN
-        xt = x + att_output
-        xt = self.norm2(xt)
-        att_output = xt + self.ffn(xt)
+        x_norm1 = self.norm1(src)
+        attention_output, _ = self.multihead_attn(
+            x_norm1, x_norm1, x_norm1
+        )  # Q, K, V 都是 x_norm1
+        src = x_residual1 + self.dropout_attn(attention_output)
 
-        return att_output
+        x_residual2 = src
+
+        x_norm2 = self.norm2(src)
+        ffn_output = self.ffn(x_norm2)
+
+        output = x_residual2 + self.dropout_ffn(ffn_output)
+
+        return output
 
 
 class Gate(nn.Module):
@@ -188,7 +167,7 @@ class PPNet(nn.Module):
         gate_input_end_index,
         seq_len,
         pred_len,
-        beta=5,
+        beta=5.0,
     ):
         super(PPNet, self).__init__()
 
