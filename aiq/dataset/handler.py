@@ -110,7 +110,7 @@ class Alpha158(DataHandler):
         high = df["High"] * adjusted_factor
         low = df["Low"] * adjusted_factor
         volume = df["Volume"] * adjusted_factor
-        
+
         turn = df["Turnover_rate_f"]
 
         # kbar
@@ -130,7 +130,6 @@ class Alpha158(DataHandler):
             (2 * close - high - low) / open,
             (2 * close - high - low) / (high - low + 1e-12),
             Log(open / Ref(close, 1)),
-            turn
         ]
         feature_names = [
             "IND_CLS_CAT",
@@ -148,7 +147,6 @@ class Alpha158(DataHandler):
             "KSFT",
             "KSFT2",
             "KOC",
-            "TURN"
         ]
 
         # price
@@ -163,7 +161,7 @@ class Alpha158(DataHandler):
         # rolling
         windows = [5, 10, 20, 30, 60]
         include = None
-        exclude = ["SUMN", "CNTN", "VSUMN", "CNTD", "SUMD", "VSUMD"]
+        exclude = ["SUMD", "CNTD", "VSUMD"]
 
         def use(x):
             return x not in exclude and (include is None or x in include)
@@ -172,7 +170,7 @@ class Alpha158(DataHandler):
             # https://www.investopedia.com/terms/r/rateofchange.asp
             # Rate of change, the price change in the past d days, divided by latest close price to remove unit
             for d in windows:
-                features.append(close / Ref(close, d) - 1)
+                features.append(Ref(close, d) / close)
                 feature_names.append("ROC%d" % d)
 
         if use("MA"):
@@ -393,7 +391,7 @@ class Alpha158(DataHandler):
                 feature_names.append("VSUMD%d" % d)
 
         if use("TURN"):
-            for d in [5, 20, 60]:
+            for d in windows:
                 features.append(Mean(turn, d))
                 features.append(Std(turn, d))
                 feature_names.append("TURN_%dD" % d)
