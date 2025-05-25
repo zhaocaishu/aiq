@@ -170,7 +170,7 @@ class Alpha158(DataHandler):
             # https://www.investopedia.com/terms/r/rateofchange.asp
             # Rate of change, the price change in the past d days, divided by latest close price to remove unit
             for d in windows:
-                features.append(Ref(close, d) / close)
+                features.append(close / Ref(close, d) - 1)
                 feature_names.append("ROC%d" % d)
 
         if use("MA"):
