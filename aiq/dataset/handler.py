@@ -161,7 +161,7 @@ class Alpha158(DataHandler):
         # rolling
         windows = [5, 10, 20, 30, 60]
         include = None
-        exclude = ["SUMD", "CNTD", "VSUMD"]
+        exclude = ["SUMN", "CNTN", "VSUMN", "SUMP", "CNTP", "VSUMP"]
 
         def use(x):
             return x not in exclude and (include is None or x in include)
