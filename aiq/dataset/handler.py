@@ -529,7 +529,7 @@ class MarketAlpha158(Alpha158):
     def extract_market_features(self, df: pd.DataFrame = None):
         close = df["Close"]
         volume = df["Volume"]
-        returns = Log(close / Ref(close, 1))
+        returns = close / Ref(close, 1) - 1
 
         # Define window sizes and compute features systematically
         windows = [5, 10, 20, 30, 60]
