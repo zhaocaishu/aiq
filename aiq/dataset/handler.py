@@ -528,7 +528,7 @@ class MarketAlpha158(Alpha158):
 
     def extract_market_features(self, df: pd.DataFrame = None):
         close = df["Close"]
-        volume = df["Volume"]
+        amount = df["AMount"]
         returns = close / Ref(close, 1) - 1
 
         # Define window sizes and compute features systematically
@@ -541,16 +541,16 @@ class MarketAlpha158(Alpha158):
                 [
                     Mean(returns, window),
                     Std(returns, window),
-                    Mean(volume, window) / volume,
-                    Std(volume, window) / volume,
+                    Mean(amount, window) / amount,
+                    Std(amount, window) / amount,
                 ]
             )
             feature_names.extend(
                 [
                     f"MKT_RETURN_MEAN_{window}D",
                     f"MKT_RETURN_STD_{window}D",
-                    f"MKT_VOLUME_MEAN_{window}D",
-                    f"MKT_VOLUME_STD_{window}D",
+                    f"MKT_AMOUNT_MEAN_{window}D",
+                    f"MKT_AMOUNT_STD_{window}D",
                 ]
             )
 
