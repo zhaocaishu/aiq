@@ -543,9 +543,7 @@ class MarketAlpha158(Alpha158):
                     Mean(returns, window),
                     Std(returns, window),
                     Mean(volume, window) / volume,
-                    Std(volume, window) / volume,
-                    Mean(up_ratio, window),
-                    Std(up_ratio, window),
+                    Std(volume, window) / volume
                 ]
             )
             feature_names.extend(
@@ -554,8 +552,6 @@ class MarketAlpha158(Alpha158):
                     f"MKT_RETURN_STD_{window}D",
                     f"MKT_VOLUME_MEAN_{window}D",
                     f"MKT_VOLUME_STD_{window}D",
-                    f"MKT_UPRATIO_MEAN_{window}D",
-                    f"MKT_UPRATIO_STD_{window}D",
                 ]
             )
 
