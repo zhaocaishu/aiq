@@ -539,7 +539,6 @@ class MarketAlpha158(Alpha158):
         for window in windows:
             features.extend(
                 [
-                    close / Ref(close, window) - 1,
                     Mean(returns, window),
                     Std(returns, window),
                     Mean(volume, window) / volume,
@@ -548,7 +547,6 @@ class MarketAlpha158(Alpha158):
             )
             feature_names.extend(
                 [
-                    f"MKT_RETURN_{window}D",
                     f"MKT_RETURN_MEAN_{window}D",
                     f"MKT_RETURN_STD_{window}D",
                     f"MKT_VOLUME_MEAN_{window}D",
