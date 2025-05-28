@@ -391,7 +391,9 @@ class Alpha158(DataHandler):
                 feature_names.append("VSUMD%d" % d)
 
         if use("TURN"):
-            for d in windows:
+            features.append(turn)
+            feature_names.append("TURN_1D")
+            for d in [5, 20]:
                 features.append(Mean(turn, d))
                 features.append(Std(turn, d))
                 feature_names.append("TURN_%dD" % d)
@@ -528,7 +530,7 @@ class MarketAlpha158(Alpha158):
 
     def extract_market_features(self, df: pd.DataFrame = None):
         close = df["Close"]
-        volume = df["Volume"]
+        amount = df["AMount"]
 
         # Define window sizes and compute features systematically
         returns = close / Ref(close, 1) - 1
@@ -541,16 +543,16 @@ class MarketAlpha158(Alpha158):
                 [
                     Mean(returns, window),
                     Std(returns, window),
-                    Mean(volume, window) / volume,
-                    Std(volume, window) / volume
+                    Mean(amount, window) / amount,
+                    Std(amount, window) / amount
                 ]
             )
             feature_names.extend(
                 [
                     f"MKT_RETURN_MEAN_{window}D",
                     f"MKT_RETURN_STD_{window}D",
-                    f"MKT_VOLUME_MEAN_{window}D",
-                    f"MKT_VOLUME_STD_{window}D",
+                    f"MKT_AMOUNT_MEAN_{window}D",
+                    f"MKT_AMOUNT_STD_{window}D",
                 ]
             )
 

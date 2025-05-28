@@ -45,15 +45,15 @@ model:
   class: DFTModel
   module_path: aiq.models.dft
   kwargs:
-    d_feat: 138
+    d_feat: 133
     d_model: 256
     t_nhead: 4
     s_nhead: 2
     seq_len: 8
     pred_len: 1
     dropout: 0.5
-    gate_input_start_index: 143
-    gate_input_end_index: 206
+    gate_input_start_index: 138
+    gate_input_end_index: 201
     epochs: 30
     batch_size: 1
     learning_rate: 0.0001
