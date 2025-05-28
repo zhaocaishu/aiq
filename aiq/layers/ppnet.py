@@ -198,9 +198,6 @@ class PPNet(nn.Module):
         self.d_gate_input = gate_input_end_index - gate_input_start_index  # F'
         self.feature_gate = Gate(self.d_gate_input, d_feat, beta=beta)
 
-        # normalize
-        self.revin_layer = RevIN(d_feat + self.d_gate_input)
-
         # instrument
         self.layers = nn.Sequential(
             # feature layer
@@ -215,14 +212,17 @@ class PPNet(nn.Module):
             nn.Linear(d_model, pred_len),
         )
 
+        # feature normalize
+        self.revin_layer = RevIN(d_feat)
+
     def forward(self, x):
-        # Apply revin_layer to feature columns (from index 5 onwards)
-        x[:, :, 5:] = self.revin_layer(x[:, :, 5:])
-    
         # Extract source features and gate input
         src = x[:, :, 5: self.gate_input_start_index]  # Shape: (N, T, D)
         gate_input = x[:, -1, self.gate_input_start_index: self.gate_input_end_index]
-    
+
+        # Apply revin_layer to src features
+        src = self.revin_layer(src)
+        
         # Apply feature gate to source features
         gate_output = self.feature_gate(gate_input).unsqueeze(1)  # Add dimension for broadcasting
         src_gated = src * gate_output  # Element-wise multiplication
