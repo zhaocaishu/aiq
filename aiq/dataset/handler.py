@@ -536,7 +536,7 @@ class MarketAlpha158(Alpha158):
         features = [returns]
         feature_names = ["MKT_RETURN_1D"]
 
-        windows = [5, 10, 30, 60]
+        windows = [3, 5, 20, 60]
         for window in windows:
             features.extend(
                 [
