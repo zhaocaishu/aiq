@@ -198,9 +198,10 @@ class PPNet(nn.Module):
         self.d_gate_input = gate_input_end_index - gate_input_start_index  # F'
         self.feature_gate = Gate(self.d_gate_input, d_feat, beta=beta)
 
-        # instrument
-        self.revin_layer = RevIN(d_feat)
+        # normalize
+        self.revin_layer = RevIN(d_feat + self.d_gate_input)
 
+        # instrument
         self.layers = nn.Sequential(
             # feature layer
             nn.Linear(d_feat, d_model),
@@ -215,8 +216,8 @@ class PPNet(nn.Module):
         )
 
     def forward(self, x):
+        x[:, :, 5:] = self.revin_layer(x[:, :, 5:])
         src = x[:, :, 5 : self.gate_input_start_index]  # N, T, D
-        src = self.revin_layer(src)
         gate_input = x[:, -1, self.gate_input_start_index : self.gate_input_end_index]
         src = src * torch.unsqueeze(self.feature_gate(gate_input), dim=1)
 
