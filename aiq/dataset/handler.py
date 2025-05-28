@@ -391,13 +391,11 @@ class Alpha158(DataHandler):
                 feature_names.append("VSUMD%d" % d)
 
         if use("TURN"):
-            features.append(turn)
-            feature_names.append("TURN_1D")
             for d in [5, 20]:
                 features.append(Mean(turn, d))
                 features.append(Std(turn, d))
-                feature_names.append("TURN_%dD" % d)
-                feature_names.append("STD_TURN_%dD" % d)
+                feature_names.append("TURN_MEAN_%dD" % d)
+                feature_names.append("TURN_STD_%dD" % d)
 
         # concat features
         self._feature_names = feature_names.copy()
