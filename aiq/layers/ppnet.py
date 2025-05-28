@@ -216,11 +216,18 @@ class PPNet(nn.Module):
         )
 
     def forward(self, x):
+        # Apply revin_layer to feature columns (from index 5 onwards)
         x[:, :, 5:] = self.revin_layer(x[:, :, 5:])
-        src = x[:, :, 5 : self.gate_input_start_index]  # N, T, D
-        gate_input = x[:, -1, self.gate_input_start_index : self.gate_input_end_index]
-        src = src * torch.unsqueeze(self.feature_gate(gate_input), dim=1)
-
-        output = self.layers(src)
-
+    
+        # Extract source features and gate input
+        src = x[:, :, 5: self.gate_input_start_index]  # Shape: (N, T, D)
+        gate_input = x[:, -1, self.gate_input_start_index: self.gate_input_end_index]
+    
+        # Apply feature gate to source features
+        gate_output = self.feature_gate(gate_input).unsqueeze(1)  # Add dimension for broadcasting
+        src_gated = src * gate_output  # Element-wise multiplication
+    
+        # Generate output through layers
+        output = self.layers(src_gated)
+    
         return output
