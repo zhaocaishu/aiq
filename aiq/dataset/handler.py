@@ -82,6 +82,7 @@ class Alpha158(DataHandler):
         fit_start_time=None,
         fit_end_time=None,
         processors=None,
+        benchmark="000300.SH",
     ):
         super().__init__(
             data_dir,
@@ -94,6 +95,17 @@ class Alpha158(DataHandler):
         )
         self._feature_names = None
         self._label_names = None
+
+        # Load benchmark data
+        if benchmark is not None:
+            self.benchmark_df = DataLoader.load_market_features(
+                self.data_dir,
+                market=benchmark,
+                start_time=self.start_time,
+                end_time=self.end_time,
+            )
+        else:
+            self.benchmark_df = None
 
     def extract_instrument_features(self, df):
         # fundamental data
@@ -420,7 +432,15 @@ class Alpha158(DataHandler):
         close = df["Close"] * adjusted_factor
 
         self._label_names = ["RETN_5D"]
-        labels = [Ref(close, -5) / Ref(close, -1) - 1]
+        if self.benchmark_df is not None:
+            benchmark_close = self.benchmark_df["Close"]
+            labels = [
+                (Ref(close, -5) / Ref(close, -1))
+                / (Ref(benchmark_close, -5) / Ref(benchmark_close, -1))
+                - 1
+            ]
+        else:
+            labels = [Ref(close, -5) / Ref(close, -1) - 1]
         label_df = pd.concat(
             [
                 df[["Instrument", "Date"]],
@@ -542,7 +562,7 @@ class MarketAlpha158(Alpha158):
                     Mean(returns, window),
                     Std(returns, window),
                     Mean(amount, window) / amount,
-                    Std(amount, window) / amount
+                    Std(amount, window) / amount,
                 ]
             )
             feature_names.extend(
@@ -573,10 +593,6 @@ class MarketAlpha158(Alpha158):
         return feature_df
 
     def setup_data(self, mode="train") -> pd.DataFrame:
-        # Instrument-level feature and label extraction
-        feature_label_df = super().setup_data(mode=mode)
-        feature_label_df = feature_label_df.reset_index()
-
         # Load market data
         market_df = DataLoader.load_markets_features(
             self.data_dir,
@@ -584,6 +600,10 @@ class MarketAlpha158(Alpha158):
             self.start_time,
             self.end_time,
         )
+
+        # Instrument-level feature and label extraction
+        feature_label_df = super().setup_data(mode=mode)
+        feature_label_df = feature_label_df.reset_index()
 
         # Market-level feature extraction
         market_feature_df = pd.concat(
