@@ -216,14 +216,12 @@ class PPNet(nn.Module):
         self.revin_layer = RevIN(d_feat)
 
     def forward(self, x):
-        # Extract source features and gate input
+        # Extract source features and apply revin_layer to src features
         src = x[:, :, 5: self.gate_input_start_index]  # Shape: (N, T, D)
-        gate_input = x[:, -1, self.gate_input_start_index: self.gate_input_end_index]
-
-        # Apply revin_layer to src features
         src = self.revin_layer(src)
         
         # Apply feature gate to source features
+        gate_input = x[:, -1, self.gate_input_start_index: self.gate_input_end_index]
         gate_output = self.feature_gate(gate_input).unsqueeze(1)  # Add dimension for broadcasting
         src_gated = src * gate_output  # Element-wise multiplication
     
