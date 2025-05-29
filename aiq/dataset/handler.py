@@ -104,6 +104,9 @@ class Alpha158(DataHandler):
                 start_time=self.start_time,
                 end_time=self.end_time,
             )
+            self.benchmark_df = self.benchmark_df.rename(
+                columns={"Close": "Bench_Close"}
+            )
         else:
             self.benchmark_df = None
 
@@ -428,22 +431,36 @@ class Alpha158(DataHandler):
         return feature_df
 
     def extract_instrument_labels(self, df):
-        adjusted_factor = df["Adj_factor"]
-        close = df["Close"] * adjusted_factor
-
         self._label_names = ["RETN_5D"]
         if self.benchmark_df is not None:
-            benchmark_close = self.benchmark_df["Close"]
+            merge_df = pd.merge(
+                df,
+                self.benchmark_df[["Date", "Bench_Close"]],
+                on="Date",
+                how="inner",
+            )
+
+            assert merge_df.shape[0] == df.shape[0]
+
+            adjusted_factor = merge_df["Adj_factor"]
+            close = merge_df["Close"] * adjusted_factor
+            benchmark_close = merge_df["Bench_Close"]
+
             labels = [
                 (Ref(close, -5) / Ref(close, -1))
                 / (Ref(benchmark_close, -5) / Ref(benchmark_close, -1))
                 - 1
             ]
         else:
+            merge_df = df
+            adjusted_factor = merge_df["Adj_factor"]
+            close = merge_df["Close"] * adjusted_factor
+
             labels = [Ref(close, -5) / Ref(close, -1) - 1]
+
         label_df = pd.concat(
             [
-                df[["Instrument", "Date"]],
+                merge_df[["Instrument", "Date"]],
                 pd.concat(
                     [
                         labels[i].rename(self._label_names[i])
