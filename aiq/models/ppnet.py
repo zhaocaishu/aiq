@@ -95,11 +95,11 @@ class PPNetModel(BaseModel):
 
         time_now = time.time()
 
-        optimizer = optim.Adam(
+        optimizer = optim.AdamW(
             self.model.parameters(),
             lr=self.learning_rate,
             betas=(0.9, 0.999),
-            weight_decay=0.001,
+            weight_decay=0.01,
         )
         lr_scheduler = get_scheduler(
             name=self.lr_scheduler_type,
