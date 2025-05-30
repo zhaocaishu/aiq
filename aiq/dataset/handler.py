@@ -618,7 +618,7 @@ class MarketAlpha158(Alpha158):
         # Load market data
         market_df = DataLoader.load_markets_features(
             self.data_dir,
-            ["000300.SH", "000903.SH", "000905.SH"],
+            ["000903.SH", "000300.SH", "000906.SH"],
             self.start_time,
             self.end_time,
         )
