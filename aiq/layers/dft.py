@@ -219,7 +219,7 @@ class DFT(nn.Module):
     def forward(self, x):
         # Slice input features
         continuous_feats = x[
-            :, :, 5 : self.gate_input_start_index
+            :, :, 6 : self.gate_input_start_index
         ]  # Continuous features (N, T, D_c)
         gate_input_feats = x[
             :, :, self.gate_input_start_index : self.gate_input_end_index

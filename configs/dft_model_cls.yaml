@@ -52,8 +52,8 @@ model:
     seq_len: 8
     pred_len: 1
     dropout: 0.5
-    gate_input_start_index: 137
-    gate_input_end_index: 200
+    gate_input_start_index: 138
+    gate_input_end_index: 201
     epochs: 30
     batch_size: 1
     learning_rate: 0.0001

@@ -112,7 +112,8 @@ class Alpha158(DataHandler):
 
     def extract_instrument_features(self, df):
         # fundamental data
-        ind_class = df["Ind_class_l2"]
+        ind_class_l1 = df["Ind_class_l1"]
+        ind_class_l2 = df["Ind_class_l2"]
         mkt_class = df["Mkt_class"]
         ep = 1.0 / df["Pe_ttm"]
         bp = 1.0 / df["Pb"]
@@ -130,7 +131,8 @@ class Alpha158(DataHandler):
 
         # kbar
         features = [
-            ind_class,
+            ind_class_l1,
+            ind_class_l2,
             mkt_class,
             ep,
             bp,
@@ -147,7 +149,8 @@ class Alpha158(DataHandler):
             Log(open / Ref(close, 1)),
         ]
         feature_names = [
-            "IND_CLS_CAT",
+            "IND_CLS_L1_CAT",
+            "IND_CLS_L2_CAT",
             "MKT_CLS_CAT",
             "EP",
             "BP",
