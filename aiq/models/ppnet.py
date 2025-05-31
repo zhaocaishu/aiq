@@ -95,7 +95,7 @@ class PPNetModel(BaseModel):
 
         time_now = time.time()
 
-        optimizer = optim.AdamW(
+        optimizer = optim.Adam(
             self.model.parameters(),
             lr=self.learning_rate,
             betas=(0.9, 0.999),
