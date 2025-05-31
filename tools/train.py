@@ -1,6 +1,10 @@
 import os
 import argparse
+import random
 from typing import List, Any
+
+import torch
+import numpy as np
 
 from aiq.utils.config import config as cfg
 from aiq.utils.module import init_instance_by_config
@@ -21,11 +25,25 @@ def parse_args() -> argparse.Namespace:
         required=True,
         help="Directory to save model and data handler",
     )
+    parser.add_argument(
+        "--seed", type=int, default=1234, help="A seed for reproducible training."
+    )
     return parser.parse_args()
 
 
 def setup_logger(name: str = "TRAINING") -> Any:
     return get_logger(name)
+
+
+def set_random_seed(seed):
+    random.seed(seed)                         # Python 随机种子
+    np.random.seed(seed)                      # NumPy 随机种子
+    torch.manual_seed(seed)                   # PyTorch CPU 随机种子
+    torch.cuda.manual_seed(seed)              # PyTorch 当前 GPU 随机种子
+    torch.cuda.manual_seed_all(seed)          # 所有 GPU 随机种子（多GPU训练）
+
+    torch.backends.cudnn.deterministic = True  # 保证每次返回的卷积算法是确定的
+    torch.backends.cudnn.benchmark = False     # 禁止 cuDNN 自动寻找最优算法（为了确定性）
 
 
 def load_datasets(data: str, feature_names: List[str]) -> tuple:
@@ -65,6 +83,9 @@ def main():
 
     # Load config
     cfg.from_file(args.cfg_file)
+
+    # If passed along, set the training seed now.
+    set_random_seed(args.seed)
 
     logger = get_logger("TRAINING")
     logger.info("Configuration loaded:\n%s", cfg)
