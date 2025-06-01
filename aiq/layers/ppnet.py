@@ -150,7 +150,7 @@ class TAttention(nn.Module):
 
 
 class Gate(nn.Module):
-    def __init__(self, market_dim, inst_dim, beta=3.0):
+    def __init__(self, market_dim, inst_dim, beta=5.0):
         super().__init__()
         self.qtrans = nn.Linear(market_dim, inst_dim, bias=False)
         self.ktrans = nn.Linear(market_dim, inst_dim, bias=False)
@@ -194,7 +194,7 @@ class PPNet(nn.Module):
         gate_input_end_index,
         seq_len,
         pred_len,
-        beta=3.0,
+        beta=5.0,
     ):
         super(PPNet, self).__init__()
 
