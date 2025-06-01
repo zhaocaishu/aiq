@@ -2,18 +2,19 @@ import os
 from typing import List, Optional
 
 import pandas as pd
-
-from aiq.utils.db import init_db_connection
+import mysql.connector
 
 
 class DataLoader:
     """Utility class for loading financial datasets from local directory or database."""
 
     @staticmethod
-    def _read_csv(file_path: str, timestamp_col: str, start: str, end: str) -> Optional[pd.DataFrame]:
+    def _read_csv(
+        file_path: str, timestamp_col: str, start: str, end: str
+    ) -> Optional[pd.DataFrame]:
         if not os.path.exists(file_path):
             return None
-        
+
         df = pd.read_csv(file_path)
 
         # 根据start和end日期过滤数据
@@ -28,7 +29,12 @@ class DataLoader:
     def _query_db(
         query: str, params: tuple, columns: List[str], date_col: str = "Date"
     ) -> pd.DataFrame:
-        conn = init_db_connection()
+        conn = mysql.connector.connect(
+            host="127.0.0.1",
+            user="zcs",
+            passwd="2025zcsdaydayup",
+            database="stock_info",
+        )
         try:
             with conn.cursor() as cursor:
                 cursor.execute(query, params)
@@ -155,7 +161,7 @@ class DataLoader:
 
             if column_names:
                 df = df[column_names]
-            
+
             df = df.sort_values(by=timestamp_col)
         return df
 
