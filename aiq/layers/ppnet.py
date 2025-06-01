@@ -150,16 +150,22 @@ class TAttention(nn.Module):
 
 
 class Gate(nn.Module):
-    def __init__(self, d_input, d_output, beta=1.0):
+    def __init__(self, market_dim, inst_dim, beta=3.0):
         super().__init__()
-        self.trans = nn.Linear(d_input, d_output)
-        self.d_output = d_output
+        self.qtrans = nn.Linear(market_dim, inst_dim, bias=False)
+        self.ktrans = nn.Linear(market_dim, inst_dim, bias=False)
+        self.vtrans = nn.Linear(inst_dim, inst_dim, bias=False)
         self.t = beta
 
-    def forward(self, gate_input):
-        output = self.trans(gate_input)
-        output = torch.softmax(output / self.t, dim=-1)
-        return self.d_output * output
+    def forward(self, market_feature, inst_feature):
+        q = self.qtrans(market_feature)
+        k = self.ktrans(market_feature)
+        v = self.vtrans(inst_feature)
+
+        attn_weight = torch.softmax(torch.matmul(q, k.transpose(1, 2)) / self.t, dim=-1)
+
+        output = torch.matmul(attn_weight, v)
+        return output
 
 
 class TemporalAttention(nn.Module):
@@ -188,7 +194,7 @@ class PPNet(nn.Module):
         gate_input_end_index,
         seq_len,
         pred_len,
-        beta=5.0,
+        beta=3.0,
     ):
         super(PPNet, self).__init__()
 
@@ -217,15 +223,15 @@ class PPNet(nn.Module):
 
     def forward(self, x):
         # Extract source features and apply revin_layer to src features
-        src = x[:, :, 6: self.gate_input_start_index]  # Shape: (N, T, D)
+        src = x[:, :, 6 : self.gate_input_start_index]  # Shape: (N, T, D)
         src = self.revin_layer(src)
-        
+
         # Apply feature gate to source features
-        gate_input = x[:, -1, self.gate_input_start_index: self.gate_input_end_index]
-        gate_output = self.feature_gate(gate_input).unsqueeze(1)  # Add dimension for broadcasting
+        gate_input = x[:, :, self.gate_input_start_index : self.gate_input_end_index]
+        gate_output = self.feature_gate(gate_input, gate_input, src)
         src_gated = src * gate_output  # Element-wise multiplication
-    
+
         # Generate output through layers
         output = self.layers(src_gated)
-    
+
         return output
