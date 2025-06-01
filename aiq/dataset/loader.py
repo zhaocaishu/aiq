@@ -36,15 +36,12 @@ class DataLoader:
             database="stock_info",
         )
         try:
-            with conn.cursor() as cursor:
-                cursor.execute(query, params)
-                data = cursor.fetchall()
-                df = pd.DataFrame(data, columns=columns)
-                if date_col in df.columns:
-                    df[date_col] = pd.to_datetime(
-                        df[date_col], format="%Y%m%d"
-                    ).dt.strftime("%Y-%m-%d")
-                return df
+            df = pd.read_sql(query, conn, params=params)
+            if date_col in df.columns:
+                df[date_col] = pd.to_datetime(
+                    df[date_col].astype(str), format="%Y%m%d"
+                ).dt.strftime("%Y-%m-%d")
+            return df[columns]
         finally:
             conn.close()
 
