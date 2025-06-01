@@ -228,7 +228,7 @@ class PPNet(nn.Module):
 
         # Apply feature gate to source features
         gate_input = x[:, :, self.gate_input_start_index : self.gate_input_end_index]
-        gate_output = self.feature_gate(gate_input, gate_input, src)
+        gate_output = self.feature_gate(gate_input, src)
         src_gated = src * gate_output  # Element-wise multiplication
 
         # Generate output through layers
