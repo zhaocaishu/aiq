@@ -164,9 +164,8 @@ class Gate(nn.Module):
         v = self.vtrans(inst_feature)
 
         attn_weight = torch.softmax(torch.matmul(q, k.transpose(1, 2)) / self.t, dim=-1)
-
         output = torch.matmul(attn_weight, v)
-        return self.d_output * output
+        return output
 
 
 class TemporalAttention(nn.Module):
@@ -229,8 +228,7 @@ class PPNet(nn.Module):
 
         # Apply feature gate to source features
         gate_input = x[:, :, self.gate_input_start_index : self.gate_input_end_index]
-        gate_output = self.feature_gate(gate_input, src)
-        src_gated = src * gate_output  # Element-wise multiplication
+        src_gated = self.feature_gate(gate_input, src)
 
         # Generate output through layers
         output = self.layers(src_gated)
