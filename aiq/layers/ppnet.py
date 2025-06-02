@@ -206,7 +206,7 @@ class PPNet(nn.Module):
         self.gate_input_start_index = gate_input_start_index
         self.gate_input_end_index = gate_input_end_index
         self.d_gate_input = gate_input_end_index - gate_input_start_index  # F'
-        self.feature_gate = Gate(self.d_gate_input, d_feat, beta=beta)
+        self.feature_gate = Gate(self.d_gate_input, d_feat)
 
         # instrument
         self.layers = nn.Sequential(
