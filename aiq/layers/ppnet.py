@@ -156,6 +156,7 @@ class Gate(nn.Module):
         self.ktrans = nn.Linear(market_dim, inst_dim, bias=False)
         self.vtrans = nn.Linear(inst_dim, inst_dim, bias=False)
         self.t = beta
+        self.d_output = inst_dim
 
     def forward(self, market_feature, inst_feature):
         q = self.qtrans(market_feature)
@@ -165,7 +166,7 @@ class Gate(nn.Module):
         attn_weight = torch.softmax(torch.matmul(q, k.transpose(1, 2)) / self.t, dim=-1)
 
         output = torch.matmul(attn_weight, v)
-        return output
+        return self.d_output * output
 
 
 class TemporalAttention(nn.Module):
