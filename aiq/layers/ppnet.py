@@ -150,22 +150,26 @@ class TAttention(nn.Module):
 
 
 class Gate(nn.Module):
-    def __init__(self, market_dim, inst_dim, beta=5.0):
+    def __init__(self, market_dim, inst_dim, num_heads=4, dropout=0.1):
         super().__init__()
-        self.qtrans = nn.Linear(market_dim, inst_dim, bias=False)
-        self.ktrans = nn.Linear(market_dim, inst_dim, bias=False)
-        self.vtrans = nn.Linear(inst_dim, inst_dim, bias=False)
-        self.t = beta
-        self.d_output = inst_dim
+
+        # 将 market_feature 映射到 inst_dim，以便做 attention
+        self.market_proj = nn.Linear(market_dim, inst_dim)
+
+        self.cross_attn = nn.MultiheadAttention(
+            embed_dim=inst_dim, num_heads=num_heads, batch_first=True, dropout=dropout
+        )
 
     def forward(self, market_feature, inst_feature):
-        q = self.qtrans(market_feature)
-        k = self.ktrans(market_feature)
-        v = self.vtrans(inst_feature)
+        # 映射 market_feature 到 inst_dim
+        market_query = self.market_proj(market_feature)  # shape: (N, T, inst_dim)
 
-        attn_weight = torch.softmax(torch.matmul(q, k.transpose(1, 2)) / self.t, dim=-1)
-        output = torch.matmul(attn_weight, v)
-        return output
+        # 做 cross attention
+        attn_out, _ = self.cross_attn(
+            query=market_query, key=inst_feature, value=inst_feature, need_weights=False
+        )
+
+        return attn_out
 
 
 class TemporalAttention(nn.Module):
