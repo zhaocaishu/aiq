@@ -150,26 +150,16 @@ class TAttention(nn.Module):
 
 
 class Gate(nn.Module):
-    def __init__(self, market_dim, inst_dim, num_heads=4, dropout=0.1):
+    def __init__(self, d_input, d_output, beta=1.0):
         super().__init__()
+        self.trans = nn.Linear(d_input, d_output)
+        self.d_output = d_output
+        self.t = beta
 
-        # 将 market_feature 映射到 inst_dim，以便做 attention
-        self.market_proj = nn.Linear(market_dim, inst_dim)
-
-        self.cross_attn = nn.MultiheadAttention(
-            embed_dim=inst_dim, num_heads=num_heads, batch_first=True, dropout=dropout
-        )
-
-    def forward(self, market_feature, inst_feature):
-        # 映射 market_feature 到 inst_dim
-        market_query = self.market_proj(market_feature)  # shape: (N, T, inst_dim)
-
-        # 做 cross attention
-        attn_out, _ = self.cross_attn(
-            query=market_query, key=inst_feature, value=inst_feature, need_weights=False
-        )
-
-        return attn_out
+    def forward(self, gate_input):
+        output = self.trans(gate_input)
+        output = torch.softmax(output / self.t, dim=-1)
+        return self.d_output * output
 
 
 class TemporalAttention(nn.Module):
@@ -206,7 +196,7 @@ class PPNet(nn.Module):
         self.gate_input_start_index = gate_input_start_index
         self.gate_input_end_index = gate_input_end_index
         self.d_gate_input = gate_input_end_index - gate_input_start_index  # F'
-        self.feature_gate = Gate(self.d_gate_input, d_feat)
+        self.feature_gate = Gate(self.d_gate_input, d_feat, beta=beta)
 
         # instrument
         self.layers = nn.Sequential(
@@ -231,8 +221,8 @@ class PPNet(nn.Module):
         src = self.revin_layer(src)
 
         # Apply feature gate to source features
-        gate_input = x[:, :, self.gate_input_start_index : self.gate_input_end_index]
-        src_gated = self.feature_gate(gate_input, src)
+        gate_input = x[:, -1, self.gate_input_start_index : self.gate_input_end_index]
+        src_gated = src * torch.unsqueeze(self.feature_gate(gate_input), dim=1)
 
         # Generate output through layers
         output = self.layers(src_gated)
