@@ -582,8 +582,8 @@ class MarketAlpha158(Alpha158):
                 [
                     Mean(returns, window),
                     Std(returns, window),
-                    Mean(amount, window) / amount,
-                    Std(amount, window) / amount,
+                    amount / Mean(amount, window),
+                    Std(amount, window) / Mean(amount, window),
                 ]
             )
             feature_names.extend(
