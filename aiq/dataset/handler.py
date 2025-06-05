@@ -117,7 +117,7 @@ class Alpha158(DataHandler):
         mkt_class = df["Mkt_class"]
         ep = 1.0 / df["Pe_ttm"]
         bp = 1.0 / df["Pb"]
-        mkt_cap = np.log(df["Total_mv"])
+        mkt_cap = np.log(df["Circ_mv"])
 
         # adjusted prices
         adjusted_factor = df["Adj_factor"]
