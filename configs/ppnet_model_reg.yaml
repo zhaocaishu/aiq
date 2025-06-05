@@ -2,7 +2,7 @@ data_handler:
   class: MarketAlpha158
   module_path: aiq.dataset.handler
   kwargs:
-    instruments: "000300.SH"
+    instruments: "000906.SH"
     start_time: "2016-02-01"
     end_time: "2023-06-30"
     fit_start_time: "2017-01-01"
