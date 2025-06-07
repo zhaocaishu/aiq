@@ -45,6 +45,8 @@ def neutralize(df: pd.DataFrame, industry_col: str, cap_col: str, factor_cols: l
 
     for factor_col in factor_cols:
         y = df["feature", factor_col].astype(float)
+        if y.isna.all():
+            continue
         neutral_factor = sm.OLS(y, X, missing="drop").fit().resid.reindex(df.index)
         df["feature", factor_col] = neutral_factor
 
