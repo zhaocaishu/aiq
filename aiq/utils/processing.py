@@ -49,10 +49,10 @@ def neutralize(df: pd.DataFrame, industry_col: str, cap_col: str, factor_cols: l
     try:
         # Prepare the independent variables matrix (X) for the regression
         industry_series = df[("feature", industry_col)]
-        cap_series = df[("feature", cap_col)].astype(float)
+        cap_series = df[("feature", cap_col)]
         
         industry_dummies = pd.get_dummies(industry_series, prefix="IND", drop_first=True)
-        X = pd.concat([industry_dummies, cap_series], axis=1)
+        X = pd.concat([industry_dummies, cap_series], axis=1).astype(float)
         X = sm.add_constant(X)
 
         # Neutralize each factor column by running a regression
