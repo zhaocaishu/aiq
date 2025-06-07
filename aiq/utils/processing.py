@@ -33,22 +33,48 @@ def zscore(x: Union[pd.Series, pd.DataFrame, np.ndarray]):
         return (x - x.mean()).div(x.std() + 1e-12)
 
 
-def neutralize(df: pd.DataFrame, industry_col: str, cap_col: str, factor_cols: list):
-    # 行业哑变量
-    industry_dummies = pd.get_dummies(
-        df["feature", industry_col], prefix="IND", drop_first=True
-    )
+def neutralize(df: pd.DataFrame, industry_col: str, cap_col: str, factor_cols: list) -> pd.DataFrame:
+    """
+    指定因子列行业与市值中性化。
 
-    # 构造回归自变量 X（行业 + 市值）
-    X = pd.concat([industry_dummies, df["feature", cap_col]], axis=1).astype(float)
-    X = sm.add_constant(X)
+    参数:
+    - df: 多层列索引的DataFrame，需包含 ('feature', col) 格式的列。
+    - industry_col: 行业列名（在 'feature' 层级下）。
+    - cap_col: 市值列名（在 'feature' 层级下）。
+    - factor_cols: 要中性化的因子列名列表（在 'feature' 层级下）。
 
-    for factor_col in factor_cols:
-        y = df["feature", factor_col].astype(float)
-        if y.isna.all():
-            continue
-        neutral_factor = sm.OLS(y, X, missing="drop").fit().resid.reindex(df.index)
-        df["feature", factor_col] = neutral_factor
+    返回:
+    - 中性化处理后的DataFrame。
+    """
+    try:
+        # Prepare the independent variables matrix (X) for the regression
+        industry_series = df[("feature", industry_col)]
+        cap_series = df[("feature", cap_col)].astype(float)
+        
+        industry_dummies = pd.get_dummies(industry_series, prefix="IND", drop_first=True)
+        X = pd.concat([industry_dummies, cap_series], axis=1)
+        X = sm.add_constant(X)
+
+        # Neutralize each factor column by running a regression
+        for col in factor_cols:
+            y = df[("feature", col)].astype(float)
+            
+            # Skip if the factor column is entirely empty
+            if y.isna().all():
+                continue
+            
+            # Perform OLS regression. The `missing='drop'` argument efficiently
+            # handles alignment and removes rows with NaN in either y or X.
+            model = sm.OLS(y, X, missing='drop')
+            results = model.fit()
+
+            # Replace the original factor with the regression residuals.
+            # .reindex() ensures alignment with the original DataFrame's index,
+            # assigning NaN to rows that could not be used in the regression.
+            df[('feature', col)] = results.resid.reindex(df.index)
+
+    except Exception as e:
+        raise RuntimeError(f"Neutralization failed: {e}")
 
     return df
 
