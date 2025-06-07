@@ -408,7 +408,7 @@ class Alpha158(DataHandler):
                 feature_names.append("VSUMD%d" % d)
 
         if use("TURN"):
-            for d in [5, 20]:
+            for d in windows:
                 features.append(Mean(turn, d))
                 features.append(Std(turn, d))
                 feature_names.append("TURN_MEAN_%dD" % d)

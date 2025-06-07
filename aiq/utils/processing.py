@@ -4,6 +4,8 @@ import torch
 import pandas as pd
 import numpy as np
 
+import statsmodels.api as sm
+
 
 def robust_zscore(x: pd.Series, zscore=False):
     """Robust ZScore Normalization
@@ -29,6 +31,24 @@ def zscore(x: Union[pd.Series, pd.DataFrame, np.ndarray]):
         return (x - x.mean()) / (x.std() + 1e-12)
     else:
         return (x - x.mean()).div(x.std() + 1e-12)
+
+
+def neutralize(df: pd.DataFrame, industry_col: str, cap_col: str, factor_cols: list):
+    # 行业哑变量
+    industry_dummies = pd.get_dummies(
+        df["feature", industry_col], prefix="IND", drop_first=True
+    )
+
+    # 构造回归自变量 X（行业 + 市值）
+    X = pd.concat([industry_dummies, df["feature", cap_col]], axis=1)
+    X = sm.add_constant(X)
+
+    for factor_col in factor_cols:
+        y = df["feature", factor_col]
+        neutral_factor = sm.OLS(y, X, missing="drop").fit().resid.reindex(df.index)
+        df["feature", factor_col] = neutral_factor
+
+    return df
 
 
 def drop_extreme_label(x: np.array):

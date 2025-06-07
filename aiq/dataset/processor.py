@@ -3,7 +3,7 @@ import abc
 import pandas as pd
 import numpy as np
 
-from aiq.utils.processing import robust_zscore, zscore
+from aiq.utils.processing import robust_zscore, zscore, neutralize
 
 
 def get_group_columns(
@@ -123,6 +123,21 @@ class RobustZScoreNorm(Processor):
         if self.clip_outlier:
             X = np.clip(X, -3, 3)
         df[self.cols] = X
+        return df
+
+
+class CSNeutralize(Processor):
+    """Factors Neutralization"""
+
+    def __init__(self, industry_col: str, cap_col: str, factor_cols: list):
+        self.industry_col = industry_col
+        self.cap_col = cap_col
+        self.factor_cols = factor_cols
+
+    def __call__(self, df):
+        df = df.groupby("Date", group_keys=False).apply(
+            neutralize, self.industry_col, self.cap_col, self.factor_cols
+        )
         return df
 
 
