@@ -5,7 +5,6 @@ import pandas as pd
 import numpy as np
 
 from sklearn.linear_model import LinearRegression
-import statsmodels.api as sm
 
 
 def robust_zscore(x: pd.Series, zscore=False):
