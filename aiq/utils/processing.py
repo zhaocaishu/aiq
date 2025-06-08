@@ -1,3 +1,4 @@
+import re
 from typing import Union, List
 
 import torch
@@ -38,6 +39,7 @@ def neutralize(
 ) -> pd.DataFrame:
     """
     Neutralize specified factor columns by industry and market capitalization.
+    Supports regex/expression patterns in factor_cols to match multiple columns.
 
     Parameters:
     - df: DataFrame with MultiIndex columns; level 'feature' contains input columns.
@@ -50,6 +52,16 @@ def neutralize(
     """
     # Extract the feature-level DataFrame for clarity
     feats = df["feature"]
+
+    # Combine all patterns into one big regex using alternation (|)
+    # Each pattern is grouped to preserve its regex semantics
+    combined_pattern = "|".join(f"({pat})" for pat in factor_cols)
+
+    # Filter column names in one pass; original order is preserved
+    actual_factors = [
+        col for col in feats.columns
+        if re.search(combined_pattern, str(col))
+    ]
 
     # Build design matrix: industry dummies + cap + intercept
     industry = feats[industry_col].astype("category")
@@ -64,7 +76,7 @@ def neutralize(
     model = LinearRegression(fit_intercept=False)
 
     # Loop over each factor column and compute residuals
-    for factor in factor_cols:
+    for factor in actual_factors:
         y = feats[factor].astype(float)
 
         # Mask out rows with any missing data in X or y
