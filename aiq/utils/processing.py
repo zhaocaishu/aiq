@@ -4,6 +4,7 @@ import torch
 import pandas as pd
 import numpy as np
 
+from sklearn.linear_model import LinearRegression
 import statsmodels.api as sm
 
 
@@ -33,7 +34,9 @@ def zscore(x: Union[pd.Series, pd.DataFrame, np.ndarray]):
         return (x - x.mean()).div(x.std() + 1e-12)
 
 
-def neutralize(df: pd.DataFrame, industry_col: str, cap_col: str, factor_cols: list) -> pd.DataFrame:
+def neutralize(
+    df: pd.DataFrame, industry_col: str, cap_col: str, factor_cols: list
+) -> pd.DataFrame:
     """
     指定因子列行业与市值中性化。
 
@@ -46,35 +49,33 @@ def neutralize(df: pd.DataFrame, industry_col: str, cap_col: str, factor_cols: l
     返回:
     - 中性化处理后的DataFrame。
     """
-    try:
-        # Prepare the independent variables matrix (X) for the regression
-        industry_series = df[("feature", industry_col)]
-        cap_series = df[("feature", cap_col)]
-        
-        industry_dummies = pd.get_dummies(industry_series, prefix="IND", drop_first=True)
-        X = pd.concat([industry_dummies, cap_series], axis=1).astype(float)
-        X = sm.add_constant(X)
+    # 构造 X
+    ind = df[("feature", industry_col)].astype("category")
+    cap = df[("feature", cap_col)].astype(float)
+    dummies = pd.get_dummies(ind, prefix="IND", drop_first=True).astype(float)
+    X = pd.concat([dummies, cap.rename("CAP")], axis=1)
+    X.insert(0, "CONST", 1.0)
+    Xv = X.values  # (T, K)
 
-        # Neutralize each factor column by running a regression
-        for col in factor_cols:
-            y = df[("feature", col)].astype(float)
-            
-            # Skip if the factor column is entirely empty
-            if y.isna().all():
-                continue
-            
-            # Perform OLS regression. The `missing='drop'` argument efficiently
-            # handles alignment and removes rows with NaN in either y or X.
-            model = sm.OLS(y, X, missing='drop')
-            results = model.fit()
+    # 对每个因子单独回归
+    lr = LinearRegression(fit_intercept=False)
+    for col in factor_cols:
+        # 单列 Y
+        Y = df[("feature", col)].astype(float).values.reshape(-1, 1)  # shape (T, 1)
 
-            # Replace the original factor with the regression residuals.
-            # .reindex() ensures alignment with the original DataFrame's index,
-            # assigning NaN to rows that could not be used in the regression.
-            df[('feature', col)] = results.resid.reindex(df.index)
+        # 只剔除 X 或 该 Y 的 NaN
+        valid = (~np.isnan(Xv).any(axis=1)) & (~np.isnan(Y.ravel()))
+        Xv_valid = Xv[valid]
+        Y_valid = Y[valid]
 
-    except Exception as e:
-        raise RuntimeError(f"Neutralization failed: {e}")
+        # 拟合并算残差
+        lr.fit(Xv_valid, Y_valid)
+        resid_valid = Y_valid - lr.predict(Xv_valid)
+
+        # 把残差写回，只改这一列
+        resid_full = np.full_like(Y, np.nan)
+        resid_full[valid, 0] = resid_valid.ravel()
+        df.loc[:, ("feature", col)] = resid_full
 
     return df
 
