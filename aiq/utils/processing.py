@@ -34,53 +34,51 @@ def zscore(x: Union[pd.Series, pd.DataFrame, np.ndarray]):
 
 
 def neutralize(
-    df: pd.DataFrame, industry_col: str, cap_col: str, factor_cols: list
+    df: pd.DataFrame, industry_col: str, cap_col: str, factor_cols: List[str]
 ) -> pd.DataFrame:
     """
-    指定因子列行业与市值中性化。
+    Neutralize specified factor columns by industry and market capitalization.
 
-    参数:
-    - df: 多层列索引的DataFrame，需包含 ('feature', col) 格式的列。
-    - industry_col: 行业列名（在 'feature' 层级下）。
-    - cap_col: 市值列名（在 'feature' 层级下）。
-    - factor_cols: 要中性化的因子列名列表（在 'feature' 层级下）。
+    Parameters:
+    - df: DataFrame with MultiIndex columns; level 'feature' contains input columns.
+    - industry_col: Name of the industry category column under 'feature'.
+    - cap_col: Name of the market cap column under 'feature'.
+    - factor_cols: List of factor column names (under 'feature') to be neutralized.
 
-    返回:
-    - 中性化处理后的DataFrame。
+    Returns:
+    - DataFrame with each specified factor column replaced by its regression residuals.
     """
-    # 构造 X
-    ind = df[("feature", industry_col)].astype("category")
-    cap = df[("feature", cap_col)].astype(float)
-    dummies = pd.get_dummies(ind, prefix="IND", drop_first=True).astype(float)
-    X = pd.concat([dummies, cap.rename("CAP")], axis=1)
-    X.insert(0, "CONST", 1.0)
-    Xv = X.values  # (T, K)
+    # Extract the feature-level DataFrame for clarity
+    feats = df["feature"]
 
-    # 对每个因子单独回归
-    lr = LinearRegression(fit_intercept=False)
-    for col in factor_cols:
-        # 单列 Y
-        Y = df[("feature", col)].astype(float).values.reshape(-1, 1)  # shape (T, 1)
+    # Build design matrix: industry dummies + cap + intercept
+    industry = feats[industry_col].astype("category")
+    cap = feats[cap_col].astype(float)
 
-        # 只剔除 X 或 该 Y 的 NaN
-        valid = (~np.isnan(Xv).any(axis=1)) & (~np.isnan(Y.ravel()))
-        
-        # 如果没有任何有效行，就跳过
-        if not valid.any():
+    X = pd.get_dummies(industry, prefix="IND", drop_first=True)
+    X["CAP"] = cap
+    X["CONST"] = 1.0
+    X_values = X.values
+
+    # Prepare regression model (no intercept since CONST is included)
+    model = LinearRegression(fit_intercept=False)
+
+    # Loop over each factor column and compute residuals
+    for factor in factor_cols:
+        y = feats[factor].astype(float)
+
+        # Mask out rows with any missing data in X or y
+        mask = (~np.isnan(X_values).any(axis=1)) & (~y.isna())
+        if not mask.any():
             continue
-        
-        # 直接按掩码筛选
-        Xv_valid = Xv[valid]
-        Y_valid = Y[valid]
 
-        # 拟合并算残差
-        lr.fit(Xv_valid, Y_valid)
-        resid_valid = Y_valid - lr.predict(Xv_valid)
+        # Fit model and compute residuals
+        model.fit(X_values[mask], y[mask].to_numpy())
+        resid = y.copy()
+        resid.loc[mask] = y.loc[mask] - model.predict(X_values[mask])
 
-        # 把残差写回，只改这一列
-        resid_full = np.full_like(Y, np.nan)
-        resid_full[valid, 0] = resid_valid.ravel()
-        df.loc[:, ("feature", col)] = resid_full
+        # Write residuals back to original DataFrame
+        df.loc[mask, ("feature", factor)] = resid
 
     return df
 
