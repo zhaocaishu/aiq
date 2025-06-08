@@ -58,7 +58,7 @@ def neutralize(
     X = pd.get_dummies(industry, prefix="IND", drop_first=True)
     X["CAP"] = cap
     X["CONST"] = 1.0
-    X_values = X.values
+    X_values = X.astype(float).values
 
     # Prepare regression model (no intercept since CONST is included)
     model = LinearRegression(fit_intercept=False)
