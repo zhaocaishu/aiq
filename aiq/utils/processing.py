@@ -64,6 +64,12 @@ def neutralize(
 
         # 只剔除 X 或 该 Y 的 NaN
         valid = (~np.isnan(Xv).any(axis=1)) & (~np.isnan(Y.ravel()))
+        
+        # 如果没有任何有效行，就跳过
+        if not valid.any():
+            continue
+        
+        # 直接按掩码筛选
         Xv_valid = Xv[valid]
         Y_valid = Y[valid]
 
