@@ -1,6 +1,6 @@
 import pandas as pd
 
-from aiq.dataset.processor import CSZScoreNorm, CSNeutralize
+from aiq.dataset.processor import CSZScoreNorm, CSNeutralize, CSWinsorize
 
 
 if __name__ == "__main__":
@@ -11,7 +11,7 @@ if __name__ == "__main__":
             "IND_CLS_CAT": [0, 0, 0, 0],
             "MKT_CAP": [2.5, 5.2, 3.0, 10.0],
             "Factor_0": [0.1, 2.4, 1.2, None],
-            "Factor_1": [2.0, 1.0, 3.0, 4.0],
+            "Factor_1": [2.0, 1.0, 3.0, 100.0],
         }
     )
     df.set_index(["Date", "Instrument"], inplace=True)
@@ -24,6 +24,9 @@ if __name__ == "__main__":
         ]
     )
     print(df)
+
+    cswinsorize = CSWinsorize(fields_group="feature")
+    print(cswinsorize(df))
 
     cs_neutralize = CSNeutralize(
         industry_col="IND_CLS_CAT", cap_col="MKT_CAP", factor_cols=["Factor_0", "Factor_1"]

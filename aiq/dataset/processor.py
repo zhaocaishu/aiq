@@ -141,6 +141,41 @@ class CSNeutralize(Processor):
         return df
 
 
+class CSWinsorize(Processor):
+    """Cross Sectional Winsorization: winsorize each variable within each date slice."""
+
+    def __init__(self, fields_group=None, lower_quantile=0.01, upper_quantile=0.99):
+        """
+        :param fields_group: grouping key or pattern to select columns (passed to get_group_columns)
+        :param lower_quantile: lower tail cutoff (e.g. 0.01 for 1%)
+        :param upper_quantile: upper tail cutoff (e.g. 0.99 for 99%)
+        """
+        self.fields_group = fields_group
+        self.lower_quantile = lower_quantile
+        self.upper_quantile = upper_quantile
+
+    def __call__(self, df: pd.DataFrame) -> pd.DataFrame:
+        # Identify numeric columns to winsorize, excluding discrete if specified
+        cols = get_group_columns(df, self.fields_group, exclude_discrete=True)
+
+        def winsorize_slice(slice_df: pd.DataFrame) -> pd.DataFrame:
+            """
+            Winsorize values in each column of the slice.
+
+            :param slice_df: DataFrame subset for a single date
+            :return: winsorized DataFrame
+            """
+            # Compute per-column quantiles
+            lower_bounds = slice_df.quantile(self.lower_quantile)
+            upper_bounds = slice_df.quantile(self.upper_quantile)
+            # Clip values to bounds
+            return slice_df.clip(lower=lower_bounds, upper=upper_bounds, axis=1)
+
+        # Apply winsorization within each date group
+        df[cols] = df[cols].groupby("Date", group_keys=False).apply(winsorize_slice)
+        return df
+
+
 class CSZScoreNorm(Processor):
     """Cross Sectional ZScore Normalization"""
 
