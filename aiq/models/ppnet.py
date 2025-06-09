@@ -80,9 +80,18 @@ class PPNetModel(BaseModel):
 
         self.model = self.model.to(self.device)
 
+        if self.criterion_name == "MSE":
+            self.criterion = nn.MSELoss()
+        else:
+            raise NotImplementedError
+
         self.save_dir = save_dir
 
         self.logger = logger
+
+    def to_device(self, tensor):
+        """统一设备转换方法"""
+        return tensor.squeeze(0).to(device=self.device, dtype=torch.float)
 
     def fit(self, train_dataset: Dataset, val_dataset: Dataset = None):
         train_loader = DataLoader(
@@ -108,11 +117,6 @@ class PPNetModel(BaseModel):
             num_training_steps=num_training_steps,
         )
 
-        if self.criterion_name == "MSE":
-            self.criterion = nn.MSELoss()
-        else:
-            raise NotImplementedError
-
         for epoch in range(self.epochs):
             self.logger.info("=" * 20 + " Epoch {} ".format(epoch + 1) + "=" * 20)
 
@@ -129,8 +133,8 @@ class PPNetModel(BaseModel):
                     mask = torch.bernoulli(torch.full(batch_x.shape, 1 - mask_prob))
                     batch_x = batch_x * mask
 
-                batch_x = batch_x.squeeze(0).to(self.device, dtype=torch.float)
-                batch_y = batch_y.squeeze(0).to(self.device, dtype=torch.float)
+                batch_x = self.to_device(batch_x)
+                batch_y = self.to_device(batch_y)
 
                 assert not torch.isnan(batch_x).any(), "NaN at batch_x"
                 assert not torch.isnan(batch_y).any(), "NaN at batch_y"
@@ -184,10 +188,9 @@ class PPNetModel(BaseModel):
         val_loader = DataLoader(val_dataset, batch_size=self.batch_size, shuffle=False)
 
         total_loss = []
-
         for i, (_, batch_x, batch_y) in enumerate(val_loader):
-            batch_x = batch_x.squeeze(0).to(self.device, dtype=torch.float)
-            batch_y = batch_y.squeeze(0).to(self.device, dtype=torch.float)
+            batch_x = self.to_device(batch_x)
+            batch_y = self.to_device(batch_y)
 
             with torch.no_grad():
                 outputs = self.model(batch_x)
@@ -211,15 +214,15 @@ class PPNetModel(BaseModel):
         labels = np.zeros((num_samples, self.pred_len))
         preds = np.zeros((num_samples, self.pred_len))
         for i, (sample_indices, batch_x, batch_y) in enumerate(test_loader):
-            sample_indices = sample_indices.squeeze(0).numpy()  # 确保索引为 numpy 数组
-            batch_x = batch_x.squeeze(0).to(self.device, dtype=torch.float)
-            batch_y = batch_y.squeeze(0).to(self.device, dtype=torch.float)
+            batch_x = self.to_device(batch_x)
+            batch_y = self.to_device(batch_y)
 
             with torch.no_grad():
                 outputs = self.model(batch_x)
 
-            labels[sample_indices] = batch_y.cpu().numpy()
-            preds[sample_indices] = outputs.cpu().numpy()
+            indices = sample_indices.squeeze(0).numpy()  # 确保索引为 numpy 数组
+            labels[indices] = batch_y.cpu().numpy()
+            preds[indices] = outputs.cpu().numpy()
 
         test_dataset.data[label_names] = labels
         test_dataset.data[[f"PRED_{name}" for name in label_names]] = preds

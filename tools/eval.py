@@ -76,7 +76,8 @@ def main():
     logger = get_logger("EVALUATION")
     logger.info("Starting evaluation with config:\n%s", cfg)
 
-    data_handler = load_data_handler(args.save_dir, logger)
+    data_handler = init_instance_by_config(cfg.data_handler, data_dir=args.data_dir)
+    data_handler.load(os.path.join(args.save_dir, "data_handler.pkl"))
     data = data_handler.setup_data(mode="valid")
 
     # Load dataset

@@ -1,7 +1,10 @@
 import os
 import argparse
-import pickle
+import random
 from typing import List, Any
+
+import torch
+import numpy as np
 
 from aiq.utils.config import config as cfg
 from aiq.utils.module import init_instance_by_config
@@ -22,6 +25,9 @@ def parse_args() -> argparse.Namespace:
         required=True,
         help="Directory to save model and data handler",
     )
+    parser.add_argument(
+        "--seed", type=int, default=1234, help="A seed for reproducible training."
+    )
     return parser.parse_args()
 
 
@@ -29,12 +35,15 @@ def setup_logger(name: str = "TRAINING") -> Any:
     return get_logger(name)
 
 
-def setup_config(cfg_file: str) -> None:
-    cfg.from_file(cfg_file)
+def set_random_seed(seed):
+    random.seed(seed)                         # Python 随机种子
+    np.random.seed(seed)                      # NumPy 随机种子
+    torch.manual_seed(seed)                   # PyTorch CPU 随机种子
+    torch.cuda.manual_seed(seed)              # PyTorch 当前 GPU 随机种子
+    torch.cuda.manual_seed_all(seed)          # 所有 GPU 随机种子（多GPU训练）
 
-
-def setup_directories(save_dir: str) -> None:
-    os.makedirs(save_dir, exist_ok=True)
+    torch.backends.cudnn.deterministic = True  # 保证每次返回的卷积算法是确定的
+    torch.backends.cudnn.benchmark = False     # 禁止 cuDNN 自动寻找最优算法（为了确定性）
 
 
 def load_datasets(data: str, feature_names: List[str]) -> tuple:
@@ -55,11 +64,6 @@ def load_datasets(data: str, feature_names: List[str]) -> tuple:
     return train_dataset, val_dataset
 
 
-def save_data_handler(handler: Any, save_path: str) -> None:
-    with open(save_path, "wb") as f:
-        pickle.dump(handler, f)
-
-
 def train_and_save_model(
     train_dataset: Any, val_dataset: Any, save_dir: str, logger: Any
 ) -> None:
@@ -76,33 +80,32 @@ def train_and_save_model(
 
 def main():
     args = parse_args()
-    logger = setup_logger()
 
-    try:
-        setup_config(args.cfg_file)
-        logger.info("Configuration loaded:\n%s", cfg)
+    # Load config
+    cfg.from_file(args.cfg_file)
 
-        setup_directories(args.save_dir)
+    # If passed along, set the training seed now.
+    set_random_seed(args.seed)
 
-        data_handler = init_instance_by_config(cfg.data_handler, data_dir=args.data_dir)
-        data = data_handler.setup_data()
-        
-        save_data_handler(data_handler, os.path.join(args.save_dir, "data_handler.pkl"))
+    logger = get_logger("TRAINING")
+    logger.info("Configuration loaded:\n%s", cfg)
 
-        train_dataset, val_dataset = load_datasets(data, data_handler.feature_names)
+    os.makedirs(args.save_dir, exist_ok=True)
 
-        logger.info(
-            "Loaded %d training and %d validation samples.",
-            len(train_dataset),
-            len(val_dataset),
-        )
+    data_handler = init_instance_by_config(cfg.data_handler, data_dir=args.data_dir)
+    data = data_handler.setup_data()
+    data_handler.save(os.path.join(args.save_dir, "data_handler.pkl"))
 
-        train_and_save_model(train_dataset, val_dataset, args.save_dir, logger)
+    train_dataset, val_dataset = load_datasets(data, data_handler.feature_names)
+    logger.info(
+        "Loaded %d training and %d validation samples.",
+        len(train_dataset),
+        len(val_dataset),
+    )
 
-        logger.info("Model training completed successfully!")
+    train_and_save_model(train_dataset, val_dataset, args.save_dir, logger)
 
-    except Exception as e:
-        logger.exception("Training failed due to an error: %s", str(e))
+    logger.info("Model training completed successfully!")
 
 
 if __name__ == "__main__":

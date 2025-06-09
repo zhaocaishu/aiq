@@ -5,6 +5,8 @@ from torch.nn.modules.linear import Linear
 from torch.nn.modules.dropout import Dropout
 from torch.nn.modules.normalization import LayerNorm
 
+from aiq.layers.revin import RevIN
+
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=100):
@@ -186,15 +188,17 @@ class PPNet(nn.Module):
         gate_input_end_index,
         seq_len,
         pred_len,
-        beta=5,
+        beta=5.0,
     ):
         super(PPNet, self).__init__()
+
         # market
         self.gate_input_start_index = gate_input_start_index
         self.gate_input_end_index = gate_input_end_index
         self.d_gate_input = gate_input_end_index - gate_input_start_index  # F'
         self.feature_gate = Gate(self.d_gate_input, d_feat, beta=beta)
 
+        # instrument
         self.layers = nn.Sequential(
             # feature layer
             nn.Linear(d_feat, d_model),
@@ -208,11 +212,19 @@ class PPNet(nn.Module):
             nn.Linear(d_model, pred_len),
         )
 
-    def forward(self, x):
-        src = x[:, :, 5 : self.gate_input_start_index]  # N, T, D
-        gate_input = x[:, -1, self.gate_input_start_index : self.gate_input_end_index]
-        src = src * torch.unsqueeze(self.feature_gate(gate_input), dim=1)
+        # feature normalize
+        self.revin_layer = RevIN(d_feat)
 
-        output = self.layers(src)
+    def forward(self, x):
+        # Extract source features and apply revin_layer to src features
+        src = x[:, :, 6 : self.gate_input_start_index]  # Shape: (N, T, D)
+        src = self.revin_layer(src)
+
+        # Apply feature gate to source features
+        gate_input = x[:, -1, self.gate_input_start_index : self.gate_input_end_index]
+        src_gated = src * torch.unsqueeze(self.feature_gate(gate_input), dim=1)
+
+        # Generate output through layers
+        output = self.layers(src_gated)
 
         return output

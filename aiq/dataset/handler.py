@@ -1,4 +1,5 @@
 from typing import List
+import pickle
 
 import pandas as pd
 import numpy as np
@@ -51,6 +52,25 @@ class DataHandler:
     def setup_data(self, mode="train") -> pd.DataFrame:
         raise NotImplementedError
 
+    def load(self, filepath: str):
+        try:
+            with open(filepath, "rb") as f:
+                loaded_components = pickle.load(f)
+                self.processors = loaded_components.get("processors", [])
+        except FileNotFoundError:
+            print(f"Error: File not found at {filepath}")
+        except Exception as e:
+            print(f"Error loading processing components from {filepath}: {e}")
+
+    def save(self, filepath: str):
+        components_to_save = {"processors": self.processors}
+        try:
+            with open(filepath, "wb") as f:
+                pickle.dump(components_to_save, f)
+            print(f"Processing components successfully saved to {filepath}")
+        except Exception as e:
+            print(f"Error saving processing components to {filepath}: {e}")
+
 
 class Alpha158(DataHandler):
     def __init__(
@@ -62,6 +82,7 @@ class Alpha158(DataHandler):
         fit_start_time=None,
         fit_end_time=None,
         processors=None,
+        benchmark=None,
     ):
         super().__init__(
             data_dir,
@@ -75,13 +96,28 @@ class Alpha158(DataHandler):
         self._feature_names = None
         self._label_names = None
 
+        # Load benchmark data
+        if benchmark is not None:
+            self.benchmark_df = DataLoader.load_market_features(
+                self.data_dir,
+                market=benchmark,
+                start_time=self.start_time,
+                end_time=self.end_time,
+            )
+            self.benchmark_df = self.benchmark_df.rename(
+                columns={"Close": "Bench_Close"}
+            )
+        else:
+            self.benchmark_df = None
+
     def extract_instrument_features(self, df):
         # fundamental data
-        ind_class = df["Ind_class"]
+        ind_class_l1 = df["Ind_class_l1"]
+        ind_class_l2 = df["Ind_class_l2"]
         mkt_class = df["Mkt_class"]
         ep = 1.0 / df["Pe_ttm"]
         bp = 1.0 / df["Pb"]
-        mkt_cap = np.log(df["Total_mv"])
+        mkt_cap = np.log(df["Circ_mv"])
 
         # adjusted prices
         adjusted_factor = df["Adj_factor"]
@@ -89,12 +125,13 @@ class Alpha158(DataHandler):
         close = df["Close"] * adjusted_factor
         high = df["High"] * adjusted_factor
         low = df["Low"] * adjusted_factor
-
-        volume = df["Volume"]
+        volume = df["Volume"] * adjusted_factor
+        turn = df["Turnover_rate_f"]
 
         # kbar
         features = [
-            ind_class,
+            ind_class_l1,
+            ind_class_l2,
             mkt_class,
             ep,
             bp,
@@ -108,9 +145,11 @@ class Alpha158(DataHandler):
             (Less(open, close) - low) / (high - low + 1e-12),
             (2 * close - high - low) / open,
             (2 * close - high - low) / (high - low + 1e-12),
+            Log(open / Ref(close, 1)),
         ]
         feature_names = [
-            "IND_CLS_CAT",
+            "IND_CLS_L1_CAT",
+            "IND_CLS_L2_CAT",
             "MKT_CLS_CAT",
             "EP",
             "BP",
@@ -124,6 +163,7 @@ class Alpha158(DataHandler):
             "KLOW2",
             "KSFT",
             "KSFT2",
+            "KOC",
         ]
 
         # price
@@ -138,7 +178,7 @@ class Alpha158(DataHandler):
         # rolling
         windows = [5, 10, 20, 30, 60]
         include = None
-        exclude = []
+        exclude = ["SUMN", "SUMD", "CNTN", "CNTD", "VSUMN", "VSUMD"]
 
         def use(x):
             return x not in exclude and (include is None or x in include)
@@ -331,8 +371,8 @@ class Alpha158(DataHandler):
             # The volume weighted price change volatility
             for d in windows:
                 features.append(
-                    Std(Abs(close / Ref(close, 1) - 1) * volume, d)
-                    / (Mean(Abs(close / Ref(close, 1) - 1) * volume, d) + 1e-12)
+                    Std((close / Ref(close, 1) - 1) * Log(1 + volume), d)
+                    / (Mean((close / Ref(close, 1) - 1) * Log(1 + volume), d) + 1e-12)
                 )
                 feature_names.append("WVMA%d" % d)
 
@@ -367,6 +407,13 @@ class Alpha158(DataHandler):
                 )
                 feature_names.append("VSUMD%d" % d)
 
+        if use("TURN"):
+            for d in windows:
+                features.append(Mean(turn, d))
+                features.append(Std(turn, d))
+                feature_names.append("TURN_MEAN_%dD" % d)
+                feature_names.append("TURN_STD_%dD" % d)
+
         # concat features
         self._feature_names = feature_names.copy()
         feature_df = pd.concat(
@@ -386,14 +433,36 @@ class Alpha158(DataHandler):
         return feature_df
 
     def extract_instrument_labels(self, df):
-        adjusted_factor = df["Adj_factor"]
-        close = df["Close"] * adjusted_factor
-
         self._label_names = ["RETN_5D"]
-        labels = [Ref(close, -5) / Ref(close, -1) - 1]
+        if self.benchmark_df is not None:
+            merge_df = pd.merge(
+                df,
+                self.benchmark_df[["Date", "Bench_Close"]],
+                on="Date",
+                how="inner",
+            )
+
+            assert merge_df.shape[0] == df.shape[0]
+
+            adjusted_factor = merge_df["Adj_factor"]
+            close = merge_df["Close"] * adjusted_factor
+            benchmark_close = merge_df["Bench_Close"]
+
+            labels = [
+                (Ref(close, -5) / Ref(close, -1))
+                / (Ref(benchmark_close, -5) / Ref(benchmark_close, -1))
+                - 1
+            ]
+        else:
+            merge_df = df
+            adjusted_factor = merge_df["Adj_factor"]
+            close = merge_df["Close"] * adjusted_factor
+
+            labels = [Ref(close, -5) / Ref(close, -1) - 1]
+
         label_df = pd.concat(
             [
-                df[["Instrument", "Date"]],
+                merge_df[["Instrument", "Date"]],
                 pd.concat(
                     [
                         labels[i].rename(self._label_names[i])
@@ -480,6 +549,7 @@ class MarketAlpha158(Alpha158):
         fit_end_time=None,
         processors=None,
         market_processors=None,
+        benchmark=None
     ):
         super().__init__(
             data_dir,
@@ -489,6 +559,7 @@ class MarketAlpha158(Alpha158):
             fit_start_time,
             fit_end_time,
             processors,
+            benchmark
         )
 
         self.market_processors = [
@@ -499,20 +570,20 @@ class MarketAlpha158(Alpha158):
     def extract_market_features(self, df: pd.DataFrame = None):
         close = df["Close"]
         amount = df["AMount"]
-        returns = close / Ref(close, 1) - 1
 
         # Define window sizes and compute features systematically
-        windows = [5, 10, 20, 30, 60]
+        returns = close / Ref(close, 1) - 1
         features = [returns]
         feature_names = ["MKT_RETURN_1D"]
 
+        windows = [5, 10, 20, 30, 60]
         for window in windows:
             features.extend(
                 [
                     Mean(returns, window),
                     Std(returns, window),
-                    Mean(amount, window) / amount,
-                    Std(amount, window) / amount,
+                    amount / Mean(amount, window),
+                    Std(amount, window) / Mean(amount, window),
                 ]
             )
             feature_names.extend(
@@ -543,17 +614,17 @@ class MarketAlpha158(Alpha158):
         return feature_df
 
     def setup_data(self, mode="train") -> pd.DataFrame:
-        # Instrument-level feature and label extraction
-        feature_label_df = super().setup_data(mode=mode)
-        feature_label_df = feature_label_df.reset_index()
-
         # Load market data
         market_df = DataLoader.load_markets_features(
             self.data_dir,
-            ["000903.SH", "000300.SH", "000906.SH"],
+            ["000903.SH", "000300.SH", "000905.SH"],
             self.start_time,
             self.end_time,
         )
+
+        # Instrument-level feature and label extraction
+        feature_label_df = super().setup_data(mode=mode)
+        feature_label_df = feature_label_df.reset_index()
 
         # Market-level feature extraction
         market_feature_df = pd.concat(
@@ -604,3 +675,26 @@ class MarketAlpha158(Alpha158):
         ), "Mismatch in row counts after merging."
 
         return market_feature_label_df
+
+    def load(self, filepath: str):
+        try:
+            with open(filepath, "rb") as f:
+                loaded_components = pickle.load(f)
+                self.processors = loaded_components.get("processors", [])
+                self.market_processors = loaded_components.get("market_processors", [])
+        except FileNotFoundError:
+            print(f"Error: File not found at {filepath}")
+        except Exception as e:
+            print(f"Error loading processing components from {filepath}: {e}")
+
+    def save(self, filepath: str):
+        components_to_save = {
+            "processors": self.processors,
+            "market_processors": self.market_processors,
+        }
+        try:
+            with open(filepath, "wb") as f:
+                pickle.dump(components_to_save, f)
+            print(f"Processing components successfully saved to {filepath}")
+        except Exception as e:
+            print(f"Error saving processing components to {filepath}: {e}")

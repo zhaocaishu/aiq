@@ -1,8 +1,11 @@
+import re
 from typing import Union, List
 
 import torch
 import pandas as pd
 import numpy as np
+
+from sklearn.linear_model import LinearRegression
 
 
 def robust_zscore(x: pd.Series, zscore=False):
@@ -29,6 +32,67 @@ def zscore(x: Union[pd.Series, pd.DataFrame, np.ndarray]):
         return (x - x.mean()) / (x.std() + 1e-12)
     else:
         return (x - x.mean()).div(x.std() + 1e-12)
+
+
+def neutralize(
+    df: pd.DataFrame, industry_col: str, cap_col: str, factor_cols: List[str]
+) -> pd.DataFrame:
+    """
+    Neutralize specified factor columns by industry and market capitalization.
+    Supports regex/expression patterns in factor_cols to match multiple columns.
+
+    Parameters:
+    - df: DataFrame with MultiIndex columns; level 'feature' contains input columns.
+    - industry_col: Name of the industry category column under 'feature'.
+    - cap_col: Name of the market cap column under 'feature'.
+    - factor_cols: List of factor column names (under 'feature') to be neutralized.
+
+    Returns:
+    - DataFrame with each specified factor column replaced by its regression residuals.
+    """
+    # Extract the feature-level DataFrame for clarity
+    feats = df["feature"]
+
+    # Combine all patterns into one big regex using alternation (|)
+    # Each pattern is grouped to preserve its regex semantics
+    combined_pattern = "|".join(f"({pat})" for pat in factor_cols)
+
+    # Filter column names in one pass; original order is preserved
+    actual_factors = [
+        col for col in feats.columns
+        if re.search(combined_pattern, str(col))
+    ]
+
+    # Build design matrix: industry dummies + cap + intercept
+    industry = feats[industry_col].astype("category")
+    cap = feats[cap_col].astype(float)
+
+    X = pd.get_dummies(industry, prefix="IND", drop_first=True)
+    X["CAP"] = cap
+    X["CONST"] = 1.0
+    X_values = X.astype(float).values
+
+    # Prepare regression model (no intercept since CONST is included)
+    model = LinearRegression(fit_intercept=False)
+
+    # Loop over each factor column and compute residuals
+    for factor in actual_factors:
+        y = feats[factor].astype(float)
+
+        # Mask out rows with any missing data in X or y
+        mask = (~np.isnan(X_values).any(axis=1)) & (~y.isna())
+        if not mask.any():
+            continue
+
+        # Fit model and compute residuals
+        model.fit(X_values[mask], y[mask].to_numpy())
+        resid = y.copy()
+        resid.loc[mask] = y.loc[mask] - model.predict(X_values[mask])
+
+        # Write residuals back to original DataFrame
+        df.loc[mask, ("feature", factor)] = resid.astype("float32")
+
+    return df
 
 
 def drop_extreme_label(x: np.array):
