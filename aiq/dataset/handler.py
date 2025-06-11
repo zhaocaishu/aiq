@@ -327,7 +327,7 @@ class Alpha158(DataHandler):
             for d in windows:
                 features.append(
                     Sum(Greater(close - Ref(close, 1), 0), d)
-                    / (Sum(Abs(close - Ref(close, 1)), d))
+                    / Sum(Abs(close - Ref(close, 1)), d)
                 )
                 feature_names.append("SUMP%d" % d)
 
@@ -338,7 +338,7 @@ class Alpha158(DataHandler):
             for d in windows:
                 features.append(
                     Sum(Greater(Ref(close, 1) - close, 0), d)
-                    / (Sum(Abs(close - Ref(close, 1)), d))
+                    / Sum(Abs(close - Ref(close, 1)), d)
                 )
                 feature_names.append("SUMN%d" % d)
 
@@ -351,7 +351,7 @@ class Alpha158(DataHandler):
                         Sum(Greater(close - Ref(close, 1), 0), d)
                         - Sum(Greater(Ref(close, 1) - close, 0), d)
                     )
-                    / (Sum(Abs(close - Ref(close, 1)), d))
+                    / Sum(Abs(close - Ref(close, 1)), d)
                 )
                 feature_names.append("SUMD%d" % d)
 
@@ -372,7 +372,7 @@ class Alpha158(DataHandler):
             for d in windows:
                 features.append(
                     Std((close / Ref(close, 1) - 1) * Log(1 + volume), d)
-                    / (Mean((close / Ref(close, 1) - 1) * Log(1 + volume), d))
+                    / Mean((close / Ref(close, 1) - 1) * Log(1 + volume), d)
                 )
                 feature_names.append("WVMA%d" % d)
 
@@ -381,7 +381,7 @@ class Alpha158(DataHandler):
             for d in windows:
                 features.append(
                     Sum(Greater(volume - Ref(volume, 1), 0), d)
-                    / (Sum(Abs(volume - Ref(volume, 1)), d))
+                    / Sum(Abs(volume - Ref(volume, 1)), d)
                 )
                 feature_names.append("VSUMP%d" % d)
 
