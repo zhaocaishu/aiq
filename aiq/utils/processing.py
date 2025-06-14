@@ -59,8 +59,7 @@ def neutralize(
 
     # Filter column names in one pass; original order is preserved
     actual_factors = [
-        col for col in feats.columns
-        if re.search(combined_pattern, str(col))
+        col for col in feats.columns if re.search(combined_pattern, str(col))
     ]
 
     # Build design matrix: industry dummies + cap + intercept
@@ -75,22 +74,43 @@ def neutralize(
     # Prepare regression model (no intercept since CONST is included)
     model = LinearRegression(fit_intercept=False)
 
-    # Loop over each factor column and compute residuals
-    for factor in actual_factors:
-        y = feats[factor].astype(float)
+    # Identify which factors never have NaNs and which have some NaN in y
+    no_nan_factors = [f for f in actual_factors if not feats[f].isna().any()]
+    with_nan_factors = [f for f in actual_factors if feats[f].isna().any()]
 
-        # Mask out rows with any missing data in X or y
-        mask = (~np.isnan(X_values).any(axis=1)) & (~y.isna())
+    # Batch fit for all-no-NaN factors
+    if no_nan_factors:
+        # construct Y (n_samples × k) array
+        Y = feats[no_nan_factors].astype(float).to_numpy()
+
+        # fit a multi-output regressor
+        model.fit(X_values, Y)
+
+        # predict and compute residuals
+        Y_pred = model.predict(X_values)
+        residuals = Y - Y_pred  # same shape
+
+        # write back into df
+        for idx, f in enumerate(no_nan_factors):
+            df.loc[:, ("feature", f)] = residuals[:, idx].astype("float32")
+
+    # Loop for each factor that has NaNs
+    for f in with_nan_factors:
+        y = feats[f].astype(float)
+
+        # mask out only the rows where y is present
+        mask = ~y.isna()
         if not mask.any():
             continue
 
-        # Fit model and compute residuals
+        # fit and predict on the subset
         model.fit(X_values[mask], y[mask].to_numpy())
-        resid = y.copy()
-        resid.loc[mask] = y.loc[mask] - model.predict(X_values[mask])
+        y_pred = model.predict(X_values[mask])
 
-        # Write residuals back to original DataFrame
-        df.loc[mask, ("feature", factor)] = resid.astype("float32")
+        # compute residuals and write back
+        resid = y.copy()
+        resid.loc[mask] = y.loc[mask] - y_pred
+        df.loc[mask, ("feature", f)] = resid.astype("float32")
 
     return df
 

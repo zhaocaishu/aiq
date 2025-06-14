@@ -430,6 +430,12 @@ class Alpha158(DataHandler):
             axis=1,
         )
 
+        # 根据List_date过滤上市前3个月的数据
+        if "List_date" in df.columns:
+            list_date = pd.to_datetime(df["List_date"].iloc[0])
+            min_date = (list_date + pd.DateOffset(months=3)).strftime("%Y-%m-%d")
+            feature_df = feature_df[feature_df["Date"] >= min_date]
+
         return feature_df
 
     def extract_instrument_labels(self, df):
