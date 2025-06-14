@@ -63,6 +63,13 @@ class TSDataset(Dataset):
         if self._data.index.names == ["Date", "Instrument"]:
             self._data.index = self._data.index.swaplevel()
         self._data.sort_index(inplace=True)
+
+        self._feature = self._data[self._feature_names].values.astype("float32")
+        self._label = (
+            self._data[self._label_names].values.astype("float32")
+            if self._label_names is not None
+            else None
+        )
         self._index = self._data.index
 
         daily_slices = defaultdict(list)
@@ -104,9 +111,7 @@ class TSDataset(Dataset):
         sample_indices = np.array([slice[1] for slice in daily_slices])
 
         features = [
-            self.padding_zeros(
-                self._data[self.feature_names].iloc[slice[0]].values, self.seq_len
-            )
+            self.padding_zeros(self._feature[slice[0]], self.seq_len)
             for slice in daily_slices
         ]
         features = np.stack(features)
@@ -115,10 +120,7 @@ class TSDataset(Dataset):
             return sample_indices, features
 
         labels = np.array(
-            [
-                self._data[self.label_names].iloc[slice[0].stop - 1].values
-                for slice in daily_slices
-            ]
+            [self._label[slice[0].stop - 1] for slice in daily_slices]
         ).squeeze()
 
         if self.mode == "train":
