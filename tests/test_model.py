@@ -34,8 +34,8 @@ if __name__ == "__main__":
     # train stage
     model = init_instance_by_config(
         cfg.model,
-        feature_cols=train_dataset.feature_names,
-        label_cols=train_dataset.label_names,
+        feature_names=train_dataset.feature_names,
+        label_names=train_dataset.label_names,
         save_dir="./checkpoints",
         logger=logger,
     )
@@ -45,4 +45,5 @@ if __name__ == "__main__":
 
     # predict stage
     model.load()
-    model.predict(test_dataset=val_dataset)
+    pred_df = model.predict(test_dataset=val_dataset)
+    print(pred_df.head(3))

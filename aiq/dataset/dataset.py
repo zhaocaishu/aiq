@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 import numpy as np
 import pandas as pd
 import torch
@@ -53,25 +55,21 @@ class TSDataset(Dataset):
         self.mode = mode
         self._feature_names = feature_names
         self._label_names = label_names
-        start_time, end_time = segments[self.mode]
-        self._data = data.loc[start_time:end_time].copy()
+        self.start_time, self.end_time = segments[self.mode]
+        self._data = data
         self._setup_time_series()
 
     def _setup_time_series(self):
-        self._data.index = self._data.index.swaplevel()
+        if self._data.index.names == ["Date", "Instrument"]:
+            self._data.index = self._data.index.swaplevel()
         self._data.sort_index(inplace=True)
-        self._feature = self._data[self._feature_names].values.astype("float32")
-        self._label = (
-            self._data[self._label_names].values.astype("float32")
-            if self._label_names is not None
-            else None
-        )
         self._index = self._data.index
 
-        daily_slices = {date: [] for date in sorted(self._index.unique(level=1))}
-        batch_slices = self._create_ts_slices(self._index, self.seq_len)
+        daily_slices = defaultdict(list)
+        data_slices = self._create_ts_slices(self._index, self.seq_len)
         for i, (code, date) in enumerate(self._index):
-            daily_slices[date].append((batch_slices[i], i))
+            if self.start_time <= date <= self.end_time:
+                daily_slices[date].append((data_slices[i], i))
 
         self._daily_slices = list(daily_slices.values())
         self._daily_index = list(daily_slices.keys())
@@ -106,16 +104,21 @@ class TSDataset(Dataset):
         sample_indices = np.array([slice[1] for slice in daily_slices])
 
         features = [
-            self.padding_zeros(self._feature[slice[0]], self.seq_len)
+            self.padding_zeros(
+                self._data[self.feature_names].iloc[slice[0]].values, self.seq_len
+            )
             for slice in daily_slices
         ]
         features = np.stack(features)
 
-        if self._label is None:
+        if self.label_names is None:
             return sample_indices, features
 
         labels = np.array(
-            [self._label[slice[0].stop - 1] for slice in daily_slices]
+            [
+                self._data[self.label_names].iloc[slice[0].stop - 1].values
+                for slice in daily_slices
+            ]
         ).squeeze()
 
         if self.mode == "train":

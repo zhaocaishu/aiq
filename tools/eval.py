@@ -91,7 +91,7 @@ def main():
 
     # Load and predict
     model = load_model(cfg, val_dataset, args.save_dir, logger)
-    pred_df = model.predict(val_dataset).data.reset_index()
+    pred_df = model.predict(val_dataset).reset_index()
     logger.info("Prediction completed. Shape: %s", pred_df.shape)
 
     # Evaluate

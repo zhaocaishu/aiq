@@ -208,11 +208,9 @@ class PPNetModel(BaseModel):
             test_dataset, batch_size=self.batch_size, shuffle=False
         )
 
-        num_samples = test_dataset.data.shape[0]
-        label_names = test_dataset.label_names
-
-        labels = np.zeros((num_samples, self.pred_len))
-        preds = np.zeros((num_samples, self.pred_len))
+        labels = []
+        preds = []
+        indices = []
         for i, (sample_indices, batch_x, batch_y) in enumerate(test_loader):
             batch_x = self.to_device(batch_x)
             batch_y = self.to_device(batch_y)
@@ -220,13 +218,19 @@ class PPNetModel(BaseModel):
             with torch.no_grad():
                 outputs = self.model(batch_x)
 
-            indices = sample_indices.squeeze(0).numpy()  # 确保索引为 numpy 数组
-            labels[indices] = batch_y.cpu().numpy()
-            preds[indices] = outputs.cpu().numpy()
+            indices.append(sample_indices.squeeze(0).numpy())
+            labels.append(batch_y.cpu().numpy())
+            preds.append(outputs.cpu().numpy())
 
-        test_dataset.data[label_names] = labels
-        test_dataset.data[[f"PRED_{name}" for name in label_names]] = preds
-        return test_dataset
+        indices = np.concatenate(indices, axis=0)
+        labels = np.concatenate(labels, axis=0)
+        preds = np.concatenate(preds, axis=0)
+
+        label_names = test_dataset.label_names
+        pred_df = test_dataset.data.iloc[indices].copy()
+        pred_df[label_names] = labels
+        pred_df[[f"PRED_{name}" for name in label_names]] = preds
+        return pred_df
 
     def load(self, model_name=None):
         model_name = "model.pth" if model_name is None else model_name
