@@ -126,37 +126,22 @@ def discretize(data: torch.Tensor, bins: List[float]) -> torch.Tensor:
     """
     将连续数据离散化为指定的区间。
     """
-    bins_tensor = torch.Tensor(bins, device=data.device)
-    ids = torch.bucketize(
-        torch.clamp(data, bins[0], bins[-1]),
-        boundaries=bins_tensor,
-    )
-    return ids
+    boundaries = torch.Tensor(bins, device=data.device)
+    return torch.bucketize(data.clamp(min=boundaries[0], max=boundaries[-1]), boundaries)
 
 
 def undiscretize(ids: torch.Tensor, bins: List[float]) -> torch.Tensor:
     """
     将离散化的区间编号还原为连续数据的近似值。
     """
-    bins_tensor = torch.Tensor(bins, device=ids.device)
-    # 获取对应区间的左右边界
-    left = bins_tensor[ids]
-    right = bins_tensor[torch.clamp(ids + 1, max=len(bins) - 1)]  # 防止越界
-    # 计算中间值
-    data = (left + right) / 2
-    return data
+    boundaries = torch.as_tensor(bins, device=ids.device)
+    # 计算左、右边界，并取各自中点
+    left = boundaries[ids]
+    right = boundaries[ids.clamp(max=boundaries.size(0) - 1) + 1]
+    return (left + right) * 0.5
 
 
 def count_samples_per_bin(data_loader, class_boundaries):
-    num_classes = len(class_boundaries)  # 确定类别总数
-    counts = torch.zeros(num_classes, dtype=torch.int64)  # 初始化统计张量
-
-    for i, (_, batch_x, batch_y) in enumerate(data_loader):
-        batch_y = batch_y.flatten().float()
-        discreted_batch_y = discretize(batch_y, bins=class_boundaries).long()
-
-        current_counts = torch.bincount(discreted_batch_y, minlength=num_classes)
-        # 累计全局统计结果
-        counts += current_counts.cpu()  # 确保在CPU上累加避免GPU内存问题
-
-    return counts
+    all_y = torch.cat([y.view(-1) for *_, y in data_loader]).float()
+    bin_idxs = discretize(all_y, bins=class_boundaries).long()
+    return torch.bincount(bin_idxs, minlength=len(class_boundaries))
