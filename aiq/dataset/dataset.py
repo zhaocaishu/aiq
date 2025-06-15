@@ -56,12 +56,11 @@ class TSDataset(Dataset):
         self._feature_names = feature_names
         self._label_names = label_names
         self.start_time, self.end_time = segments[self.mode]
-        self._data = data
+        self._data = data.copy()
         self._setup_time_series()
 
     def _setup_time_series(self):
-        if self._data.index.names == ["Date", "Instrument"]:
-            self._data.index = self._data.index.swaplevel()
+        self._data.index = self._data.index.swaplevel()
         self._data.sort_index(inplace=True)
 
         self._feature = self._data[self._feature_names].values.astype("float32")
@@ -100,9 +99,12 @@ class TSDataset(Dataset):
 
     def padding_zeros(self, data, seq_len):
         if data.shape[0] < seq_len:
-            padding_zeros = np.zeros((seq_len - data.shape[0], data.shape[1]))
+            padding_zeros = np.zeros(
+                (seq_len - data.shape[0], data.shape[1]), dtype=data.dtype
+            )
             return np.concatenate([padding_zeros, data], axis=0)
-        return data
+        else:
+            return data
 
     def __getitem__(self, index):
         """根据索引获返回样本索引、特征和标准化后的标签（若存在）"""
@@ -116,7 +118,7 @@ class TSDataset(Dataset):
         ]
         features = np.stack(features)
 
-        if self.label_names is None:
+        if self._label_names is None:
             return sample_indices, features
 
         labels = np.array(
