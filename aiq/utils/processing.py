@@ -1,7 +1,6 @@
 import re
-from typing import Union, List
+from typing import List
 
-import torch
 import pandas as pd
 import numpy as np
 
@@ -120,28 +119,3 @@ def drop_extreme_label(x: np.array):
     mask = np.zeros_like(x, dtype=bool)
     mask[filtered_indices] = True
     return mask, x[mask]
-
-
-def discretize(data: torch.Tensor, bins: List[float]) -> torch.Tensor:
-    """
-    将连续数据离散化为指定的区间。
-    """
-    boundaries = torch.Tensor(bins, device=data.device)
-    return torch.bucketize(data.clamp(min=boundaries[0], max=boundaries[-1]), boundaries)
-
-
-def undiscretize(ids: torch.Tensor, bins: List[float]) -> torch.Tensor:
-    """
-    将离散化的区间编号还原为连续数据的近似值。
-    """
-    boundaries = torch.as_tensor(bins, device=ids.device)
-    # 计算左、右边界，并取各自中点
-    left = boundaries[ids]
-    right = boundaries[ids.clamp(max=boundaries.size(0) - 1) + 1]
-    return (left + right) * 0.5
-
-
-def count_samples_per_bin(data_loader, class_boundaries):
-    all_y = torch.cat([y.view(-1) for *_, y in data_loader]).float()
-    bin_idxs = discretize(all_y, bins=class_boundaries).long()
-    return torch.bincount(bin_idxs, minlength=len(class_boundaries))
