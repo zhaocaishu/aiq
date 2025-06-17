@@ -555,7 +555,7 @@ class MarketAlpha158(Alpha158):
         fit_end_time=None,
         processors=None,
         market_processors=None,
-        benchmark=None
+        benchmark=None,
     ):
         super().__init__(
             data_dir,
@@ -565,7 +565,7 @@ class MarketAlpha158(Alpha158):
             fit_start_time,
             fit_end_time,
             processors,
-            benchmark
+            benchmark,
         )
 
         self.market_processors = [

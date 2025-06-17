@@ -21,13 +21,14 @@ if not _CYTHON_INSTALLED:
 
 
 def requirements(path):
-    with open(path, 'r') as fd:
+    with open(path, "r") as fd:
         return [r.strip() for r in fd.readlines()]
 
 
 def readme():
-    with open('README.md', encoding='utf-8') as f:
+    with open("README.md", encoding="utf-8") as f:
         return f.read()
+
 
 # Cython Extensions
 extensions = [
@@ -47,28 +48,30 @@ extensions = [
 
 
 def version():
-    version_file = 'aiq/version.py'
-    with open(version_file, encoding='utf-8') as f:
-        exec (compile(f.read(), version_file, 'exec'))
-    return locals()['__version__']
+    version_file = "aiq/version.py"
+    with open(version_file, encoding="utf-8") as f:
+        exec(compile(f.read(), version_file, "exec"))
+    return locals()["__version__"]
 
 
 setup(
     name="aiq",
     version=version(),
-    packages=find_packages(exclude=(
-            'tests',
-            'docs',
-            'examples',
-            'requirements',
-            '*.egg-info',
-    )),
+    packages=find_packages(
+        exclude=(
+            "tests",
+            "docs",
+            "examples",
+            "requirements",
+            "*.egg-info",
+        )
+    ),
     author="darrenwang",
     author_email="wangyang9113@gmail.com",
     description="aiq",
     long_description=readme(),
     long_description_content_type="text/markdown",
-    install_requires=requirements('requirements/requirements.txt'),
+    install_requires=requirements("requirements/requirements.txt"),
     ext_modules=extensions,
     classifiers=[
         "Intended Audience :: Developers",
@@ -76,5 +79,5 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    python_requires=">=3.6"
+    python_requires=">=3.6",
 )

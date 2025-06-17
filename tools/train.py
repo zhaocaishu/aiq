@@ -36,14 +36,14 @@ def setup_logger(name: str = "TRAINING") -> Any:
 
 
 def set_random_seed(seed):
-    random.seed(seed)                         # Python 随机种子
-    np.random.seed(seed)                      # NumPy 随机种子
-    torch.manual_seed(seed)                   # PyTorch CPU 随机种子
-    torch.cuda.manual_seed(seed)              # PyTorch 当前 GPU 随机种子
-    torch.cuda.manual_seed_all(seed)          # 所有 GPU 随机种子（多GPU训练）
+    random.seed(seed)  # Python 随机种子
+    np.random.seed(seed)  # NumPy 随机种子
+    torch.manual_seed(seed)  # PyTorch CPU 随机种子
+    torch.cuda.manual_seed(seed)  # PyTorch 当前 GPU 随机种子
+    torch.cuda.manual_seed_all(seed)  # 所有 GPU 随机种子（多GPU训练）
 
     torch.backends.cudnn.deterministic = True  # 保证每次返回的卷积算法是确定的
-    torch.backends.cudnn.benchmark = False     # 禁止 cuDNN 自动寻找最优算法（为了确定性）
+    torch.backends.cudnn.benchmark = False  # 禁止 cuDNN 自动寻找最优算法（为了确定性）
 
 
 def load_datasets(data: str, feature_names: List[str]) -> tuple:

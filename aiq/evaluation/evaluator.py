@@ -27,7 +27,9 @@ class Evaluator:
             float: R² 值，若分母为零或数据无效则返回 NaN。
         """
         if not all(col in df.columns for col in [self.pred_col, self.label_col]):
-            raise ValueError(f"DataFrame must contain columns: {self.pred_col}, {self.label_col}")
+            raise ValueError(
+                f"DataFrame must contain columns: {self.pred_col}, {self.label_col}"
+            )
 
         label = df[self.label_col].values
         pred = df[self.pred_col].values
@@ -55,8 +57,11 @@ class Evaluator:
         返回:
             float: 斯皮尔曼相关系数，若样本不足或数据无效则返回 NaN。
         """
-        if len(group) < self.min_samples or \
-           group[self.pred_col].isna().any() or group[self.label_col].isna().any():
+        if (
+            len(group) < self.min_samples
+            or group[self.pred_col].isna().any()
+            or group[self.label_col].isna().any()
+        ):
             return np.nan
         return spearmanr(group[self.pred_col], group[self.label_col])[0]
 

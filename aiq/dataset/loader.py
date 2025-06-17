@@ -145,7 +145,7 @@ class DataLoader:
                     "Free_share",
                     "Total_mv",
                     "Circ_mv",
-                    "Adj_factor"
+                    "Adj_factor",
                 ],
             )
 
