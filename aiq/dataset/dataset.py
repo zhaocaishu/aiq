@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from aiq.utils.processing import drop_extreme_label, zscore
+from aiq.utils.functional import drop_extreme_label, zscore
 
 
 class Dataset(torch.utils.data.Dataset):

@@ -3,7 +3,7 @@ import abc
 import pandas as pd
 import numpy as np
 
-from aiq.utils.processing import robust_zscore, zscore, neutralize
+from aiq.utils.functional import robust_zscore, zscore, neutralize
 
 
 def get_group_columns(
