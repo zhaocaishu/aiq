@@ -13,7 +13,7 @@ data_handler:
         kwargs:
           industry_col: "IND_CLS_L1_CAT"
           cap_col: "MKT_CAP"
-          factor_cols: ["KMID", "KLEN", "KMID2", "KUP", "KUP2", "KLOW", "KLOW2", "KSFT", "KSFT2", "KOC", "^(?:ROC|MA|STD|MAX|MIN|QTLU|QTLD|CORR|CORD|VMA|VSTD|WVMA)(?:5|10|20|30|60)D$", "^TURN_(?:MEAN|STD)_(?:5|10|20|30|60)D$"]
+          factor_cols: ["KMID", "KLEN", "KMID2", "KUP", "KUP2", "KLOW", "KLOW2", "KSFT", "KSFT2", "KOC", "^(?:ROC|MA|STD|MAX|MIN|QTLU|QTLD|CORR|CORD|VMA|VSTD|WVMA|RSV|IMAX|IMIN|IMXD|SUMP|VSUMP)(?:5|10|20|30|60)D$", "^TURN_(?:MEAN|STD)_(?:5|10|20|30|60)D$", "RETN_5D"]
       - class: RobustZScoreNorm
         module_path: aiq.dataset.processor
         kwargs:
