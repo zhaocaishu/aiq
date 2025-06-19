@@ -188,7 +188,7 @@ class PPNet(nn.Module):
         gate_input_end_index,
         seq_len,
         pred_len,
-        beta=5.0,
+        beta,
     ):
         super(PPNet, self).__init__()
 

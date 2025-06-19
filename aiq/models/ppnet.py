@@ -27,6 +27,7 @@ class PPNetModel(BaseModel):
         dropout=0.5,
         gate_input_start_index=158,
         gate_input_end_index=221,
+        beta=5.0,
         epochs=5,
         batch_size=1,
         warmup_ratio=0.1,
@@ -69,6 +70,7 @@ class PPNetModel(BaseModel):
             dropout=self.dropout,
             gate_input_start_index=self.gate_input_start_index,
             gate_input_end_index=self.gate_input_end_index,
+            beta=beta
         )
 
         if pretrained is not None:
