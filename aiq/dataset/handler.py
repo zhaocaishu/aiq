@@ -138,13 +138,13 @@ class Alpha158(DataHandler):
             mkt_cap,
             (close - open) / open,
             (high - low) / open,
-            (close - open) / (high - low + 1e-12),
+            (close - open) / (high - low + 0.001),
             (high - Greater(open, close)) / open,
-            (high - Greater(open, close)) / (high - low + 1e-12),
+            (high - Greater(open, close)) / (high - low + 0.001),
             (Less(open, close) - low) / open,
-            (Less(open, close) - low) / (high - low + 1e-12),
+            (Less(open, close) - low) / (high - low + 0.001),
             (2 * close - high - low) / open,
-            (2 * close - high - low) / (high - low + 1e-12),
+            (2 * close - high - low) / (high - low + 0.001),
             Log(open / Ref(close, 1)),
         ]
         feature_names = [
