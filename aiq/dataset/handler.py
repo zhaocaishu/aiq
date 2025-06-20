@@ -169,10 +169,7 @@ class Alpha158(DataHandler):
         # price
         for field, price in zip(["Open", "High", "Low"], [open, high, low]):
             for d in range(1):
-                if d != 0:
-                    features.append(Ref(price, d) / close)
-                else:
-                    features.append(price / close)
+                features.append(Ref(price, d) / close)
                 feature_names.append(field.upper() + str(d))
 
         # rolling
