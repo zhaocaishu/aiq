@@ -42,7 +42,7 @@ cdef class Mean(Rolling):
             self.na_count += 1
         else:
             self.vsum += val
-        return self.vsum / (self.window - self.na_count + 1e-12)
+        return self.vsum / (self.window - self.na_count)
 
 
 cdef class Slope(Rolling):
@@ -83,7 +83,7 @@ cdef class Slope(Rolling):
             self.xy_sum += self.window * val
         cdef int N = self.window - self.na_count
         return (N*self.xy_sum - self.x_sum*self.y_sum) / \
-            (N*self.x2_sum - self.x_sum*self.x_sum + 1e-12)
+            (N*self.x2_sum - self.x_sum*self.x_sum)
 
 
 cdef class Resi(Rolling):
@@ -124,7 +124,7 @@ cdef class Resi(Rolling):
             self.xy_sum += self.window * val
         cdef int N = self.window - self.na_count
         slope = (N*self.xy_sum - self.x_sum*self.y_sum) / \
-                (N*self.x2_sum - self.x_sum*self.x_sum + 1e-12)
+                (N*self.x2_sum - self.x_sum*self.x_sum)
         x_mean = self.x_sum / N
         y_mean = self.y_sum / N
         interp = y_mean - slope*x_mean
@@ -174,7 +174,7 @@ cdef class Rsquare(Rolling):
         cdef int N = self.window - self.na_count
         cdef double rvalue
         rvalue = (N*self.xy_sum - self.x_sum*self.y_sum) / \
-            (sqrt((N*self.x2_sum - self.x_sum*self.x_sum) * (N*self.y2_sum - self.y_sum*self.y_sum)) + 1e-12)
+            sqrt((N*self.x2_sum - self.x_sum*self.x_sum) * (N*self.y2_sum - self.y_sum*self.y_sum))
         return rvalue * rvalue
 
 
