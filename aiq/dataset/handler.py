@@ -225,7 +225,7 @@ class Alpha158(DataHandler):
                 features.append(Max(high, d) / close)
                 feature_names.append("MAX%d" % d)
 
-        if use("LOW"):
+        if use("MIN"):
             # The low price for past d days, divided by latest close price to remove unit
             for d in windows:
                 features.append(Min(low, d) / close)
