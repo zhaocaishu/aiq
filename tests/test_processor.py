@@ -11,7 +11,8 @@ if __name__ == "__main__":
             "IND_CLS_CAT": [0, 0, 0, 0],
             "MKT_CAP": [2.5, 5.2, 3.0, 10.0],
             "Factor_0": [0.1, 2.4, 1.2, None],
-            "Factor_1": [2.0, 1.0, 3.0, 100.0],
+            "Factor_1": [2.0, 1.0, 3.0, 4.0],
+            "Factor_2": [2.0, 1.0, 3.0, 4.0],
         }
     )
     df.set_index(["Date", "Instrument"], inplace=True)
@@ -21,6 +22,7 @@ if __name__ == "__main__":
             ("feature", "MKT_CAP"),
             ("feature", "Factor_0"),
             ("feature", "Factor_1"),
+            ("feature", "Factor_2"),
         ]
     )
     print(df)
@@ -29,7 +31,9 @@ if __name__ == "__main__":
     print(cswinsorize(df))
 
     cs_neutralize = CSNeutralize(
-        industry_col="IND_CLS_CAT", cap_col="MKT_CAP", factor_cols=["Factor_0", "Factor_1"]
+        industry_col="IND_CLS_CAT",
+        cap_col="MKT_CAP",
+        factor_cols=["Factor_0", "Factor_1", "Factor_2"],
     )
     print(cs_neutralize(df))
 

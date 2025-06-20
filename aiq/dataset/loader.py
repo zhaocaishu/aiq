@@ -150,12 +150,6 @@ class DataLoader:
             )
 
         if df is not None:
-            # 根据filter_list_date过滤上市前3个月的数据
-            if "List_date" in df.columns:
-                list_date = pd.to_datetime(df["List_date"].iloc[0])
-                min_date = (list_date + pd.DateOffset(months=3)).strftime("%Y-%m-%d")
-                df = df[df[timestamp_col] >= min_date]
-
             if column_names:
                 df = df[column_names]
 

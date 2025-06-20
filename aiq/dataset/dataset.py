@@ -1,8 +1,10 @@
+from collections import defaultdict
+
 import numpy as np
 import pandas as pd
 import torch
 
-from aiq.utils.processing import drop_extreme_label, zscore
+from aiq.utils.functional import drop_extreme_label, zscore
 
 
 class Dataset(torch.utils.data.Dataset):
@@ -53,13 +55,14 @@ class TSDataset(Dataset):
         self.mode = mode
         self._feature_names = feature_names
         self._label_names = label_names
-        start_time, end_time = segments[self.mode]
-        self._data = data.loc[start_time:end_time].copy()
+        self.start_time, self.end_time = segments[self.mode]
+        self._data = data.copy()
         self._setup_time_series()
 
     def _setup_time_series(self):
         self._data.index = self._data.index.swaplevel()
         self._data.sort_index(inplace=True)
+
         self._feature = self._data[self._feature_names].values.astype("float32")
         self._label = (
             self._data[self._label_names].values.astype("float32")
@@ -68,10 +71,11 @@ class TSDataset(Dataset):
         )
         self._index = self._data.index
 
-        daily_slices = {date: [] for date in sorted(self._index.unique(level=1))}
-        batch_slices = self._create_ts_slices(self._index, self.seq_len)
+        daily_slices = defaultdict(list)
+        data_slices = self._create_ts_slices(self._index, self.seq_len)
         for i, (code, date) in enumerate(self._index):
-            daily_slices[date].append((batch_slices[i], i))
+            if self.start_time <= date <= self.end_time:
+                daily_slices[date].append((data_slices[i], i))
 
         self._daily_slices = list(daily_slices.values())
         self._daily_index = list(daily_slices.keys())
@@ -95,9 +99,12 @@ class TSDataset(Dataset):
 
     def padding_zeros(self, data, seq_len):
         if data.shape[0] < seq_len:
-            padding_zeros = np.zeros((seq_len - data.shape[0], data.shape[1]))
+            padding_zeros = np.zeros(
+                (seq_len - data.shape[0], data.shape[1]), dtype=data.dtype
+            )
             return np.concatenate([padding_zeros, data], axis=0)
-        return data
+        else:
+            return data
 
     def __getitem__(self, index):
         """根据索引获返回样本索引、特征和标准化后的标签（若存在）"""
@@ -111,7 +118,7 @@ class TSDataset(Dataset):
         ]
         features = np.stack(features)
 
-        if self._label is None:
+        if self._label_names is None:
             return sample_indices, features
 
         labels = np.array(

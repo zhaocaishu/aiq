@@ -1,5 +1,35 @@
-from .ops import Rolling, Ref, Mean, Std, Var, Skew, Kurt, Max, IdxMax, Min, IdxMin, Quantile, Med, Mad, Rank, Count, \
-    Delta, Slope, Rsquare, Resi, WMA, EMA, Greater, Less, Corr, Log, Abs, Sum, Cov, CSRank
+from .ops import (
+    Rolling,
+    Ref,
+    Mean,
+    Std,
+    Var,
+    Skew,
+    Kurt,
+    Max,
+    IdxMax,
+    Min,
+    IdxMin,
+    Quantile,
+    Med,
+    Mad,
+    Rank,
+    Count,
+    Delta,
+    Slope,
+    Rsquare,
+    Resi,
+    WMA,
+    EMA,
+    Greater,
+    Less,
+    Corr,
+    Log,
+    Abs,
+    Sum,
+    Cov,
+    CSRank,
+)
 
 Greater: Greater = Greater()
 Less: Less = Less()
@@ -31,7 +61,35 @@ Corr: Corr = Corr()
 Cov: Cov = Cov()
 CSRank: CSRank = CSRank()
 
-__all = ['Rolling', 'Ref', 'Mean', 'Std', 'Var', 'Skew', 'Kurt', 'Max', 'IdxMax', 'Min', 'IdxMin', 'Quantile', 'Med',
-         'Mad', 'Rank', 'Count', 'Delta', 'Slope', 'Rsquare', 'Resi', 'WMA', 'EMA', 'Greater', 'Less', 'Corr', 'Log',
-         'Abs', 'Sum', 'Cov', 'CSRank']
-
+__all = [
+    "Rolling",
+    "Ref",
+    "Mean",
+    "Std",
+    "Var",
+    "Skew",
+    "Kurt",
+    "Max",
+    "IdxMax",
+    "Min",
+    "IdxMin",
+    "Quantile",
+    "Med",
+    "Mad",
+    "Rank",
+    "Count",
+    "Delta",
+    "Slope",
+    "Rsquare",
+    "Resi",
+    "WMA",
+    "EMA",
+    "Greater",
+    "Less",
+    "Corr",
+    "Log",
+    "Abs",
+    "Sum",
+    "Cov",
+    "CSRank",
+]

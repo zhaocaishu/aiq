@@ -241,7 +241,10 @@ class DFT(nn.Module):
         # Combine and generate output
         fused_component = trend_component + season_component
         if self.num_classes is not None:
-            outputs = [classification_head(fused_component) for classification_head in self.classification_heads]
+            outputs = [
+                classification_head(fused_component)
+                for classification_head in self.classification_heads
+            ]
         else:
             outputs = self.regression_head(fused_component)
 
