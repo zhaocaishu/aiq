@@ -203,12 +203,12 @@ class Alpha158(DataHandler):
                 features.append(Std(close, d) / close)
                 feature_names.append("STD%d" % d)
 
-        if use("BETA"):
+        if use("SLOPE"):
             # The rate of close price change in the past d days, divided by latest close price to remove unit
             # For example, price increase 10 dollar per day in the past d days, then Slope will be 10.
             for d in windows:
                 features.append(Slope(close, d) / close)
-                feature_names.append("BETA%d" % d)
+                feature_names.append("SLOPE%d" % d)
 
         if use("RSQR"):
             # The R-sqaure value of linear regression for the past d days, represent the trend linear
