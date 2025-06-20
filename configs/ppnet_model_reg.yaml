@@ -4,7 +4,7 @@ data_handler:
   kwargs:
     instruments: "000906.SH"
     start_time: "2016-01-01"
-    end_time: "2023-06-30"
+    end_time: "2023-12-31"
     fit_start_time: "2017-01-01"
     fit_end_time: "2022-06-30"
     processors:
