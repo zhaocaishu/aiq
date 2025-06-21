@@ -25,6 +25,7 @@ from aiq.ops import (
     Abs,
 )
 from aiq.utils.module import init_instance_by_config
+from aiq.utils.functional import calculate_adx
 
 from .loader import DataLoader
 from .processor import Processor
@@ -254,9 +255,7 @@ class Alpha158(DataHandler):
         if use("RSV"):
             # Represent the price position between upper and lower resistent price for past d days.
             for d in windows:
-                features.append(
-                    (close - Min(low, d)) / (Max(high, d) - Min(low, d))
-                )
+                features.append((close - Min(low, d)) / (Max(high, d) - Min(low, d)))
                 feature_names.append("RSV%d" % d)
 
         if use("IMAX"):
@@ -597,6 +596,9 @@ class MarketAlpha158(Alpha158):
                     f"MKT_AMOUNT_STD_{window}D",
                 ]
             )
+
+        features.append(calculate_adx(df, n=10))
+        feature_names.append("MKT_ADX_10D")
 
         # Concat features
         self._market_feature_names = feature_names.copy()
