@@ -25,7 +25,6 @@ from aiq.ops import (
     Abs,
 )
 from aiq.utils.module import init_instance_by_config
-from aiq.utils.functional import calculate_adx
 
 from .loader import DataLoader
 from .processor import Processor
@@ -569,6 +568,61 @@ class MarketAlpha158(Alpha158):
         ]
         self._market_feature_names = None
 
+    def calculate_adx(self, df: pd.DataFrame, n: int = 10) -> pd.Series:
+        """
+        Calculate the ADX indicator for a given DataFrame.
+        The DataFrame must contain columns: 'High', 'Low', 'Close'.
+
+        Parameters:
+        - df: pd.DataFrame with 'High', 'Low', 'Close' columns
+        - n: period for smoothing (default 10)
+
+        Returns:
+        - pd.Series with 'ADX' column
+        """
+        df = df.copy()
+        alpha = 1 / n
+
+        # Precompute shifted close
+        close_prev = df["Close"].shift(1)
+
+        # Calculate True Range (TR)
+        tr1 = df["High"] - df["Low"]
+        tr2 = (df["High"] - close_prev).abs()
+        tr3 = (df["Low"] - close_prev).abs()
+        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+
+        # Calculate Directional Movements
+        up = df["High"] - df["High"].shift(1)
+        dn = df["Low"].shift(1) - df["Low"]
+
+        # Create masks
+        pos = np.where((up > dn) & (up > 0), up, 0.0)
+        neg = np.where((dn > up) & (dn > 0), dn, 0.0)
+
+        # Smoothing with EMA
+        atr = tr.ewm(alpha=alpha, adjust=False).mean()
+        pos_smoothed = (
+            pd.Series(pos, index=df.index).ewm(alpha=alpha, adjust=False).mean()
+        )
+        neg_smoothed = (
+            pd.Series(neg, index=df.index).ewm(alpha=alpha, adjust=False).mean()
+        )
+
+        # Calculate Directional Indicators
+        df["DI+"] = 100 * (pos_smoothed / atr)
+        df["DI-"] = 100 * (neg_smoothed / atr)
+
+        # Calculate DX (handle division by zero)
+        di_sum = df["DI+"] + df["DI-"]
+        di_diff = (df["DI+"] - df["DI-"]).abs()
+        df["DX"] = 100 * (di_diff / di_sum.replace(0, np.nan))
+
+        # Calculate ADX
+        df["ADX"] = df["DX"].ewm(alpha=alpha, adjust=False).mean()
+
+        return df["ADX"]
+
     def extract_market_features(self, df: pd.DataFrame = None):
         close = df["Close"]
         amount = Log(df["AMount"] + 1)
@@ -597,7 +651,7 @@ class MarketAlpha158(Alpha158):
                 ]
             )
 
-        features.append(calculate_adx(df, n=10))
+        features.append(self.calculate_adx(df, n=10))
         feature_names.append("MKT_ADX_10D")
 
         # Concat features
