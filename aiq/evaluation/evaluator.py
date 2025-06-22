@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 from scipy.stats import spearmanr
 
 
@@ -65,6 +66,38 @@ class Evaluator:
             return np.nan
         return spearmanr(group[self.pred_col], group[self.label_col])[0]
 
+    def compute_hit_rate(self, group, K=20):
+        """
+        计算 Top-K 和 Bottom-K 的命中率（Hit Rate）。
+
+        参数:
+            group (pd.DataFrame): 单日数据，包含预测值列和真实标签列。
+            K (int): Top-K 和 Bottom-K 的取值。
+
+        返回:
+            Tuple[float, float]: 返回 Top-K 和 Bottom-K 的命中率 (HR@TopK, HR@BottomK)。
+                                若样本数量不足或数据无效，则返回 (np.nan, np.nan)。
+        """
+        # 样本量不足时直接返回 NaN
+        if (
+            group is None
+            or not isinstance(group, pd.DataFrame)
+            or len(group) < K
+            or K <= 0
+        ):
+            return pd.DataFrame({"HR@TopK": [np.nan], "HR@BottomK": [np.nan]})
+
+        # 排序并取 Top-K
+        topk = group.nlargest(K, self.pred_col)
+        # 排序并取 Bottom-K
+        bottomk = group.nsmallest(K, self.pred_col)
+
+        # 计算命中数（标签 == 1），并除以 K 得到命中率
+        hr_top = topk[self.label_col].eq(1).sum() / K
+        hr_bottom = bottomk[self.label_col].eq(1).sum() / K
+
+        return pd.DataFrame({"HR@TopK": [hr_top], "HR@BottomK": [hr_bottom]})
+
     def evaluate(self, df, groupby_col="Date"):
         """
         评估预测模型性能，返回 IC、ICIR 和 R² 等指标。
@@ -78,6 +111,7 @@ class Evaluator:
                 - IC: 每日斯皮尔曼相关系数的均值。
                 - ICIR: IC 的均值除以标准差。
                 - R2: 样本外 R²。
+                - 命中率: Top-K 和 Bottom-K 的命中率。
         """
         if not groupby_col in df.columns:
             raise ValueError(f"DataFrame must contain groupby column: {groupby_col}")
@@ -94,9 +128,9 @@ class Evaluator:
         # 计算 R²
         r2 = self.compute_r2(df)
 
-        metrics = {
-            "IC": ic_mean,
-            "ICIR": icir,
-            "R2": r2,
-        }
+        # 计算命中率
+        daily_hitrate = df.groupby(groupby_col).apply(self.compute_hit_rate)
+        hitrate = daily_hitrate.mean()
+
+        metrics = {"IC": ic_mean, "ICIR": icir, "R2": r2, "HitRate": hitrate.to_dict()}
         return metrics
