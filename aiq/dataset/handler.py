@@ -619,7 +619,7 @@ class MarketAlpha158(Alpha158):
         df["DX"] = 100 * (di_diff / di_sum.replace(0, np.nan))
 
         # Calculate ADX
-        df["ADX"] = df["DX"].ewm(alpha=alpha, adjust=False).mean()
+        df["ADX"] = df["DX"].ewm(alpha=alpha, adjust=False).mean() / 100
 
         return df["ADX"]
 

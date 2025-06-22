@@ -43,6 +43,12 @@ data_handler:
         kwargs:
           fields_group: "feature"
           clip_outlier: true
+          exclude_cols:
+            [
+              "000903.SH_MKT_ADX_10D",
+              "000300.SH_MKT_ADX_10D",
+              "000905.SH_MKT_ADX_10D",
+            ]
       - class: Fillna
         module_path: aiq.dataset.processor
         kwargs:
