@@ -148,9 +148,9 @@ class Alpha158(DataHandler):
             Log(open / Ref(close, 1)),
         ]
         feature_names = [
-            "IND_CLS_L1_CAT",
-            "IND_CLS_L2_CAT",
-            "MKT_CLS_CAT",
+            "IND_CLS_L1",
+            "IND_CLS_L2",
+            "MKT_CLS",
             "EP",
             "BP",
             "MKT_CAP",

@@ -1,4 +1,5 @@
 import abc
+from typing import List
 
 import pandas as pd
 import numpy as np
@@ -7,7 +8,7 @@ from aiq.utils.functional import robust_zscore, zscore, neutralize
 
 
 def get_group_columns(
-    df: pd.DataFrame, group: str = None, exclude_discrete: bool = False
+    df: pd.DataFrame, group: str = None, exclude_cols: List[str] = []
 ):
     """
     get a group of columns from multi-index columns DataFrame
@@ -18,20 +19,18 @@ def get_group_columns(
         with multi of columns.
     group : str
         the name of the feature group, i.e. the first level value of the group index.
-    exclude_discrete : bool
-        whether exclude discrete columns
+    exclude_cols : List[str], optional
+        List of column names (from the last level) to exclude from the result.
     """
     if group is None:
         cols = df.columns
     else:
         cols = df.columns[df.columns.get_loc(group)]
 
-    if exclude_discrete:
-        filtered_cols = cols[~cols.get_level_values(-1).str.endswith("_CAT")]
-    else:
-        filtered_cols = cols
+    if exclude_cols:
+        cols = cols[~cols.get_level_values(-1).isin(exclude_cols)]
 
-    return filtered_cols
+    return cols
 
 
 class Processor(abc.ABC):
@@ -104,12 +103,13 @@ class RobustZScoreNorm(Processor):
         https://en.wikipedia.org/wiki/Median_absolute_deviation.
     """
 
-    def __init__(self, fields_group=None, clip_outlier=True):
+    def __init__(self, fields_group=None, clip_outlier=True, exclude_cols=[]):
         self.fields_group = fields_group
         self.clip_outlier = clip_outlier
+        self.exclude_cols = exclude_cols
 
     def fit(self, df: pd.DataFrame = None):
-        self.cols = get_group_columns(df, self.fields_group, exclude_discrete=True)
+        self.cols = get_group_columns(df, self.fields_group, self.exclude_cols)
         X = df[self.cols].values
         self.mean_train = np.nanmedian(X, axis=0)
         self.std_train = np.nanmedian(np.abs(X - self.mean_train), axis=0)
@@ -144,27 +144,30 @@ class CSNeutralize(Processor):
 class CSWinsorize(Processor):
     """Cross Sectional Winsorization: winsorize each variable within each date slice."""
 
-    def __init__(self, fields_group=None, lower_quantile=0.01, upper_quantile=0.99):
+    def __init__(
+        self,
+        fields_group=None,
+        lower_quantile=0.01,
+        upper_quantile=0.99,
+        exclude_cols=[],
+    ):
         """
-        :param fields_group: grouping key or pattern to select columns (passed to get_group_columns)
-        :param lower_quantile: lower tail cutoff (e.g. 0.01 for 1%)
-        :param upper_quantile: upper tail cutoff (e.g. 0.99 for 99%)
+        Parameters
+        ----------
+        fields_group: grouping key or pattern to select columns (passed to get_group_columns)
+        lower_quantile: lower tail cutoff (e.g. 0.01 for 1%)
+        upper_quantile: upper tail cutoff (e.g. 0.99 for 99%)
         """
         self.fields_group = fields_group
         self.lower_quantile = lower_quantile
         self.upper_quantile = upper_quantile
+        self.exclude_cols = exclude_cols
 
     def __call__(self, df: pd.DataFrame) -> pd.DataFrame:
-        # Identify numeric columns to winsorize, excluding discrete if specified
-        cols = get_group_columns(df, self.fields_group, exclude_discrete=True)
+        # Identify numeric columns to winsorize
+        cols = get_group_columns(df, self.fields_group, self.exclude_cols)
 
         def winsorize_slice(slice_df: pd.DataFrame) -> pd.DataFrame:
-            """
-            Winsorize values in each column of the slice.
-
-            :param slice_df: DataFrame subset for a single date
-            :return: winsorized DataFrame
-            """
             # Compute per-column quantiles
             lower_bounds = slice_df.quantile(self.lower_quantile)
             upper_bounds = slice_df.quantile(self.upper_quantile)
@@ -179,7 +182,7 @@ class CSWinsorize(Processor):
 class CSZScoreNorm(Processor):
     """Cross Sectional ZScore Normalization"""
 
-    def __init__(self, fields_group=None, method="zscore"):
+    def __init__(self, fields_group=None, method="zscore", exclude_cols=[]):
         self.fields_group = fields_group
         if method == "zscore":
             self.zscore_func = zscore
@@ -187,9 +190,10 @@ class CSZScoreNorm(Processor):
             self.zscore_func = robust_zscore
         else:
             raise NotImplementedError(f"This type of input is not supported")
+        self.exclude_cols = exclude_cols
 
     def __call__(self, df):
-        cols = get_group_columns(df, self.fields_group, exclude_discrete=True)
+        cols = get_group_columns(df, self.fields_group, self.exclude_cols)
         df[cols] = df[cols].groupby("Date", group_keys=False).apply(self.zscore_func)
         return df
 

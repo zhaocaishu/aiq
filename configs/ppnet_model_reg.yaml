@@ -12,10 +12,11 @@ data_handler:
         module_path: aiq.dataset.processor
         kwargs:
           fields_group: "feature"
+          exclude_cols: ["IND_CLS_L1", "IND_CLS_L2", "MKT_CLS"]
       - class: CSNeutralize
         module_path: aiq.dataset.processor
         kwargs:
-          industry_col: "IND_CLS_L1_CAT"
+          industry_col: "IND_CLS_L1"
           cap_col: "MKT_CAP"
           factor_cols: ["^TURN_(?:MEAN|STD)_(?:5|10|20|30|60)D$"]
       - class: RobustZScoreNorm
@@ -23,6 +24,7 @@ data_handler:
         kwargs:
           fields_group: "feature"
           clip_outlier: true
+          exclude_cols: ["IND_CLS_L1", "IND_CLS_L2", "MKT_CLS"]
       - class: Fillna
         module_path: aiq.dataset.processor
         kwargs:
