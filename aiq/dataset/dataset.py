@@ -121,7 +121,7 @@ class TSDataset(Dataset):
 
         labels = np.array(
             [self._label[slice[0].stop - 1] for slice in daily_slices]
-        ).squeeze()
+        )
 
         return sample_indices, features, labels
 
