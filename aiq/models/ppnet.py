@@ -220,9 +220,9 @@ class PPNetModel(BaseModel):
             with torch.no_grad():
                 outputs = self.model(batch_x)
 
-            indices.append(sample_indices.squeeze().numpy())
-            labels.append(batch_y.cpu().squeeze().numpy())
-            preds.append(outputs.cpu().squeeze().numpy())
+            indices.append(sample_indices.squeeze(0).numpy())
+            labels.append(batch_y.cpu().numpy())
+            preds.append(outputs.cpu().numpy())
 
         indices = np.concatenate(indices, axis=0)
         labels = np.concatenate(labels, axis=0)
