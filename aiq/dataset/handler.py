@@ -130,12 +130,12 @@ class Alpha158(DataHandler):
 
         # kbar
         features = [
+            mkt_class,
             ind_class_l1,
             ind_class_l2,
-            mkt_class,
+            mkt_cap,
             ep,
             bp,
-            mkt_cap,
             (close - open) / open,
             (high - low) / open,
             (close - open) / ((high - low) + 0.001),
@@ -148,12 +148,12 @@ class Alpha158(DataHandler):
             Log(open / Ref(close, 1)),
         ]
         feature_names = [
+            "MKT_CLS",
             "IND_CLS_L1",
             "IND_CLS_L2",
-            "MKT_CLS",
+            "MKT_CAP",
             "EP",
             "BP",
-            "MKT_CAP",
             "KMID",
             "KLEN",
             "KMID2",
@@ -651,7 +651,7 @@ class MarketAlpha158(Alpha158):
                 ]
             )
 
-        features.append(self.calculate_adx(df, n=10))
+        features.append(self.calculate_adx(df))
         feature_names.append("MKT_ADX_10D")
 
         # Concat features
