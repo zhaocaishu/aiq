@@ -66,7 +66,7 @@ class Evaluator:
             return np.nan
         return spearmanr(group[self.pred_col], group[self.label_col])[0]
 
-    def compute_hit_rate(self, group, K=20):
+    def compute_hit_rate(self, group, K=30):
         """
         计算 Top-K 和 Bottom-K 的命中率（Hit Rate）。
 
@@ -88,13 +88,14 @@ class Evaluator:
             return pd.DataFrame({"HR@TopK": [np.nan], "HR@BottomK": [np.nan]})
 
         # 排序并取 Top-K
-        topk = group.nlargest(K, self.pred_col)
+        pred_topk = group.nlargest(K, self.pred_col)
+        gt_topk = group.nlargest(K, self.label_col)
+        hr_top = (pred_topk["Instrument"].values == gt_topk["Instrument"].values).sum() / K
+        
         # 排序并取 Bottom-K
-        bottomk = group.nsmallest(K, self.pred_col)
-
-        # 计算命中数（标签 == 1），并除以 K 得到命中率
-        hr_top = topk[self.label_col].eq(1).sum() / K
-        hr_bottom = bottomk[self.label_col].eq(1).sum() / K
+        pred_bottomk = group.nsmallest(K, self.pred_col)
+        gt_bottomk = group.nsmallest(K, self.label_col)
+        hr_bottom = (pred_bottomk["Instrument"].values == gt_bottomk["Instrument"].values).sum() / K
 
         return pd.DataFrame({"HR@TopK": [hr_top], "HR@BottomK": [hr_bottom]})
 
