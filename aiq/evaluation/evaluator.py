@@ -97,7 +97,7 @@ class Evaluator:
         gt_bottomk = group.nsmallest(K, self.label_col)
         hr_bottom = (pred_bottomk["Instrument"].values == gt_bottomk["Instrument"].values).sum() / K
 
-        return pd.DataFrame({"HR@TopK": [hr_top], "HR@BottomK": [hr_bottom]})
+        return pd.DataFrame({f"HR@Top{K}": [hr_top], f"HR@Bottom{K}": [hr_bottom]})
 
     def evaluate(self, df, groupby_col="Date"):
         """
