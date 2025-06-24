@@ -79,7 +79,7 @@ model:
     pred_len: 1
     dropout: 0.5
     gate_input_start_index: 144
-    gate_input_end_index: 210
+    gate_input_end_index: 237
     beta: 3.0
     epochs: 30
     batch_size: 1
