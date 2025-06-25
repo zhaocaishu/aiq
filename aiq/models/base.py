@@ -11,17 +11,14 @@ class BaseModel(abc.ABC):
         self,
         feature_names=None,
         label_names=None,
-        model_params=None,
         save_dir=None,
         logger=None,
+        **kwargs,
     ):
         self._feature_names = feature_names
         self._label_names = label_names
 
-        if model_params is not None:
-            self.model_params = copy.deepcopy(dict(model_params))
-        else:
-            self.model_params = {}
+        self.model_params = copy.deepcopy(kwargs)
 
         self.model = None
 
