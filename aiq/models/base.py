@@ -13,12 +13,12 @@ class BaseModel(abc.ABC):
         label_names=None,
         save_dir=None,
         logger=None,
-        **kwargs,
+        **model_params,
     ):
         self._feature_names = feature_names
         self._label_names = label_names
 
-        self.model_params = copy.deepcopy(kwargs)
+        self.model_params = copy.deepcopy(model_params)
 
         self.model = None
 
