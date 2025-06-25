@@ -29,14 +29,13 @@ model:
   class: LGBModel
   module_path: aiq.models.lightgbm
   kwargs:
-    model_params:
-      objective: "mse"
-      learning_rate: 0.1
-      colsample_bytree: 0.8879
-      max_depth: 8
-      num_leaves: 210
-      subsample: 0.8789
-      lambda_l1: 205.6999
-      lambda_l2: 580.9768
-      metric: "rmse"
-      nthread: 4
+    objective: "mse"
+    learning_rate: 0.1
+    colsample_bytree: 0.8879
+    max_depth: 8
+    num_leaves: 210
+    subsample: 0.8789
+    lambda_l1: 205.6999
+    lambda_l2: 580.9768
+    metric: "rmse"
+    nthread: 4
