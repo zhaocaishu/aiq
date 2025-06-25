@@ -47,12 +47,6 @@ data_handler:
         kwargs:
           fields_group: "feature"
           clip_outlier: true
-          exclude_cols:
-            [
-              "000903.SH_MKT_ADX_10D",
-              "000300.SH_MKT_ADX_10D",
-              "000905.SH_MKT_ADX_10D",
-            ]
       - class: Fillna
         module_path: aiq.dataset.processor
         kwargs:
@@ -79,7 +73,7 @@ model:
     pred_len: 1
     dropout: 0.5
     gate_input_start_index: 144
-    gate_input_end_index: 237
+    gate_input_end_index: 207
     beta: 3.0
     epochs: 30
     batch_size: 1
