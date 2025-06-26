@@ -36,6 +36,11 @@ data_handler:
         kwargs:
           fields_group: "label"
     market_processors:
+      - class: RobustZScoreNorm
+        module_path: aiq.dataset.processor
+        kwargs:
+          fields_group: "feature"
+          clip_outlier: true
       - class: Fillna
         module_path: aiq.dataset.processor
         kwargs:
