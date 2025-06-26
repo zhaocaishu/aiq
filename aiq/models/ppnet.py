@@ -8,6 +8,7 @@ from torch.utils.data import Dataset, DataLoader
 from transformers import get_scheduler
 
 from aiq.layers import PPNet
+from aiq.losses import MSERankLoss
 
 from .base import BaseModel
 
@@ -84,6 +85,8 @@ class PPNetModel(BaseModel):
 
         if self.criterion_name == "MSE":
             self.criterion = nn.MSELoss()
+        elif self.criterion_name == "SSL":
+            self.criterion = MSERankLoss()
         else:
             raise NotImplementedError
 
