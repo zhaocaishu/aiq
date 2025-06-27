@@ -85,9 +85,9 @@ class PPNetModel(BaseModel):
 
         if self.criterion_name == "MSE":
             self.criterion = nn.MSELoss()
-        elif self.criterion_name == "MRL":
-            self.criterion = MSERankLoss(alpha=0.2)
-        elif self.criterion_name == "ICL":
+        elif self.criterion_name == "MR":
+            self.criterion = MSERankLoss()
+        elif self.criterion_name == "IC":
             self.criterion = ICLoss()
         else:
             raise NotImplementedError
