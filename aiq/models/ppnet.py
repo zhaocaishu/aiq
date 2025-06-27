@@ -85,7 +85,7 @@ class PPNetModel(BaseModel):
 
         if self.criterion_name == "MSE":
             self.criterion = nn.MSELoss()
-        elif self.criterion_name == "SSL":
+        elif self.criterion_name == "MRL":
             self.criterion = MSERankLoss()
         else:
             raise NotImplementedError
