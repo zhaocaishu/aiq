@@ -17,6 +17,7 @@ class MSERankLoss(nn.Module):
         # 去掉多余维度 => (N,)
         pred = pred.view(-1)
         target = target.view(-1)
+        N = pred.size(0)
 
         # 回归损失（MSE）
         regression_loss = self.mse_loss(pred, target)
