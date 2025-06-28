@@ -3,9 +3,9 @@ data_handler:
   module_path: aiq.dataset.handler
   kwargs:
     instruments: "000906.SH"
-    start_time: "2016-01-01"
+    start_time: "2013-01-01"
     end_time: "2023-12-31"
-    fit_start_time: "2017-01-01"
+    fit_start_time: "2014-01-01"
     fit_end_time: "2022-06-30"
     processors:
       - class: CSWinsorize
@@ -50,7 +50,7 @@ dataset:
   module_path: aiq.dataset.dataset
   kwargs:
     segments:
-      train: ["2017-01-01", "2022-06-30"]
+      train: ["2014-01-01", "2022-06-30"]
       valid: ["2022-07-01", "2022-12-31"]
       test: ["2023-01-01", "2023-06-30"]
     seq_len: 16
