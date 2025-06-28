@@ -179,6 +179,50 @@ class CSWinsorize(Processor):
         return df
 
 
+class DropExtremeLabel(Processor):
+    """
+    Processor that drops extreme label values within each cross-sectional group by setting them to NaN.
+
+    For each date, this processor groups the data using `fields_group` (on the label column),
+    drops the lowest `percent` fraction and the highest `percent` fraction of label values
+    by setting them to NaN.
+
+    Parameters
+    ----------
+    fields_group : str
+        Column name whose values are the labels to filter.
+    percent : float
+        Fraction of data to drop at each tail (0 < percent < 0.5).
+    """
+
+    def __init__(self, fields_group=None, percent: float = 0.025):
+        if not (0.0 < percent < 0.5):
+            raise ValueError("percent must be between 0 and 0.5")
+        self.fields_group = fields_group
+        self.percent = percent
+
+    def __call__(self, df: pd.DataFrame) -> pd.DataFrame:
+        # Copy to avoid SettingWithCopyWarning
+        cols = get_group_columns(df, self.fields_group)
+
+        def _filter_extremes(x: pd.Series) -> pd.Series:
+            N = x.shape[0]
+            drop_n = int(self.percent * N)
+            if drop_n == 0:
+                return x
+            sorted_idx = np.argsort(x.values)
+            keep_idx = sorted_idx[drop_n:-drop_n]
+            mask = np.zeros(N, dtype=bool)
+            mask[keep_idx] = True
+            x.iloc[~mask] = np.nan
+            return x
+
+        for col in cols:
+            df[col] = df[col].groupby("Date", group_keys=False).apply(_filter_extremes)
+
+        return df
+
+
 class CSZScoreNorm(Processor):
     """Cross Sectional ZScore Normalization"""
 

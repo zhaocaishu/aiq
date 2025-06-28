@@ -23,6 +23,7 @@ from aiq.ops import (
     Log,
     Sum,
     Abs,
+    EMA
 )
 from aiq.utils.module import init_instance_by_config
 
@@ -191,7 +192,7 @@ class Alpha158(DataHandler):
             # https://www.investopedia.com/ask/answers/071414/whats-difference-between-moving-average-and-weighted-moving-average.asp
             # Simple Moving Average, the simple moving average in the past d days, divided by latest close price to remove unit
             for d in windows:
-                features.append(Mean(close, d) / close)
+                features.append(EMA(close, d) / close)
                 feature_names.append("MA%d" % d)
 
         if use("STD"):
@@ -353,7 +354,7 @@ class Alpha158(DataHandler):
         if use("VMA"):
             # Simple Volume Moving average: https://www.barchart.com/education/technical-indicators/volume_moving_average
             for d in windows:
-                features.append(Mean(volume, d) / volume)
+                features.append(EMA(volume, d) / volume)
                 feature_names.append("VMA%d" % d)
 
         if use("VSTD"):
@@ -404,7 +405,7 @@ class Alpha158(DataHandler):
 
         if use("TURN"):
             for d in windows:
-                features.append(Mean(turn, d))
+                features.append(EMA(turn, d))
                 features.append(Std(turn, d))
                 feature_names.append("TURN_MEAN_%dD" % d)
                 feature_names.append("TURN_STD_%dD" % d)
