@@ -24,11 +24,11 @@ data_handler:
         module_path: aiq.dataset.processor
         kwargs:
           fields_group: "feature"
-      - class: DropExtremeLabel
+      - class: Dropna
         module_path: aiq.dataset.processor
         kwargs:
           fields_group: "label"
-      - class: Dropna
+      - class: DropExtremeLabel
         module_path: aiq.dataset.processor
         kwargs:
           fields_group: "label"

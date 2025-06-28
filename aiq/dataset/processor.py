@@ -184,8 +184,7 @@ class DropExtremeLabel(Processor):
     Processor that drops extreme label values within each cross-sectional group by setting them to NaN.
 
     For each date, this processor groups the data using `fields_group` (on the label column),
-    drops the lowest `percent` fraction and the highest `percent` fraction of label values
-    by setting them to NaN.
+    and removes the lowest `percent` fraction and the highest `percent` fraction of label values.
 
     Parameters
     ----------
@@ -212,9 +211,7 @@ class DropExtremeLabel(Processor):
                 return x
             sorted_idx = np.argsort(x.values)
             keep_idx = sorted_idx[drop_n:-drop_n]
-            mask = np.zeros(N, dtype=bool)
-            mask[keep_idx] = True
-            x.iloc[~mask] = np.nan
+            x = x.iloc[keep_idx]
             return x
 
         for col in cols:

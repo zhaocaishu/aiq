@@ -23,7 +23,7 @@ from aiq.ops import (
     Log,
     Sum,
     Abs,
-    EMA
+    EMA,
 )
 from aiq.utils.module import init_instance_by_config
 
