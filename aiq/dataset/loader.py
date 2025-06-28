@@ -62,7 +62,7 @@ class DataLoader:
                 (market, start_time.replace("-", ""), end_time.replace("-", "")),
                 ["Instrument", "Date"],
             )
-        return df["Instrument"].unique().tolist() if df is not None else []
+        return df
 
     @staticmethod
     def load_calendars(
@@ -161,9 +161,10 @@ class DataLoader:
         data_dir, instruments, start_time, end_time
     ) -> pd.DataFrame:
         if isinstance(instruments, str):
-            instruments = DataLoader.load_instruments(
+            instruments_df = DataLoader.load_instruments(
                 data_dir, instruments, start_time, end_time
             )
+            instruments = instruments_df["Instrument"].unique().tolist()
 
         dfs = [
             DataLoader.load_instrument_features(

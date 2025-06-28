@@ -1,8 +1,9 @@
+market: &market 000906.SH
 data_handler:
   class: Alpha158
   module_path: aiq.dataset.handler
   kwargs:
-    instruments: "000300.SH"
+    instruments: *market
     start_time: "2013-01-01"
     end_time: "2023-12-31"
     fit_start_time: "2014-01-01"
