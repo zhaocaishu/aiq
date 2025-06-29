@@ -495,7 +495,9 @@ class Alpha158(DataHandler):
         for proc in processors:
             if mode == "train" and hasattr(proc, "fit"):
                 proc.fit(fit_df)
-            df = proc(df)
+            # 判断是否在当前模式下启用该处理器
+            if mode == "train" or proc.is_for_infer():
+                df = proc(df)
 
         df.columns = df.columns.droplevel()
         return df

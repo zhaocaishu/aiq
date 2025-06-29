@@ -56,6 +56,18 @@ class Processor(abc.ABC):
             The raw_df of handler or result from previous processor.
         """
 
+    def is_for_infer(self) -> bool:
+        """
+        Is this processor usable for inference
+        Some processors are not usable for inference.
+
+        Returns
+        -------
+        bool:
+            if it is usable for infenrece.
+        """
+        return True
+
 
 class Dropna(Processor):
     def __init__(self, fields_group=None):
@@ -181,7 +193,7 @@ class CSWinsorize(Processor):
 
 class DropExtremeLabel(Processor):
     """
-    Processor that drops extreme label values within each cross-sectional group by setting them to NaN.
+    Processor that drops extreme label values within each cross-sectional group.
 
     For each date, this processor groups the data using `fields_group` (on the label column),
     and removes the lowest `percent` fraction and the highest `percent` fraction of label values.
@@ -201,23 +213,26 @@ class DropExtremeLabel(Processor):
         self.percent = percent
 
     def __call__(self, df: pd.DataFrame) -> pd.DataFrame:
-        # Copy to avoid SettingWithCopyWarning
         cols = get_group_columns(df, self.fields_group)
-
-        def _filter_extremes(x: pd.Series) -> pd.Series:
-            N = x.shape[0]
-            drop_n = int(self.percent * N)
-            if drop_n == 0:
-                return x
-            sorted_idx = np.argsort(x.values)
-            keep_idx = sorted_idx[drop_n:-drop_n]
-            x = x.iloc[keep_idx]
-            return x
-
+        # Compute per-date lower and upper quantiles for each column
         for col in cols:
-            df[col] = df[col].groupby("Date", group_keys=False).apply(_filter_extremes)
-
+            # vectorized quantile computation via groupby-transform
+            lower = (
+                df[col]
+                .groupby("Date", group_keys=False)
+                .transform(lambda x: x.quantile(self.percent))
+            )
+            upper = (
+                df[col]
+                .groupby("Date", group_keys=False)
+                .transform(lambda x: x.quantile(1 - self.percent))
+            )
+            # Keep only rows within [lower, upper]
+            df = df[df[col].between(lower, upper)]
         return df
+
+    def is_for_infer(self) -> bool:
+        return False
 
 
 class CSZScoreNorm(Processor):
