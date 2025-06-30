@@ -3,7 +3,7 @@ import torch.nn as nn
 
 
 class MSERankLoss(nn.Module):
-    def __init__(self, alpha=4.0):
+    def __init__(self, alpha=4.0, margin=1.5):
         super(MSERankLoss, self).__init__()
         self.alpha = alpha
         self.margin = margin
@@ -28,7 +28,7 @@ class MSERankLoss(nn.Module):
         diff_pred = pred[rows] - pred[cols]  # L = N(N-1)/2
         diff_target = target[rows] - target[cols]
 
-        pairwise_loss = torch.relu(-diff_pred * diff_target).mean()
+        pairwise_loss = torch.relu(self.margin - diff_pred * diff_target).mean()
 
         total_loss = regression_loss + self.alpha * pairwise_loss
         return total_loss
