@@ -3,7 +3,7 @@ import torch.nn as nn
 
 
 class MSERankLoss(nn.Module):
-    def __init__(self, alpha=4.0, margin=1.0):
+    def __init__(self, alpha=4.0):
         super(MSERankLoss, self).__init__()
         self.alpha = alpha
         self.margin = margin
