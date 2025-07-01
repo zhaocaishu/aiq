@@ -139,13 +139,13 @@ class Alpha158(DataHandler):
             bp,
             (close - open) / open,
             (high - low) / open,
-            (close - open) / ((high - low) + 0.001),
+            (close - open) / ((high - low) + 1e-12),
             (high - Greater(open, close)) / open,
-            (high - Greater(open, close)) / ((high - low) + 0.001),
+            (high - Greater(open, close)) / ((high - low) + 1e-12),
             (Less(open, close) - low) / open,
-            (Less(open, close) - low) / ((high - low) + 0.001),
+            (Less(open, close) - low) / ((high - low) + 1e-12),
             (2 * close - high - low) / open,
-            (2 * close - high - low) / ((high - low) + 0.001),
+            (2 * close - high - low) / ((high - low) + 1e-12),
             Log(open / Ref(close, 1)),
         ]
         feature_names = [
@@ -255,7 +255,7 @@ class Alpha158(DataHandler):
         if use("RSV"):
             # Represent the price position between upper and lower resistent price for past d days.
             for d in windows:
-                features.append((close - Min(low, d)) / (Max(high, d) - Min(low, d)))
+                features.append((close - Min(low, d)) / (Max(high, d) - Min(low, d) + 1e-12))
                 feature_names.append("RSV%d" % d)
 
         if use("IMAX"):
@@ -323,7 +323,7 @@ class Alpha158(DataHandler):
             for d in windows:
                 features.append(
                     Sum(Greater(close - Ref(close, 1), 0), d)
-                    / Sum(Abs(close - Ref(close, 1)), d)
+                    / (Sum(Abs(close - Ref(close, 1)), d) + 1e-12)
                 )
                 feature_names.append("SUMP%d" % d)
 
@@ -334,7 +334,7 @@ class Alpha158(DataHandler):
             for d in windows:
                 features.append(
                     Sum(Greater(Ref(close, 1) - close, 0), d)
-                    / Sum(Abs(close - Ref(close, 1)), d)
+                    / (Sum(Abs(close - Ref(close, 1)), d) + 1e-12)
                 )
                 feature_names.append("SUMN%d" % d)
 
@@ -347,20 +347,20 @@ class Alpha158(DataHandler):
                         Sum(Greater(close - Ref(close, 1), 0), d)
                         - Sum(Greater(Ref(close, 1) - close, 0), d)
                     )
-                    / Sum(Abs(close - Ref(close, 1)), d)
+                    / (Sum(Abs(close - Ref(close, 1)), d) + 1e-12)
                 )
                 feature_names.append("SUMD%d" % d)
 
         if use("VMA"):
             # Simple Volume Moving average: https://www.barchart.com/education/technical-indicators/volume_moving_average
             for d in windows:
-                features.append(EMA(volume, d) / volume)
+                features.append(EMA(volume, d) / (volume + 1e-12))
                 feature_names.append("VMA%d" % d)
 
         if use("VSTD"):
             # The standard deviation for volume in past d days.
             for d in windows:
-                features.append(Std(volume, d) / volume)
+                features.append(Std(volume, d) / (volume + 1e-12))
                 feature_names.append("VSTD%d" % d)
 
         if use("WVMA"):
@@ -377,7 +377,7 @@ class Alpha158(DataHandler):
             for d in windows:
                 features.append(
                     Sum(Greater(volume - Ref(volume, 1), 0), d)
-                    / Sum(Abs(volume - Ref(volume, 1)), d)
+                    / (Sum(Abs(volume - Ref(volume, 1)), d) + 1e-12)
                 )
                 feature_names.append("VSUMP%d" % d)
 
@@ -386,7 +386,7 @@ class Alpha158(DataHandler):
             for d in windows:
                 features.append(
                     Sum(Greater(Ref(volume, 1) - volume, 0), d)
-                    / Sum(Abs(volume - Ref(volume, 1)), d)
+                    / (Sum(Abs(volume - Ref(volume, 1)), d) + 1e-12)
                 )
                 feature_names.append("VSUMN%d" % d)
 
@@ -399,7 +399,7 @@ class Alpha158(DataHandler):
                         Sum(Greater(volume - Ref(volume, 1), 0), d)
                         - Sum(Greater(Ref(volume, 1) - volume, 0), d)
                     )
-                    / Sum(Abs(volume - Ref(volume, 1)), d)
+                    / (Sum(Abs(volume - Ref(volume, 1)), d) + 1e-12)
                 )
                 feature_names.append("VSUMD%d" % d)
 
