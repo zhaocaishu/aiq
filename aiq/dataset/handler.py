@@ -368,7 +368,7 @@ class Alpha158(DataHandler):
             for d in windows:
                 features.append(
                     Std((close / Ref(close, 1) - 1) * Log(1 + volume), d)
-                    / Mean((close / Ref(close, 1) - 1) * Log(1 + volume), d)
+                    / (Mean((close / Ref(close, 1) - 1) * Log(1 + volume), d) + 1e-12)
                 )
                 feature_names.append("WVMA%d" % d)
 
