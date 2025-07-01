@@ -22,7 +22,7 @@ dataset:
   module_path: aiq.dataset.dataset
   kwargs:
     segments:
-      train: ["2014-01-01", "2022-06-30"]
+      train: ["2014-01-01", "2022-03-31"]
       valid: ["2022-07-01", "2022-12-31"]
       test: ["2023-01-01", "2023-06-30"]
     label_names: ["RETN_5D"]
