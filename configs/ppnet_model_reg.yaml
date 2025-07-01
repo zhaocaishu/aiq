@@ -7,7 +7,7 @@ data_handler:
     start_time: "2013-01-01"
     end_time: "2023-12-31"
     fit_start_time: "2014-01-01"
-    fit_end_time: "2022-06-30"
+    fit_end_time: "2022-03-31"
     processors:
       - class: CSWinsorize
         module_path: aiq.dataset.processor
