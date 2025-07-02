@@ -95,7 +95,8 @@ def main():
     data_handler = init_instance_by_config(cfg.data_handler, data_dir=args.data_dir)
     data = data_handler.setup_data()
     data_handler.save(os.path.join(args.save_dir, "data_handler.pkl"))
-
+    logger.info("Data handler completed. Shape: %s", data.shape)
+    
     train_dataset, val_dataset = load_datasets(data, data_handler.feature_names)
     logger.info(
         "Loaded %d training and %d validation samples.",

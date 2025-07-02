@@ -79,6 +79,7 @@ def main():
     data_handler = init_instance_by_config(cfg.data_handler, data_dir=args.data_dir)
     data_handler.load(os.path.join(args.save_dir, "data_handler.pkl"))
     data = data_handler.setup_data(mode="valid")
+    logger.info("Data handler completed. Shape: %s", data.shape)
 
     # Load dataset
     val_dataset = init_instance_by_config(
