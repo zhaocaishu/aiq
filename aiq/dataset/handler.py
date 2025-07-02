@@ -413,8 +413,8 @@ class Alpha158(DataHandler):
                 feature_names.append("TURN_STD_%dD" % d)
 
         if use("TVR"):
-            features.append(tail_ratio)
-            feature_names.append("TAIL_VOLUME_RATIO")
+            features.append(EMA(tail_ratio, 5))
+            feature_names.append("TVR_MEAN_5D")
 
         # concat features
         self._feature_names = feature_names.copy()
