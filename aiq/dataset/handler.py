@@ -126,8 +126,10 @@ class Alpha158(DataHandler):
         close = df["Close"] * adjusted_factor
         high = df["High"] * adjusted_factor
         low = df["Low"] * adjusted_factor
+        vwap = df["Vwap"] * adjusted_factor
         volume = df["Volume"] * adjusted_factor
         turn = df["Turnover_rate_f"]
+        tail_ratio = df["Tail_ratio"]
 
         # kbar
         features = [
@@ -168,7 +170,7 @@ class Alpha158(DataHandler):
         ]
 
         # price
-        for field, price in zip(["Open", "High", "Low"], [open, high, low]):
+        for field, price in zip(["Open", "High", "Low", "Vwap"], [open, high, low, vwap]):
             for d in range(1):
                 features.append(Ref(price, d) / close)
                 feature_names.append(field.upper() + str(d))
@@ -409,6 +411,11 @@ class Alpha158(DataHandler):
                 features.append(Std(turn, d))
                 feature_names.append("TURN_MEAN_%dD" % d)
                 feature_names.append("TURN_STD_%dD" % d)
+
+        if use("TAIL"):
+            for d in windows:
+                features.append(EMA(tail_ratio, d))
+                feature_names.append("TAIL_MEAN_%dD" % d)
 
         # concat features
         self._feature_names = feature_names.copy()
