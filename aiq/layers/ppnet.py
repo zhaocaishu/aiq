@@ -212,7 +212,7 @@ class PPNet(nn.Module):
             nn.Linear(d_model, pred_len),
         )
 
-        # feature normalize
+        # pre-normalization
         self.revin_layer = RevIN(d_feat)
 
     def forward(self, x):
