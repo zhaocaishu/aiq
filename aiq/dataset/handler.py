@@ -128,7 +128,6 @@ class Alpha158(DataHandler):
         low = df["Low"] * adjusted_factor
         volume = df["Volume"] * adjusted_factor
         turn = df["Turnover_rate_f"]
-        tail_ratio = df["Tail_ratio"]
 
         # kbar
         features = [
@@ -410,10 +409,6 @@ class Alpha158(DataHandler):
                 features.append(Std(turn, d))
                 feature_names.append("TURN_MEAN_%dD" % d)
                 feature_names.append("TURN_STD_%dD" % d)
-
-        if use("TVR"):
-            features.append(EMA(tail_ratio, 5))
-            feature_names.append("TVR_MEAN_5D")
 
         # concat features
         self._feature_names = feature_names.copy()
