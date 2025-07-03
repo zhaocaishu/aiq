@@ -44,16 +44,14 @@ class DataHandler:
     ):
         self.data_dir = data_dir
         if isinstance(instruments, str):
-            instruments_df = DataLoader.load_instruments(
+            df = DataLoader.load_instruments(
                 self.data_dir, instruments, start_time, end_time
             )
-            self._ts_instruments = set(
-                zip(instruments_df["Instrument"], instruments_df["Date"])
-            )
-            self._instruments = instruments_df["Instrument"].unique().tolist()
+            self._instruments = df["Instrument"].unique().tolist()
+            self._ts_instruments = set(zip(df["Instrument"], df["Date"]))
         else:
-            self._ts_instruments = None
             self._instruments = instruments
+            self._ts_instruments = None
         self.start_time = start_time
         self.end_time = end_time
         self.fit_start_time = fit_start_time
