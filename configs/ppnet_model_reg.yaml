@@ -60,15 +60,15 @@ model:
   class: PPNetModel
   module_path: aiq.models.ppnet
   kwargs:
-    d_feat: 139
+    d_feat: 138
     d_model: 256
     t_nhead: 4
     s_nhead: 2
     seq_len: 16
     pred_len: 1
     dropout: 0.5
-    gate_input_start_index: 145
-    gate_input_end_index: 208
+    gate_input_start_index: 144
+    gate_input_end_index: 207
     beta: 3.0
     epochs: 30
     batch_size: 1
