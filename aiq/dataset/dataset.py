@@ -10,8 +10,11 @@ class Dataset(torch.utils.data.Dataset):
     Preparing data for model training and inference.
     """
 
-    def __init__(self, data, segments, feature_names, label_names, mode="train"):
+    def __init__(
+        self, instruments, data, segments, feature_names, label_names, mode="train"
+    ):
         start_time, end_time = segments[mode]
+        self._instruments = instruments
         self._data = data.loc[start_time:end_time].copy()
         self._feature_names = feature_names
         self._label_names = label_names
@@ -42,6 +45,7 @@ class TSDataset(Dataset):
 
     def __init__(
         self,
+        instruments,
         data,
         segments,
         seq_len,
@@ -49,12 +53,13 @@ class TSDataset(Dataset):
         label_names=None,
         mode="train",
     ):
-        self.seq_len = seq_len
-        self.mode = mode
+        self._instruments = instruments
+        self._data = data.copy()
         self._feature_names = feature_names
         self._label_names = label_names
-        self.start_time, self.end_time = segments[self.mode]
-        self._data = data.copy()
+        self.start_time, self.end_time = segments[mode]
+        self.seq_len = seq_len
+        self.mode = mode
         self._setup_time_series()
 
     def _setup_time_series(self):
@@ -72,8 +77,15 @@ class TSDataset(Dataset):
         daily_slices = defaultdict(list)
         data_slices = self._create_ts_slices(self._index, self.seq_len)
         for i, (code, date) in enumerate(self._index):
-            if self.start_time <= date <= self.end_time:
-                daily_slices[date].append((data_slices[i], i))
+            # Skip outside the desired time window
+            if not (self.start_time <= date <= self.end_time):
+                continue
+
+            # If filtering by instruments, skip missing pairs
+            if self._instruments is not None and (code, date) not in self._instruments:
+                continue
+
+            daily_slices[date].append((data_slices[i], i))
 
         self._daily_slices = list(daily_slices.values())
         self._daily_index = list(daily_slices.keys())
@@ -119,9 +131,7 @@ class TSDataset(Dataset):
         if self._label_names is None:
             return sample_indices, features
 
-        labels = np.array(
-            [self._label[slice[0].stop - 1] for slice in daily_slices]
-        )
+        labels = np.array([self._label[slice[0].stop - 1] for slice in daily_slices])
 
         return sample_indices, features, labels
 

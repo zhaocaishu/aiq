@@ -43,7 +43,17 @@ class DataHandler:
         processors=None,
     ):
         self.data_dir = data_dir
-        self.instruments = instruments
+        if isinstance(instruments, str):
+            instruments_df = DataLoader.load_instruments(
+                self.data_dir, instruments, start_time, end_time
+            )
+            self._ts_instruments = set(
+                zip(instruments_df["Instrument"], instruments_df["Date"])
+            )
+            self._instruments = instruments_df["Instrument"].unique().tolist()
+        else:
+            self._ts_instruments = None
+            self._instruments = instruments
         self.start_time = start_time
         self.end_time = end_time
         self.fit_start_time = fit_start_time
@@ -71,6 +81,10 @@ class DataHandler:
             print(f"Processing components successfully saved to {filepath}")
         except Exception as e:
             print(f"Error saving processing components to {filepath}: {e}")
+
+    @property
+    def instruments(self):
+        return self._ts_instruments
 
 
 class Alpha158(DataHandler):
@@ -255,7 +269,9 @@ class Alpha158(DataHandler):
         if use("RSV"):
             # Represent the price position between upper and lower resistent price for past d days.
             for d in windows:
-                features.append((close - Min(low, d)) / (Max(high, d) - Min(low, d) + 1e-12))
+                features.append(
+                    (close - Min(low, d)) / (Max(high, d) - Min(low, d) + 1e-12)
+                )
                 feature_names.append("RSV%d" % d)
 
         if use("IMAX"):
@@ -505,7 +521,7 @@ class Alpha158(DataHandler):
     def setup_data(self, mode="train") -> pd.DataFrame:
         # Load data
         df = DataLoader.load_instruments_features(
-            self.data_dir, self.instruments, self.start_time, self.end_time
+            self.data_dir, self._instruments, self.start_time, self.end_time
         )
 
         # Extract feature and label from data

@@ -13,6 +13,7 @@ if __name__ == "__main__":
 
     # train dataset
     train_dataset = TSDataset(
+        instruments=data_handler.instruments,
         data=data,
         segments=cfg.dataset.kwargs.segments,
         seq_len=8,

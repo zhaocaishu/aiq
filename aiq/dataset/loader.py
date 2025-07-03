@@ -160,12 +160,6 @@ class DataLoader:
     def load_instruments_features(
         data_dir, instruments, start_time, end_time
     ) -> pd.DataFrame:
-        if isinstance(instruments, str):
-            instruments_df = DataLoader.load_instruments(
-                data_dir, instruments, start_time, end_time
-            )
-            instruments = instruments_df["Instrument"].unique().tolist()
-
         dfs = [
             DataLoader.load_instrument_features(
                 data_dir, inst, start_time=start_time, end_time=end_time
