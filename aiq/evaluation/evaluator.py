@@ -89,13 +89,19 @@ class Evaluator:
 
         # 排序并取 Top-K
         pred_topk = group.nlargest(K, self.pred_col)
-        gt_topk = group.nlargest(K, self.label_col)
-        hr_top = (pred_topk["Instrument"].values == gt_topk["Instrument"].values).sum() / K
+        gt_topk   = group.nlargest(K, self.label_col)
+        
+        pred_topk_set = set(pred_topk["Instrument"])
+        gt_topk_set   = set(gt_topk["Instrument"])
+        hr_top = len(pred_topk_set & gt_topk_set) / K
         
         # 排序并取 Bottom-K
         pred_bottomk = group.nsmallest(K, self.pred_col)
-        gt_bottomk = group.nsmallest(K, self.label_col)
-        hr_bottom = (pred_bottomk["Instrument"].values == gt_bottomk["Instrument"].values).sum() / K
+        gt_bottomk   = group.nsmallest(K, self.label_col)
+        
+        pred_bottomk_set = set(pred_bottomk["Instrument"])
+        gt_bottomk_set   = set(gt_bottomk["Instrument"])
+        hr_bottom = len(pred_bottomk_set & gt_bottomk_set) / K
 
         return pd.DataFrame({f"HR@Top{K}": [hr_top], f"HR@Bottom{K}": [hr_bottom]})
 
