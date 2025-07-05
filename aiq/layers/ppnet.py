@@ -217,7 +217,7 @@ class PPNet(nn.Module):
 
     def forward(self, x):
         # Extract source features and apply revin_layer to src features
-        src = x[:, :, 6 : self.gate_input_start_index]  # Shape: (N, T, D)
+        src = x[:, :, 3 : self.gate_input_start_index]  # Shape: (N, T, D)
         src = self.revin_layer(src)
 
         # Apply feature gate to source features
