@@ -43,7 +43,7 @@ class Evaluator:
         sse = np.sum((label - pred) ** 2)
 
         # 计算总平方和 (SST)
-        sst = np.sum((label - label.mean()) ** 2)
+        sst = np.sum(label ** 2)
 
         # 避免除以零
         return 1 - sse / sst if sst != 0 else np.nan
