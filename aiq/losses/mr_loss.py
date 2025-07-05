@@ -28,7 +28,8 @@ class MSERankLoss(nn.Module):
         diff_pred = pred[rows] - pred[cols]  # L = N(N-1)/2
         diff_target = target[rows] - target[cols]
 
-        pairwise_loss = torch.relu(self.margin - diff_pred * diff_target).mean()
+        mask = diff_target != 0
+        pairwise_loss = torch.relu(self.margin - diff_pred * diff_target)[mask].mean()
 
         total_loss = regression_loss + self.alpha * pairwise_loss
         return total_loss
