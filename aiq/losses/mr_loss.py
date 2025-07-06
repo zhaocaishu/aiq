@@ -3,10 +3,9 @@ import torch.nn as nn
 
 
 class MSERankLoss(nn.Module):
-    def __init__(self, alpha=4.0, margin=1.5):
+    def __init__(self, alpha=4.0):
         super(MSERankLoss, self).__init__()
         self.alpha = alpha
-        self.margin = margin
         self.mse_loss = nn.MSELoss()
 
     def forward(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
@@ -23,13 +22,24 @@ class MSERankLoss(nn.Module):
         # 回归损失（MSE）
         regression_loss = self.mse_loss(pred, target)
 
-        # 排序损失（Pairwise）
+        # 生成所有股票对索引 (i, j)，其中 i < j
         rows, cols = torch.triu_indices(N, N, offset=1)
-        diff_pred = pred[rows] - pred[cols]  # L = N(N-1)/2
-        diff_target = target[rows] - target[cols]
+        pred_i = pred[rows]
+        pred_j = pred[cols]
+        target_i = target[rows]
+        target_j = target[cols]
 
-        mask = diff_target != 0
-        pairwise_loss = torch.relu(self.margin - diff_pred * diff_target)[mask].mean()
+        # 计算目标收益差异并创建掩码
+        diff_target = target_i - target_j
+        mask = diff_target != 0  # 只处理收益不同的股票对
+
+        # 计算BPR Loss
+        # 核心思想：若股票i收益高于j，则鼓励pred_i > pred_j；反之鼓励pred_j > pred_i
+        bpr_diff = (pred_i - pred_j) * torch.sign(diff_target.detach())
+        pairwise_loss = -torch.log(torch.sigmoid(bpr_diff) + 1e-8)  # 加1e-8防止数值溢出
+
+        # 应用掩码并求平均
+        pairwise_loss = pairwise_loss[mask].mean()
 
         total_loss = regression_loss + self.alpha * pairwise_loss
         return total_loss
