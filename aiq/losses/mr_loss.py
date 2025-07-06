@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 class MSERankLoss(nn.Module):
-    def __init__(self, alpha=3.0, min_diff=1e-2):
+    def __init__(self, alpha=3.0, min_diff=5e-2):
         super(MSERankLoss, self).__init__()
         self.alpha = alpha
         self.min_diff = min_diff
