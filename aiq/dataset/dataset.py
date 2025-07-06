@@ -146,26 +146,6 @@ class TSDataset(Dataset):
             ).astype(features.dtype)
         return features + noise
 
-    def _apply_mixup(self, features, labels):
-        if len(features) <= 1:
-            return features, labels
-        perm = np.random.permutation(len(features))
-        features_perm = features[perm]
-        labels_perm = labels[perm]
-        lam = np.random.beta(self.mixup_alpha, self.mixup_alpha)
-        if self.augment_start_index is None:
-            # 对所有特征维度应用 mixup
-            features_mix = lam * features + (1 - lam) * features_perm
-        else:
-            # 只对从 augment_start_index 开始的特征维度应用 mixup
-            features_mix = features.copy()
-            features_mix[:, :, self.augment_start_index :] = (
-                lam * features[:, :, self.augment_start_index :]
-                + (1 - lam) * features_perm[:, :, self.augment_start_index :]
-            )
-        labels_mix = lam * labels + (1 - lam) * labels_perm
-        return features_mix, labels_mix
-
     def __getitem__(self, index):
         """根据索引获返回样本索引、特征和标准化后的标签（若存在）"""
         daily_slices = self._daily_slices[index]
@@ -187,10 +167,6 @@ class TSDataset(Dataset):
             # Jittering
             if np.random.rand() < 0.5:
                 features = self._apply_jitter(features)
-
-            # Mixup
-            if np.random.rand() < 0.5:  # 控制是否使用 Mixup
-                features, labels = self._apply_mixup(features, labels)
 
         return sample_indices, features, labels
 
