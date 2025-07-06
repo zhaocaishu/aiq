@@ -37,7 +37,7 @@ class MSERankLoss(nn.Module):
 
         # 计算加权BPR损失
         bpr_diff = (pred_i - pred_j) * torch.sign(diff_target.detach())
-        pairwise_loss = -confidence * torch.log(torch.sigmoid(bpr_diff) + 1e-8)
+        pairwise_loss = -confidence * torch.log(torch.sigmoid(bpr_diff))
 
         # 应用掩码并求平均
         if valid_mask.any():
