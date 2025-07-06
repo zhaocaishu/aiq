@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class MSERankLoss(nn.Module):
@@ -30,20 +31,18 @@ class MSERankLoss(nn.Module):
 
         # 计算目标差异和置信度
         diff_target = target_i - target_j
-        confidence = torch.abs(diff_target)  # 差异绝对值作为置信度
+        confidence = torch.abs(diff_target).detach()  # 差异绝对值作为置信度
+        mask = confidence > self.min_diff  # 过滤微弱差异
 
-        # 创建有效掩码
-        valid_mask = confidence > self.min_diff
+        # 若无有效股票对，直接返回MSE损失
+        if not torch.any(mask):
+            return regression_loss
 
         # 计算加权BPR损失
-        bpr_diff = (pred_i - pred_j) * torch.sign(diff_target.detach())
-        pairwise_loss = -confidence * torch.log(torch.sigmoid(bpr_diff))
+        bpr_diff = F.logsigmoid((pred_i - pred_j) * torch.sign(diff_target.detach()))
+        pairwise_loss = -confidence * bpr_diff
 
         # 应用掩码并求平均
-        if valid_mask.any():
-            pairwise_loss = pairwise_loss[valid_mask].mean()
-        else:
-            pairwise_loss = torch.tensor(0.0, device=pred.device)
-
+        pairwise_loss = pairwise_loss[mask].mean()
         total_loss = regression_loss + self.alpha * pairwise_loss
         return total_loss
