@@ -58,6 +58,7 @@ class TSDataset(Dataset):
         feature_names=None,
         label_names=None,
         use_augmentation=False,
+        augment_start_index=None,  # 特征维度开始增强的索引
         jitter_std=0.01,  # 加入 jitter 的标准差
         mixup_alpha=0.2,  # mixup 的 beta 分布参数
         mode="train",
@@ -69,6 +70,7 @@ class TSDataset(Dataset):
         self.start_time, self.end_time = segments[mode]
         self.seq_len = seq_len
         self.use_augmentation = use_augmentation
+        self.augment_start_index = augment_start_index
         self.jitter_std = jitter_std
         self.mixup_alpha = mixup_alpha
         self.mode = mode
@@ -128,28 +130,39 @@ class TSDataset(Dataset):
         else:
             return data
 
-    def _apply_jitter(self, x):
-        noise = np.random.normal(0, self.jitter_std, size=x.shape).astype(x.dtype)
-        return x + noise
+    def _apply_jitter(self, features):
+        if self.augment_start_index is None:
+            # 对所有特征维度添加噪声
+            noise = np.random.normal(0, self.jitter_std, size=features.shape).astype(
+                features.dtype
+            )
+        else:
+            # 只对从 augment_start_index 开始的特征维度添加噪声
+            noise = np.zeros_like(features)
+            noise[:, :, self.augment_start_index :] = np.random.normal(
+                0,
+                self.jitter_std,
+                size=features[:, :, self.augment_start_index :].shape,
+            ).astype(features.dtype)
+        return features + noise
 
     def _apply_mixup(self, features, labels):
-        """
-        Apply mixup augmentation to the features and labels.
-
-        Args:
-            features (np.ndarray): The feature array.
-            labels (np.ndarray): The label array.
-
-        Returns:
-            tuple: Mixed-up features and labels.
-        """
         if len(features) <= 1:
             return features, labels
         perm = np.random.permutation(len(features))
         features_perm = features[perm]
         labels_perm = labels[perm]
         lam = np.random.beta(self.mixup_alpha, self.mixup_alpha)
-        features_mix = lam * features + (1 - lam) * features_perm
+        if self.augment_start_index is None:
+            # 对所有特征维度应用 mixup
+            features_mix = lam * features + (1 - lam) * features_perm
+        else:
+            # 只对从 augment_start_index 开始的特征维度应用 mixup
+            features_mix = features.copy()
+            features_mix[:, :, self.augment_start_index :] = (
+                lam * features[:, :, self.augment_start_index :]
+                + (1 - lam) * features_perm[:, :, self.augment_start_index :]
+            )
         labels_mix = lam * labels + (1 - lam) * labels_perm
         return features_mix, labels_mix
 
