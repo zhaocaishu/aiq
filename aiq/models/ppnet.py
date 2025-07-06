@@ -18,7 +18,6 @@ class PPNetModel(BaseModel):
         self,
         feature_names=None,
         label_names=None,
-        use_augmentation=False,
         d_feat=158,
         d_model=256,
         t_nhead=4,
@@ -42,7 +41,6 @@ class PPNetModel(BaseModel):
         # input parameters
         self._feature_names = feature_names
         self._label_names = label_names
-        self.use_augmentation = use_augmentation
 
         self.d_feat = d_feat
         self.d_model = d_model
@@ -134,11 +132,6 @@ class PPNetModel(BaseModel):
             epoch_time = time.time()
             for i, (_, batch_x, batch_y) in enumerate(train_loader):
                 iter_count += 1
-
-                if self.use_augmentation:
-                    mask_prob = 0.15
-                    mask = torch.bernoulli(torch.full(batch_x.shape, 1 - mask_prob))
-                    batch_x = batch_x * mask
 
                 batch_x = self.to_device(batch_x)
                 batch_y = self.to_device(batch_y)

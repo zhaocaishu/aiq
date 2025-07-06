@@ -11,7 +11,13 @@ class Dataset(torch.utils.data.Dataset):
     """
 
     def __init__(
-        self, instruments, data, segments, feature_names, label_names, mode="train"
+        self,
+        instruments,
+        data,
+        segments,
+        feature_names,
+        label_names,
+        mode="train",
     ):
         start_time, end_time = segments[mode]
         self._instruments = instruments
@@ -51,6 +57,9 @@ class TSDataset(Dataset):
         seq_len,
         feature_names=None,
         label_names=None,
+        use_augmentation=False,
+        jitter_std=0.01,  # 加入 jitter 的标准差
+        mixup_alpha=0.2,  # mixup 的 beta 分布参数
         mode="train",
     ):
         self._instruments = instruments
@@ -59,6 +68,9 @@ class TSDataset(Dataset):
         self._label_names = label_names
         self.start_time, self.end_time = segments[mode]
         self.seq_len = seq_len
+        self.use_augmentation = use_augmentation
+        self.jitter_std = jitter_std
+        self.mixup_alpha = mixup_alpha
         self.mode = mode
         self._setup_time_series()
 
@@ -116,6 +128,31 @@ class TSDataset(Dataset):
         else:
             return data
 
+    def _apply_jitter(self, x):
+        noise = np.random.normal(0, self.jitter_std, size=x.shape).astype(x.dtype)
+        return x + noise
+
+    def _apply_mixup(self, features, labels):
+        """
+        Apply mixup augmentation to the features and labels.
+
+        Args:
+            features (np.ndarray): The feature array.
+            labels (np.ndarray): The label array.
+
+        Returns:
+            tuple: Mixed-up features and labels.
+        """
+        if len(features) <= 1:
+            return features, labels
+        perm = np.random.permutation(len(features))
+        features_perm = features[perm]
+        labels_perm = labels[perm]
+        lam = np.random.beta(self.mixup_alpha, self.mixup_alpha)
+        features_mix = lam * features + (1 - lam) * features_perm
+        labels_mix = lam * labels + (1 - lam) * labels_perm
+        return features_mix, labels_mix
+
     def __getitem__(self, index):
         """根据索引获返回样本索引、特征和标准化后的标签（若存在）"""
         daily_slices = self._daily_slices[index]
@@ -129,9 +166,18 @@ class TSDataset(Dataset):
         features = np.stack(features)
 
         if self._label_names is None:
-            return sample_indices, features
+            return sample_indices, features, None
 
         labels = np.array([self._label[slice[0].stop - 1] for slice in daily_slices])
+
+        if self.mode == "train" and self.use_augmentation:
+            # Jittering
+            if np.random.rand() < 0.5:
+                features = self._apply_jitter(features)
+
+            # Mixup
+            if np.random.rand() < 0.5:  # 控制是否使用 Mixup
+                features, labels = self._apply_mixup(features, labels)
 
         return sample_indices, features, labels
 
