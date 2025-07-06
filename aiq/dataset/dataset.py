@@ -60,7 +60,6 @@ class TSDataset(Dataset):
         use_augmentation=False,
         augment_start_index=None,  # 特征维度开始增强的索引
         jitter_std=0.01,  # 加入 jitter 的标准差
-        mixup_alpha=0.2,  # mixup 的 beta 分布参数
         mode="train",
     ):
         self._instruments = instruments
@@ -72,7 +71,6 @@ class TSDataset(Dataset):
         self.use_augmentation = use_augmentation
         self.augment_start_index = augment_start_index
         self.jitter_std = jitter_std
-        self.mixup_alpha = mixup_alpha
         self.mode = mode
         self._setup_time_series()
 
