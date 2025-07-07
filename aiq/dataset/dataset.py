@@ -138,7 +138,7 @@ class TSDataset(Dataset):
             np.ndarray: The input array with features[..., start_index:] zeroed out at random.
         """
         # Compute slice to mask
-        slice_view = features[..., , self.augmentation_start_feature_index:]
+        slice_view = features[..., self.augmentation_start_feature_index:]
     
         # Generate mask: True to keep, False to zero out
         keep_prob = 1.0 - mask_prob
