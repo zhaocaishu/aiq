@@ -126,24 +126,19 @@ class TSDataset(Dataset):
         else:
             return data
 
-    def _apply_random_feature_mask(
-        features: np.ndarray,
-        start_index: int,
-        mask_prob: float = 0.15,
-    ) -> np.ndarray:
+    def _apply_random_feature_mask(features: np.ndarray, mask_prob: float = 0.15) -> np.ndarray:
         """
         Applies random dropout-style masking to a subset of feature dimensions using NumPy.
     
         Args:
             features (np.ndarray): Array of shape (batch, time, feature_dim).
-            start_index (int): Index in the last dimension from which to begin masking.
             mask_prob (float, optional): Probability of masking each element. Default: 0.15.
     
         Returns:
             np.ndarray: The input array with features[..., start_index:] zeroed out at random.
         """
         # Compute slice to mask
-        slice_view = features[..., start_index:]
+        slice_view = features[..., , self.augmentation_start_feature_index:]
     
         # Generate mask: True to keep, False to zero out
         keep_prob = 1.0 - mask_prob
@@ -174,7 +169,7 @@ class TSDataset(Dataset):
         if self.mode == "train" and self.use_augmentation:
             # Random feature mask
             if np.random.rand() < 0.5:
-                features = self._apply_random_feature_mask(features, self.augmentation_start_feature_index)
+                features = self._apply_random_feature_mask(features)
 
         return sample_indices, features, labels
 
