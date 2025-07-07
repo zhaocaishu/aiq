@@ -127,33 +127,36 @@ class TSDataset(Dataset):
             return data
 
     def _apply_random_feature_mask(
-        self,
-        features: torch.Tensor,
+        features: np.ndarray,
         start_index: int,
         mask_prob: float = 0.15,
-    ) -> torch.Tensor:
+    ) -> np.ndarray:
         """
-        Applies random dropout-style masking to a subset of feature dimensions.
+        Applies random dropout-style masking to a subset of feature dimensions using NumPy.
     
         Args:
-            features (torch.Tensor): Tensor of shape (batch, time, feature_dim).
+            features (np.ndarray): Array of shape (batch, time, feature_dim).
             start_index (int): Index in the last dimension from which to begin masking.
             mask_prob (float, optional): Probability of masking each element. Default: 0.15.
     
         Returns:
-            torch.Tensor: The input tensor with features[start_index:] zeroed out at random.
+            np.ndarray: The input array with features[..., start_index:] zeroed out at random.
         """
-        # Compute the mask shape: same as the slice we want to augment
-        batch_size, seq_len, feature_dim = features.shape
-        mask_shape = (batch_size, seq_len, feature_dim - start_index)
+        # Validate inputs
+        if not (0 <= start_index < features.shape[-1]):
+            raise ValueError("start_index must be within the feature_dim range.")
+        if not (0.0 <= mask_prob <= 1.0):
+            raise ValueError("mask_prob must be between 0 and 1.")
     
-        # Create a Bernoulli mask: 1 with prob (1 - mask_prob), 0 with prob mask_prob
+        # Compute slice to mask
+        slice_view = features[..., start_index:]
+    
+        # Generate mask: True to keep, False to zero out
         keep_prob = 1.0 - mask_prob
-        mask = torch.bernoulli(torch.full(mask_shape, keep_prob, device=features.device))
+        mask = np.random.rand(*slice_view.shape) < keep_prob
     
-        # Apply the mask to the selected feature dimensions
-        # (All other dimensions are left untouched.)
-        features[..., start_index:] *= mask
+        # Apply mask in-place
+        slice_view *= mask
     
         return features
 
