@@ -57,7 +57,7 @@ dataset:
     seq_len: 16
     label_names: ["RETN_5D"]
     use_augmentation: true
-    augmentation_feature_start_index: 7
+    augmentation_start_feature_index: 7
 model:
   class: PPNetModel
   module_path: aiq.models.ppnet
