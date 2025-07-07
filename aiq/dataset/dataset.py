@@ -58,7 +58,7 @@ class TSDataset(Dataset):
         feature_names=None,
         label_names=None,
         use_augmentation=False,
-        augment_start_index=None,  # 特征维度开始增强的索引
+        augmentation_feature_start_index=None,  # 特征维度开始增强的索引
         mode="train",
     ):
         self._instruments = instruments
@@ -68,7 +68,7 @@ class TSDataset(Dataset):
         self.start_time, self.end_time = segments[mode]
         self.seq_len = seq_len
         self.use_augmentation = use_augmentation
-        self.augment_start_index = augment_start_index
+        self.augmentation_feature_start_index = augmentation_feature_start_index
         self.mode = mode
         self._setup_time_series()
 
@@ -129,8 +129,8 @@ class TSDataset(Dataset):
     def _apply_random_mask(self, features):
         # 只对从augment_start_index 开始的特征维度进行增强
         mask_prob = 0.15
-        mask = torch.bernoulli(torch.full(features.shape, 1 - mask_prob))
-        features = features * mask
+        mask = torch.bernoulli(torch.full(features[:, :, self.augmentation_feature_start_index:].shape, 1 - mask_prob))
+        features[:, :, self.augmentation_feature_start_index:] = features[:, :, self.augmentation_feature_start_index:] * mask
         return features
 
     def __getitem__(self, index):
