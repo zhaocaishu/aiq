@@ -142,12 +142,6 @@ class TSDataset(Dataset):
         Returns:
             np.ndarray: The input array with features[..., start_index:] zeroed out at random.
         """
-        # Validate inputs
-        if not (0 <= start_index < features.shape[-1]):
-            raise ValueError("start_index must be within the feature_dim range.")
-        if not (0.0 <= mask_prob <= 1.0):
-            raise ValueError("mask_prob must be between 0 and 1.")
-    
         # Compute slice to mask
         slice_view = features[..., start_index:]
     
