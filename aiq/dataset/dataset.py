@@ -126,7 +126,7 @@ class TSDataset(Dataset):
         else:
             return data
 
-    def _apply_random_feature_mask(features: np.ndarray, mask_prob: float = 0.15) -> np.ndarray:
+    def _apply_random_feature_mask(self, features: np.ndarray, mask_prob: float = 0.15) -> np.ndarray:
         """
         Applies random dropout-style masking to a subset of feature dimensions using NumPy.
     
