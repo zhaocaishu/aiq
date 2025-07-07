@@ -59,7 +59,6 @@ class TSDataset(Dataset):
         label_names=None,
         use_augmentation=False,
         augment_start_index=None,  # 特征维度开始增强的索引
-        jitter_std=0.01,  # 加入 jitter 的标准差
         mode="train",
     ):
         self._instruments = instruments
@@ -70,7 +69,6 @@ class TSDataset(Dataset):
         self.seq_len = seq_len
         self.use_augmentation = use_augmentation
         self.augment_start_index = augment_start_index
-        self.jitter_std = jitter_std
         self.mode = mode
         self._setup_time_series()
 
@@ -128,21 +126,12 @@ class TSDataset(Dataset):
         else:
             return data
 
-    def _apply_jitter(self, features):
-        if self.augment_start_index is None:
-            # 对所有特征维度添加噪声
-            noise = np.random.normal(0, self.jitter_std, size=features.shape).astype(
-                features.dtype
-            )
-        else:
-            # 只对从 augment_start_index 开始的特征维度添加噪声
-            noise = np.zeros_like(features)
-            noise[:, :, self.augment_start_index :] = np.random.normal(
-                0,
-                self.jitter_std,
-                size=features[:, :, self.augment_start_index :].shape,
-            ).astype(features.dtype)
-        return features + noise
+    def _apply_random_mask(self, features):
+        # 只对从augment_start_index 开始的特征维度进行增强
+        mask_prob = 0.15
+        mask = torch.bernoulli(torch.full(features.shape, 1 - mask_prob))
+        features = features * mask
+        return features
 
     def __getitem__(self, index):
         """根据索引获返回样本索引、特征和标准化后的标签（若存在）"""
@@ -162,9 +151,9 @@ class TSDataset(Dataset):
         labels = np.array([self._label[slice[0].stop - 1] for slice in daily_slices])
 
         if self.mode == "train" and self.use_augmentation:
-            # Jittering
+            # Mask
             if np.random.rand() < 0.5:
-                features = self._apply_jitter(features)
+                features = self._apply_random_mask(features)
 
         return sample_indices, features, labels
 
