@@ -58,7 +58,6 @@ class TSDataset(Dataset):
         feature_names=None,
         label_names=None,
         use_augmentation=False,
-        augmentation_start_feature_index=None,  # 特征维度开始增强的索引
         mode="train",
     ):
         self._instruments = instruments
@@ -68,7 +67,6 @@ class TSDataset(Dataset):
         self.start_time, self.end_time = segments[mode]
         self.seq_len = seq_len
         self.use_augmentation = use_augmentation
-        self.augmentation_start_feature_index = augmentation_start_feature_index
         self.mode = mode
         self._setup_time_series()
 
@@ -126,29 +124,6 @@ class TSDataset(Dataset):
         else:
             return data
 
-    def _apply_random_feature_mask(self, features: np.ndarray, mask_prob: float = 0.15) -> np.ndarray:
-        """
-        Applies random dropout-style masking to a subset of feature dimensions using NumPy.
-    
-        Args:
-            features (np.ndarray): Array of shape (batch, time, feature_dim).
-            mask_prob (float, optional): Probability of masking each element. Default: 0.15.
-    
-        Returns:
-            np.ndarray: The input array with features[..., start_index:] zeroed out at random.
-        """
-        # Compute slice to mask
-        slice_view = features[..., self.augmentation_start_feature_index:]
-    
-        # Generate mask: True to keep, False to zero out
-        keep_prob = 1.0 - mask_prob
-        mask = np.random.rand(*slice_view.shape) < keep_prob
-    
-        # Apply mask in-place
-        slice_view *= mask
-    
-        return features
-
     def __getitem__(self, index):
         """根据索引获返回样本索引、特征和标准化后的标签（若存在）"""
         daily_slices = self._daily_slices[index]
@@ -165,11 +140,6 @@ class TSDataset(Dataset):
             return sample_indices, features, None
 
         labels = np.array([self._label[slice[0].stop - 1] for slice in daily_slices])
-
-        if self.mode == "train" and self.use_augmentation:
-            # Random feature mask
-            if np.random.rand() < 0.5:
-                features = self._apply_random_feature_mask(features)
 
         return sample_indices, features, labels
 
