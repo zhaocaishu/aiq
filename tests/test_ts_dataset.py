@@ -20,7 +20,7 @@ if __name__ == "__main__":
         feature_names=data_handler.feature_names,
         label_names=["RETN_5D"],
         use_augmentation=True,
-        augmentation_feature_start_index=7,
+        augmentation_start_feature_index=7,
         mode="train",
     )
 
