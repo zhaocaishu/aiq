@@ -58,7 +58,7 @@ class TSDataset(Dataset):
         feature_names=None,
         label_names=None,
         use_augmentation=False,
-        augmentation_feature_start_index=None,  # 特征维度开始增强的索引
+        augmentation_start_feature_index=None,  # 特征维度开始增强的索引
         mode="train",
     ):
         self._instruments = instruments
@@ -68,7 +68,7 @@ class TSDataset(Dataset):
         self.start_time, self.end_time = segments[mode]
         self.seq_len = seq_len
         self.use_augmentation = use_augmentation
-        self.augmentation_feature_start_index = augmentation_feature_start_index
+        self.augmentation_start_feature_index = augmentation_start_feature_index
         self.mode = mode
         self._setup_time_series()
 
@@ -174,7 +174,7 @@ class TSDataset(Dataset):
         if self.mode == "train" and self.use_augmentation:
             # Random feature mask
             if np.random.rand() < 0.5:
-                features = self._apply_random_feature_mask(features, self.augmentation_feature_start_index)
+                features = self._apply_random_feature_mask(features, self.augmentation_start_feature_index)
 
         return sample_indices, features, labels
 
