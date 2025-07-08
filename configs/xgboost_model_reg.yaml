@@ -1,4 +1,4 @@
-market: &market 000906.SH
+market: &market 000905.SH
 data_handler:
   class: Alpha158
   module_path: aiq.dataset.handler
