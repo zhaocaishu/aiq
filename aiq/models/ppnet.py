@@ -156,7 +156,7 @@ class PPNetModel(BaseModel):
                         "Epoch: {0}, step: {1}, lr: {2:.8f} train loss: {3:.8f}, speed: {4:.4f}s/iter, left time: {5:.4f}s".format(
                             epoch + 1,
                             i + 1,
-                            optimizer.param_groups[0]['lr'],
+                            lr_scheduler.get_last_lr()[0],
                             loss.item(),
                             speed,
                             left_time,
