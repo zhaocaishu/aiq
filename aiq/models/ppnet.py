@@ -139,15 +139,11 @@ class PPNetModel(BaseModel):
                 assert not torch.isnan(batch_y).any(), "NaN at batch_y"
 
                 optimizer.zero_grad()
-
                 outputs = self.model(batch_x)
                 loss = self.criterion(outputs, batch_y)
                 loss.backward()
                 torch.nn.utils.clip_grad_value_(self.model.parameters(), 3.0)
                 optimizer.step()
-                lr_scheduler.step()
-
-                train_loss.append(loss.item())
 
                 if (i + 1) % 100 == 0:
                     speed = (time.time() - time_now) / iter_count
@@ -164,6 +160,10 @@ class PPNetModel(BaseModel):
                     )
                     iter_count = 0
                     time_now = time.time()
+
+                lr_scheduler.step()
+                
+                train_loss.append(loss.item())
 
             train_loss = np.average(train_loss)
             val_loss = self.eval(val_dataset)
