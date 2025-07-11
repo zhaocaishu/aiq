@@ -138,22 +138,18 @@ class PPNetModel(BaseModel):
                 assert not torch.isnan(batch_x).any(), "NaN at batch_x"
                 assert not torch.isnan(batch_y).any(), "NaN at batch_y"
 
-                lr_scheduler.step()
-                try:
-                    cur_lr = float(optimizer.lr)
-                except:
-                    cur_lr = optimizer.param_groups[0]['lr']
-
                 optimizer.zero_grad()
                 outputs = self.model(batch_x)
                 loss = self.criterion(outputs, batch_y)
                 loss.backward()
                 torch.nn.utils.clip_grad_value_(self.model.parameters(), 3.0)
                 optimizer.step()
+                lr_scheduler.step()
 
                 if (i + 1) % 100 == 0:
                     speed = (time.time() - time_now) / iter_count
                     left_time = speed * ((self.epochs - epoch) * train_steps_epoch - i)
+                    cur_lr = optimizer.param_groups[0]['lr']
                     self.logger.info(
                         "Epoch: {0}, step: {1}, lr: {2:.8f} train loss: {3:.8f}, speed: {4:.4f}s/iter, left time: {5:.4f}s".format(
                             epoch + 1,
