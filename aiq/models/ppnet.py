@@ -142,7 +142,7 @@ class PPNetModel(BaseModel):
                 outputs = self.model(batch_x)
                 loss = self.criterion(outputs, batch_y)
                 loss.backward()
-                torch.nn.utils.clip_grad_value_(self.model.parameters(), 3.0)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 3.0)
                 optimizer.step()
                 lr_scheduler.step()
 
