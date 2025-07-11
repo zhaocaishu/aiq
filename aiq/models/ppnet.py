@@ -107,8 +107,6 @@ class PPNetModel(BaseModel):
         num_training_steps = self.epochs * train_steps_epoch
         num_warmup_steps = int(self.warmup_ratio * num_training_steps)
 
-        time_now = time.time()
-
         optimizer = optim.Adam(
             self.model.parameters(),
             lr=self.learning_rate,
@@ -126,10 +124,11 @@ class PPNetModel(BaseModel):
             self.logger.info("=" * 20 + " Epoch {} ".format(epoch + 1) + "=" * 20)
 
             iter_count = 0
-            train_loss = []
-
-            self.model.train()
+            time_now = time.time()
             epoch_time = time.time()
+
+            train_loss = []
+            self.model.train()
             for i, (_, batch_x, batch_y) in enumerate(train_loader):
                 iter_count += 1
 
@@ -139,9 +138,14 @@ class PPNetModel(BaseModel):
                 assert not torch.isnan(batch_x).any(), "NaN at batch_x"
                 assert not torch.isnan(batch_y).any(), "NaN at batch_y"
 
-                outputs = self.model(batch_x)
+                optimizer.zero_grad()
 
+                outputs = self.model(batch_x)
                 loss = self.criterion(outputs, batch_y)
+                loss.backward()
+                torch.nn.utils.clip_grad_value_(self.model.parameters(), 3.0)
+                optimizer.step()
+                lr_scheduler.step()
 
                 train_loss.append(loss.item())
 
@@ -160,12 +164,6 @@ class PPNetModel(BaseModel):
                     )
                     iter_count = 0
                     time_now = time.time()
-
-                optimizer.zero_grad()
-                loss.backward()
-                torch.nn.utils.clip_grad_value_(self.model.parameters(), 3.0)
-                optimizer.step()
-                lr_scheduler.step()
 
             train_loss = np.average(train_loss)
             val_loss = self.eval(val_dataset)
