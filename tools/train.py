@@ -51,6 +51,7 @@ def load_datasets(data: str, daily_instruments: Any, feature_names: List[str]) -
     train_dataset = init_instance_by_config(
         cfg.dataset,
         data=data,
+        daily_instruments=daily_instruments,
         feature_names=feature_names,
         mode="train",
     )
