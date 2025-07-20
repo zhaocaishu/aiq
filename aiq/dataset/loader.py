@@ -78,7 +78,7 @@ class DataLoader:
             df = DataLoader._read_csv(path, timestamp_col, start_time, end_time)
         else:
             query = (
-                "SELECT DISTINCT exchange AS Exchange, DATE_FORMAT(cal_date, '%%Y-%%m-%%d') AS Date "
+                "SELECT DISTINCT exchange AS Exchange, cal_date AS Date "
                 "FROM ts_basic_trade_cal "
                 "WHERE is_open=1 AND cal_date >= %s AND cal_date <= %s"
             )
