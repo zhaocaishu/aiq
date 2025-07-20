@@ -104,7 +104,7 @@ class DataLoader:
             query = (
                 "SELECT daily.ts_code AS Instrument, daily.trade_date AS Date, daily.close AS Close, "
                 "daily.open AS Open, daily.high AS High, daily.low AS Low, daily.pre_close AS Pre_Close, "
-                "daily.`change` AS Change, daily.pct_chg AS Pct_Chg, daily.volume AS Volume, daily.amount AS AMount, "
+                "daily.`change` AS `Change`, daily.pct_chg AS Pct_Chg, daily.volume AS Volume, daily.amount AS AMount, "
                 "daily_basic.turnover_rate AS Turnover_rate, daily_basic.turnover_rate_f AS Turnover_rate_f, "
                 "daily_basic.volume_ratio AS Volume_ratio, daily_basic.pe AS Pe, daily_basic.pe_ttm AS Pe_ttm, "
                 "daily_basic.pb AS Pb, daily_basic.ps AS Ps, daily_basic.ps_ttm AS Ps_ttm, "
@@ -159,7 +159,7 @@ class DataLoader:
             query = (
                 "SELECT index_code AS Instrument, trade_date AS Date, close AS Close, "
                 "open AS Open, high AS High, low AS Low, pre_close AS Pre_Close, "
-                "`change` AS Change, pct_chg AS Pct_Chg, volume AS Volume, amount AS AMount "
+                "`change` AS `Change`, pct_chg AS Pct_Chg, volume AS Volume, amount AS AMount "
                 "FROM ts_idx_index_daily "
                 "WHERE index_code = %s AND trade_date >= %s AND trade_date <= %s LIMIT 50000"
             )
