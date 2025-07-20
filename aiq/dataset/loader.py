@@ -41,53 +41,53 @@ class DataLoader:
                 df[date_col] = pd.to_datetime(
                     df[date_col].astype(str), format="%Y%m%d"
                 ).dt.strftime("%Y-%m-%d")
-            return df[columns]
+            if columns:
+                df = df[columns]
+            return df
         finally:
             conn.close()
 
     @staticmethod
-    def load_instruments(data_dir: str, market_name: str, start_time: str = "", end_time: str = "") -> Optional[pd.DataFrame]:
+    def load_instruments(
+        data_dir: str, market_name: str, start_time: str = "", end_time: str = ""
+    ) -> Optional[pd.DataFrame]:
         if data_dir:
             path = os.path.join(data_dir, "instruments", f"{market_name}.csv")
             df = DataLoader._read_csv(path, "Date", start_time, end_time)
         else:
             query = (
                 "SELECT ts_code AS Instrument, trade_date AS Date "
-                "FROM ts_idx_index_weight "
+                "FROM ts_idx_index_cons "
                 "WHERE index_code=%s AND trade_date>=%s AND trade_date<=%s "
                 "GROUP BY ts_code, trade_date"
             )
             df = DataLoader._query_db(
                 query,
                 (market_name, start_time.replace("-", ""), end_time.replace("-", "")),
-                ["Instrument", "Date"],
             )
         return df
 
     @staticmethod
     def load_calendars(
-        data_dir: str, timestamp_col: str = "Date", start_time: str = "", end_time: str = ""
-    ) -> Optional[List[str]]:
+        data_dir: str,
+        timestamp_col: str = "Date",
+        start_time: str = "",
+        end_time: str = "",
+    ) -> List[str]:
         if data_dir:
             path = os.path.join(data_dir, "calendars", "day.csv")
             df = DataLoader._read_csv(path, timestamp_col, start_time, end_time)
         else:
             query = (
-                "SELECT DISTINCT exchange, DATE_FORMAT(cal_date, '%%Y-%%m-%%d') AS Date "
+                "SELECT DISTINCT exchange AS Exchange, DATE_FORMAT(cal_date, '%%Y-%%m-%%d') AS Date "
                 "FROM ts_basic_trade_cal "
                 "WHERE is_open=1 AND cal_date >= %s AND cal_date <= %s"
             )
             df = DataLoader._query_db(
-                query,
-                (start_time.replace("-", ""), end_time.replace("-", "")),
-                ["Exchange", "Date"],
+                query, (start_time.replace("-", ""), end_time.replace("-", ""))
             )
 
-        return (
-            df[df["Exchange"] == "SSE"]["Date"].tolist()
-            if df is not None
-            else None
-        )
+        return df[df["Exchange"] == "SSE"]["Date"].tolist() if df is not None else []
 
     @staticmethod
     def load_instrument_features(
@@ -103,11 +103,16 @@ class DataLoader:
             df = DataLoader._read_csv(path, timestamp_col, start_time, end_time)
         else:
             query = (
-                "SELECT daily.*, daily_basic.turnover_rate, daily_basic.turnover_rate_f, "
-                "daily_basic.volume_ratio, daily_basic.pe, daily_basic.pe_ttm, daily_basic.pb, "
-                "daily_basic.ps, daily_basic.ps_ttm, daily_basic.dv_ratio, daily_basic.dv_ttm, "
-                "daily_basic.total_share, daily_basic.float_share, daily_basic.free_share, "
-                "daily_basic.total_mv, daily_basic.circ_mv, factor.adj_factor "
+                "SELECT daily.ts_code AS Instrument, daily.trade_date AS Date, daily.close AS Close, "
+                "daily.open AS Open, daily.high AS High, daily.low AS Low, daily.pre_close AS Pre_Close, "
+                "daily.change AS Change, daily.pct_chg AS Pct_Chg, daily.volume AS Volume, daily.amount AS AMount, "
+                "daily_basic.turnover_rate AS Turnover_rate, daily_basic.turnover_rate_f AS Turnover_rate_f, "
+                "daily_basic.volume_ratio AS Volume_ratio, daily_basic.pe AS Pe, daily_basic.pe_ttm AS Pe_ttm, "
+                "daily_basic.pb AS Pb, daily_basic.ps AS Ps, daily_basic.ps_ttm AS Ps_ttm, "
+                "daily_basic.dv_ratio AS Dv_ratio, daily_basic.dv_ttm AS Dv_ttm, "
+                "daily_basic.total_share AS Total_share, daily_basic.float_share AS Float_share, "
+                "daily_basic.free_share AS Free_share, daily_basic.total_mv AS Total_mv, "
+                "daily_basic.circ_mv AS Circ_mv, factor.adj_factor AS Adj_factor "
                 "FROM ts_quotation_daily daily "
                 "JOIN ts_quotation_daily_basic daily_basic ON "
                 "daily.ts_code=daily_basic.ts_code AND daily.trade_date=daily_basic.trade_date "
@@ -183,25 +188,15 @@ class DataLoader:
             df = DataLoader._read_csv(path, timestamp_col, start_time, end_time)
         else:
             query = (
-                "SELECT * FROM ts_idx_index_daily "
-                "WHERE index_code=%s AND trade_date>=%s AND trade_date<=%s LIMIT 50000"
+                "SELECT index_code AS Instrument, trade_date AS Date, close AS Close, "
+                "open AS Open, high AS High, low AS Low, pre_close AS Pre_Close, "
+                "change AS Change, pct_chg AS Pct_Chg, volume AS Volume, amount AS AMount "
+                "FROM ts_idx_index_daily "
+                "WHERE index_code = %s AND trade_date >= %s AND trade_date <= %s LIMIT 50000"
             )
             df = DataLoader._query_db(
                 query,
                 (market_name, start_time.replace("-", ""), end_time.replace("-", "")),
-                [
-                    "Instrument",
-                    "Date",
-                    "Close",
-                    "Open",
-                    "High",
-                    "Low",
-                    "Pre_Close",
-                    "Change",
-                    "Pct_Chg",
-                    "Volume",
-                    "AMount",
-                ],
             )
 
         if df is not None:
@@ -212,7 +207,7 @@ class DataLoader:
 
     @staticmethod
     def load_markets_features(
-        data_dir: str, market_names: List[str], start_time: str = "", end_time: str = ""  
+        data_dir: str, market_names: List[str], start_time: str = "", end_time: str = ""
     ) -> pd.DataFrame:
         dfs = [
             DataLoader.load_market_features(
