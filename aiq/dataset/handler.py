@@ -36,11 +36,11 @@ class DataHandler:
         self,
         data_dir,
         instruments,
-        start_time=None,
-        end_time=None,
-        fit_start_time=None,
-        fit_end_time=None,
-        processors=None,
+        start_time: str = "",
+        end_time: str = "",
+        fit_start_time: str = "",
+        fit_end_time: str = "",
+        processors: List[Processor] = [],
     ):
         self.data_dir = data_dir
         if isinstance(instruments, str):
@@ -90,12 +90,12 @@ class Alpha158(DataHandler):
         self,
         data_dir,
         instruments,
-        start_time=None,
-        end_time=None,
-        fit_start_time=None,
-        fit_end_time=None,
-        processors=None,
-        benchmark=None,
+        start_time: str = "",
+        end_time: str = "",
+        fit_start_time: str = "",
+        fit_end_time: str = "",
+        processors: List[Processor] = [],
+        benchmark: str = "",
     ):
         super().__init__(
             data_dir,
@@ -110,10 +110,10 @@ class Alpha158(DataHandler):
         self._label_names = None
 
         # Load benchmark data
-        if benchmark is not None:
+        if benchmark:
             self.benchmark_df = DataLoader.load_market_features(
                 self.data_dir,
-                market=benchmark,
+                market_name=benchmark,
                 start_time=self.start_time,
                 end_time=self.end_time,
             )
@@ -494,7 +494,7 @@ class Alpha158(DataHandler):
 
     def process(
         self,
-        df: pd.DataFrame = None,
+        df: pd.DataFrame,
         feature_names: List[str] = [],
         label_names: List[str] = [],
         processors: List[Processor] = [],
@@ -561,13 +561,14 @@ class MarketAlpha158(Alpha158):
         self,
         data_dir,
         instruments,
-        start_time=None,
-        end_time=None,
-        fit_start_time=None,
-        fit_end_time=None,
-        processors=None,
-        market_processors=None,
-        benchmark=None,
+        start_time: str = "",
+        end_time: str = "",
+        fit_start_time: str = "",
+        fit_end_time: str = "",
+        market_names: List[str] = [],
+        processors: List[Processor] = [],
+        market_processors: List[Processor] = [],
+        benchmark: str = "",
     ):
         super().__init__(
             data_dir,
@@ -580,12 +581,13 @@ class MarketAlpha158(Alpha158):
             benchmark,
         )
 
+        self.market_names = market_names
         self.market_processors = [
             init_instance_by_config(proc) for proc in market_processors
         ]
         self._market_feature_names = None
 
-    def extract_market_features(self, df: pd.DataFrame = None):
+    def extract_market_features(self, df: pd.DataFrame):
         close = df["Close"]
         amount = df["AMount"]
 
@@ -635,7 +637,7 @@ class MarketAlpha158(Alpha158):
         # Load market data
         market_df = DataLoader.load_markets_features(
             self.data_dir,
-            ["000903.SH", "000300.SH", "000905.SH"],
+            self.market_names,
             self.start_time,
             self.end_time,
         )

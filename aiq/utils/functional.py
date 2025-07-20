@@ -111,11 +111,17 @@ def neutralize(
     return df
 
 
-def drop_extreme_label(x: np.array):
-    sorted_indices = np.argsort(x)
-    N = x.shape[0]
-    percent_2_5 = int(0.025 * N)
-    filtered_indices = sorted_indices[percent_2_5:-percent_2_5]
-    mask = np.zeros_like(x, dtype=bool)
-    mask[filtered_indices] = True
-    return mask, x[mask]
+def drop_extreme_label(x: np.ndarray, percentile: float = 2.5):
+    x = np.asarray(x)
+    if x.ndim != 2 or x.shape[1] != 1:
+        raise ValueError(f"Expected input shape (N, 1), got {x.shape}")
+
+    # Compute thresholds across the flattened data
+    lower, upper = np.percentile(x, [percentile, 100 - percentile])
+
+    # Build mask of shape (N,)
+    mask = (x[:, 0] >= lower) & (x[:, 0] <= upper)
+
+    # Extract filtered values; result has shape (M, 1)
+    filtered = x[mask]
+    return mask, filtered

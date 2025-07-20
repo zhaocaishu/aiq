@@ -8,6 +8,7 @@ data_handler:
     end_time: "2023-12-31"
     fit_start_time: "2014-01-01"
     fit_end_time: "2022-03-31"
+    market_names: ["000903.SH", "000300.SH", "000905.SH"]
     processors:
       - class: CSWinsorize
         module_path: aiq.dataset.processor
@@ -25,14 +26,6 @@ data_handler:
         kwargs:
           fields_group: "feature"
       - class: Dropna
-        module_path: aiq.dataset.processor
-        kwargs:
-          fields_group: "label"
-      - class: DropExtremeLabel
-        module_path: aiq.dataset.processor
-        kwargs:
-          fields_group: "label"
-      - class: CSZScoreNorm
         module_path: aiq.dataset.processor
         kwargs:
           fields_group: "label"

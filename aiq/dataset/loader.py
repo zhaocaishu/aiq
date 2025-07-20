@@ -10,7 +10,7 @@ class DataLoader:
 
     @staticmethod
     def _read_csv(
-        file_path: str, timestamp_col: str, start: str, end: str
+        file_path: str, timestamp_col: str, start: str = "", end: str = ""
     ) -> Optional[pd.DataFrame]:
         if not os.path.exists(file_path):
             return None
@@ -27,7 +27,7 @@ class DataLoader:
 
     @staticmethod
     def _query_db(
-        query: str, params: tuple, columns: List[str], date_col: str = "Date"
+        query: str, params: tuple, columns: List[str] = [], date_col: str = "Date"
     ) -> pd.DataFrame:
         conn = mysql.connector.connect(
             host="127.0.0.1",
@@ -46,9 +46,9 @@ class DataLoader:
             conn.close()
 
     @staticmethod
-    def load_instruments(data_dir, market, start_time=None, end_time=None) -> List[str]:
+    def load_instruments(data_dir, market_name, start_time: str = "", end_time: str = "") -> Optional[pd.DataFrame]:
         if data_dir:
-            path = os.path.join(data_dir, "instruments", f"{market}.csv")
+            path = os.path.join(data_dir, "instruments", f"{market_name}.csv")
             df = DataLoader._read_csv(path, "Date", start_time, end_time)
         else:
             query = (
@@ -59,14 +59,14 @@ class DataLoader:
             )
             df = DataLoader._query_db(
                 query,
-                (market, start_time.replace("-", ""), end_time.replace("-", "")),
+                (market_name, start_time.replace("-", ""), end_time.replace("-", "")),
                 ["Instrument", "Date"],
             )
         return df
 
     @staticmethod
     def load_calendars(
-        data_dir, timestamp_col="Trade_date", start_time=None, end_time=None
+        data_dir, timestamp_col: str = "Trade_date", start_time: str = "", end_time: str = ""
     ) -> Optional[List[str]]:
         if data_dir:
             path = os.path.join(data_dir, "calendars", "day.csv")
@@ -93,10 +93,10 @@ class DataLoader:
     def load_instrument_features(
         data_dir,
         instrument,
-        timestamp_col="Date",
-        start_time=None,
-        end_time=None,
-        column_names=None,
+        timestamp_col: str = "Date",
+        start_time: str = "",
+        end_time: str = "",
+        column_names: List[str] = [],
     ) -> Optional[pd.DataFrame]:
         if data_dir:
             path = os.path.join(data_dir, "features", f"{instrument}.csv")
@@ -158,7 +158,7 @@ class DataLoader:
 
     @staticmethod
     def load_instruments_features(
-        data_dir, instruments, start_time, end_time
+        data_dir, instruments: List[str], start_time: str = "", end_time: str = ""
     ) -> pd.DataFrame:
         dfs = [
             DataLoader.load_instrument_features(
@@ -172,14 +172,14 @@ class DataLoader:
     @staticmethod
     def load_market_features(
         data_dir,
-        market,
-        timestamp_col="Date",
-        start_time=None,
-        end_time=None,
-        column_names=None,
+        market_name,
+        timestamp_col: str = "Date",
+        start_time: str = "",
+        end_time: str = "",
+        column_names: List[str] = [],
     ) -> Optional[pd.DataFrame]:
         if data_dir:
-            path = os.path.join(data_dir, "features", f"{market}.csv")
+            path = os.path.join(data_dir, "features", f"{market_name}.csv")
             df = DataLoader._read_csv(path, timestamp_col, start_time, end_time)
         else:
             query = (
@@ -188,7 +188,7 @@ class DataLoader:
             )
             df = DataLoader._query_db(
                 query,
-                (market, start_time.replace("-", ""), end_time.replace("-", "")),
+                (market_name, start_time.replace("-", ""), end_time.replace("-", "")),
                 [
                     "Instrument",
                     "Date",
@@ -212,13 +212,13 @@ class DataLoader:
 
     @staticmethod
     def load_markets_features(
-        data_dir, markets: List[str], start_time: str, end_time: str
+        data_dir, market_names: List[str], start_time: str = "", end_time: str = ""  
     ) -> pd.DataFrame:
         dfs = [
             DataLoader.load_market_features(
-                data_dir, market, start_time=start_time, end_time=end_time
+                data_dir, market_name, start_time=start_time, end_time=end_time
             )
-            for market in markets
+            for market_name in market_names
         ]
         dfs = [df for df in dfs if df is not None]
         return pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
