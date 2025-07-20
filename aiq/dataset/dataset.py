@@ -1,9 +1,11 @@
 from collections import defaultdict
+from typing import List
 
 import numpy as np
 import pandas as pd
 import torch
 
+from aiq.dataset.loader import DataLoader
 from aiq.utils.functional import drop_extreme_label, zscore
 
 
@@ -14,16 +16,14 @@ class Dataset(torch.utils.data.Dataset):
 
     def __init__(
         self,
-        data,
-        segments,
-        daily_instruments,
-        feature_names,
-        label_names,
-        mode="train",
+        data: pd.DataFrame,
+        segments: dict,
+        feature_names: List[str] = [],
+        label_names: List[str] = [],
+        mode: str = "train",
     ):
         start_time, end_time = segments[mode]
         self._data = data.loc[start_time:end_time].copy()
-        self._daily_instruments = daily_instruments
         self._feature_names = feature_names
         self._label_names = label_names
 
@@ -53,23 +53,28 @@ class TSDataset(Dataset):
 
     def __init__(
         self,
-        data,
-        segments,
-        seq_len,
-        daily_instruments,
-        feature_names=None,
-        label_names=None,
-        use_augmentation=False,
-        mode="train",
+        data: pd.DataFrame,
+        segments: dict,
+        seq_len: int,
+        data_dir: str = "",
+        market_name: str = "",
+        feature_names: List[str] = [],
+        label_names: List[str] = [],
+        use_augmentation: bool = False,
+        mode: str = "train",
     ):
         self._data = data.copy()
         self.seq_len = seq_len
-        self._daily_instruments = daily_instruments
         self._feature_names = feature_names
         self._label_names = label_names
         self.use_augmentation = use_augmentation
         self.mode = mode
         self.start_time, self.end_time = segments[mode]
+        if data_dir and market_name:
+            df = DataLoader.load_instruments(data_dir, market_name, self.start_time, self.end_time)
+            self._daily_instruments = set(zip(df["Instrument"], df["Date"]))
+        else:
+            self._daily_instruments = None
         self._setup_time_series()
 
     def _setup_time_series(self):
@@ -99,6 +104,9 @@ class TSDataset(Dataset):
 
         self._daily_slices = list(daily_slices.values())
         self._daily_index = list(daily_slices.keys())
+
+        for date, slices in zip(self._daily_index, self._daily_slices):
+            print(f"Date: {date}, Sample count: {len(slices)}")
 
     def _create_ts_slices(self, index, seq_len):
         assert isinstance(index, pd.MultiIndex), "unsupported index type"

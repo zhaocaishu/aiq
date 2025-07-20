@@ -43,6 +43,7 @@ dataset:
   class: TSDataset
   module_path: aiq.dataset.dataset
   kwargs:
+    market_name: *market
     segments:
       train: ["2014-01-01", "2022-03-31"]
       valid: ["2022-07-01", "2022-12-31"]

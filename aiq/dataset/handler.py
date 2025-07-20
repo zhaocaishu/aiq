@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Union
 import pickle
 
 import pandas as pd
@@ -34,8 +34,8 @@ from .processor import Processor
 class DataHandler:
     def __init__(
         self,
-        data_dir,
-        instruments,
+        data_dir: str,
+        instruments: Union[str, List[str]],
         start_time: str = "",
         end_time: str = "",
         fit_start_time: str = "",
@@ -47,10 +47,8 @@ class DataHandler:
             df = DataLoader.load_instruments(
                 self.data_dir, instruments, start_time, end_time
             )
-            self._daily_instruments = set(zip(df["Instrument"], df["Date"]))
             self._instruments = df["Instrument"].unique().tolist()
         else:
-            self._daily_instruments = None
             self._instruments = instruments
         self.start_time = start_time
         self.end_time = end_time
@@ -80,16 +78,12 @@ class DataHandler:
         except Exception as e:
             print(f"Error saving processing components to {filepath}: {e}")
 
-    @property
-    def daily_instruments(self):
-        return self._daily_instruments
-
 
 class Alpha158(DataHandler):
     def __init__(
         self,
-        data_dir,
-        instruments,
+        data_dir: str,
+        instruments: Union[str, List[str]],
         start_time: str = "",
         end_time: str = "",
         fit_start_time: str = "",
@@ -116,10 +110,7 @@ class Alpha158(DataHandler):
                 market_name=benchmark,
                 start_time=self.start_time,
                 end_time=self.end_time,
-            )
-            self.benchmark_df = self.benchmark_df.rename(
-                columns={"Close": "Bench_Close"}
-            )
+            ).rename(columns={"Close": "Bench_Close"})
         else:
             self.benchmark_df = None
 
@@ -559,8 +550,8 @@ class Alpha158(DataHandler):
 class MarketAlpha158(Alpha158):
     def __init__(
         self,
-        data_dir,
-        instruments,
+        data_dir: str,
+        instruments: Union[str, List[str]],
         start_time: str = "",
         end_time: str = "",
         fit_start_time: str = "",

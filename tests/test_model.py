@@ -8,7 +8,7 @@ if __name__ == "__main__":
     cfg.from_file("./configs/ppnet_model_reg.yaml")
 
     # logger
-    logger = get_logger("TEST_MODEL")
+    logger = get_logger("MODEL")
 
     # data handler
     data_handler = init_instance_by_config(cfg.data_handler, data_dir="./data")
@@ -18,7 +18,6 @@ if __name__ == "__main__":
     train_dataset = init_instance_by_config(
         cfg.dataset,
         data=data,
-        daily_instruments=data_handler.daily_instruments,
         feature_names=data_handler.feature_names,
         mode="train",
     )
@@ -26,7 +25,6 @@ if __name__ == "__main__":
     val_dataset = init_instance_by_config(
         cfg.dataset,
         data=data,
-        daily_instruments=data_handler.daily_instruments,
         feature_names=data_handler.feature_names,
         mode="valid",
     )

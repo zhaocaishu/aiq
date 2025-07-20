@@ -91,7 +91,7 @@ def main():
     eval_dataset = init_instance_by_config(
         cfg.dataset,
         data=eval_data,
-        daily_instruments=data_handler.daily_instruments,
+        data_dir=args.data_dir,
         feature_names=data_handler.feature_names,
         mode=args.split,
     )

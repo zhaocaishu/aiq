@@ -46,12 +46,12 @@ def set_random_seed(seed):
     torch.backends.cudnn.benchmark = False  # 禁止 cuDNN 自动寻找最优算法（为了确定性）
 
 
-def load_datasets(data: str, daily_instruments: Any, feature_names: List[str]) -> tuple:
+def load_datasets(data: str, data_dir: str, feature_names: List[str]) -> tuple:
     # train dataset
     train_dataset = init_instance_by_config(
         cfg.dataset,
         data=data,
-        daily_instruments=daily_instruments,
+        data_dir=data_dir,
         feature_names=feature_names,
         mode="train",
     )
@@ -59,7 +59,7 @@ def load_datasets(data: str, daily_instruments: Any, feature_names: List[str]) -
     val_dataset = init_instance_by_config(
         cfg.dataset,
         data=data,
-        daily_instruments=daily_instruments,
+        data_dir=data_dir,
         feature_names=feature_names,
         mode="valid",
     )
@@ -100,7 +100,7 @@ def main():
     data_handler.save(os.path.join(args.save_dir, "data_handler.pkl"))
 
     train_dataset, val_dataset = load_datasets(
-        data, data_handler.daily_instruments, data_handler.feature_names
+        data, args.data_dir, data_handler.feature_names
     )
     logger.info(
         "Loaded %d training and %d validation samples.",
