@@ -10,7 +10,7 @@ class DataLoader:
 
     @staticmethod
     def _read_csv(
-        file_path: str, timestamp_col: str = "Date", start: str = "", end: str = ""
+        file_path: str, timestamp_col: str = "Date", start: str = "", end: str = "", columns: List[str] = []
     ) -> Optional[pd.DataFrame]:
         if not os.path.exists(file_path):
             return None
@@ -23,11 +23,14 @@ class DataLoader:
         if end:
             df = df[df[timestamp_col] <= end]
 
+        if columns:
+            df = df[columns]
+
         return df
 
     @staticmethod
     def _query_db(
-        query: str, params: tuple, columns: List[str] = [], date_col: str = "Date"
+        query: str, params: tuple, timestamp_col: str = "Date", columns: List[str] = []
     ) -> pd.DataFrame:
         conn = mysql.connector.connect(
             host="127.0.0.1",
@@ -37,9 +40,9 @@ class DataLoader:
         )
         try:
             df = pd.read_sql(query, conn, params=params)
-            if date_col in df.columns:
-                df[date_col] = pd.to_datetime(
-                    df[date_col].astype(str), format="%Y%m%d"
+            if timestamp_col in df.columns:
+                df[timestamp_col] = pd.to_datetime(
+                    df[timestamp_col].astype(str), format="%Y%m%d"
                 ).dt.strftime("%Y-%m-%d")
             if columns:
                 df = df[columns]
@@ -84,7 +87,7 @@ class DataLoader:
                 "WHERE is_open=1 AND cal_date >= %s AND cal_date <= %s"
             )
             df = DataLoader._query_db(
-                query, (start_time.replace("-", ""), end_time.replace("-", ""))
+                query, (start_time.replace("-", ""), end_time.replace("-", "")), timestamp_col
             )
 
         return df[df["Exchange"] == "SSE"]["Date"].tolist() if df is not None else []
@@ -100,7 +103,7 @@ class DataLoader:
     ) -> Optional[pd.DataFrame]:
         if data_dir:
             path = os.path.join(data_dir, "features", f"{instrument}.csv")
-            df = DataLoader._read_csv(path, timestamp_col, start_time, end_time)
+            df = DataLoader._read_csv(path, timestamp_col, start_time, end_time, column_names)
         else:
             query = (
                 "SELECT daily.ts_code AS Instrument, daily.trade_date AS Date, daily.close AS Close, "
@@ -123,41 +126,11 @@ class DataLoader:
             df = DataLoader._query_db(
                 query,
                 (instrument, start_time.replace("-", ""), end_time.replace("-", "")),
-                [
-                    "Instrument",
-                    "Date",
-                    "Open",
-                    "Close",
-                    "High",
-                    "Low",
-                    "Pre_Close",
-                    "Change",
-                    "Pct_Chg",
-                    "Volume",
-                    "AMount",
-                    "Turnover_rate",
-                    "Turnover_rate_f",
-                    "Volume_ratio",
-                    "Pe",
-                    "Pe_ttm",
-                    "Pb",
-                    "Ps",
-                    "Ps_ttm",
-                    "Dv_ratio",
-                    "Dv_ttm",
-                    "Total_share",
-                    "Float_share",
-                    "Free_share",
-                    "Total_mv",
-                    "Circ_mv",
-                    "Adj_factor",
-                ],
+                timestamp_col,
+                column_names,
             )
 
         if df is not None:
-            if column_names:
-                df = df[column_names]
-
             df = df.sort_values(by=timestamp_col)
         return df
 
@@ -185,7 +158,7 @@ class DataLoader:
     ) -> Optional[pd.DataFrame]:
         if data_dir:
             path = os.path.join(data_dir, "features", f"{market_name}.csv")
-            df = DataLoader._read_csv(path, timestamp_col, start_time, end_time)
+            df = DataLoader._read_csv(path, timestamp_col, start_time, end_time, column_names)
         else:
             query = (
                 "SELECT index_code AS Instrument, trade_date AS Date, close AS Close, "
@@ -197,11 +170,11 @@ class DataLoader:
             df = DataLoader._query_db(
                 query,
                 (market_name, start_time.replace("-", ""), end_time.replace("-", "")),
+                timestamp_col,
+                column_names,
             )
 
         if df is not None:
-            if column_names:
-                df = df[column_names]
             df = df.sort_values(by=timestamp_col)
         return df
 
