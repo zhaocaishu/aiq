@@ -71,7 +71,9 @@ class TSDataset(Dataset):
         self.mode = mode
         self.start_time, self.end_time = segments[mode]
         if data_dir and market_name:
-            df = DataLoader.load_instruments(data_dir, market_name, self.start_time, self.end_time)
+            df = DataLoader.load_instruments(
+                data_dir, market_name, self.start_time, self.end_time
+            )
             self._daily_instruments = set(zip(df["Instrument"], df["Date"]))
         else:
             self._daily_instruments = None
@@ -84,7 +86,7 @@ class TSDataset(Dataset):
         self._feature = self._data[self._feature_names].values.astype("float32")
         self._label = (
             self._data[self._label_names].values.astype("float32")
-            if self._label_names is not None
+            if self._label_names
             else None
         )
         self._index = self._data.index
@@ -97,7 +99,10 @@ class TSDataset(Dataset):
                 continue
 
             # If filtering by instruments, skip missing pairs
-            if self._daily_instruments is not None and (code, date) not in self._daily_instruments:
+            if (
+                self._daily_instruments is not None
+                and (code, date) not in self._daily_instruments
+            ):
                 continue
 
             daily_slices[date].append((data_slices[i], i))
@@ -146,16 +151,19 @@ class TSDataset(Dataset):
         ]
         features = np.stack(features)
 
-        if self._label_names is None:
-            return sample_indices, features, None
+        if self._label_names:
+            labels = np.array(
+                [self._label[slice[0].stop - 1] for slice in daily_slices]
+            )
 
-        labels = np.array([self._label[slice[0].stop - 1] for slice in daily_slices])
+            if self.mode == "train":
+                mask, labels = drop_extreme_label(labels)
+                sample_indices = sample_indices[mask]
+                features = features[mask]
 
-        if self.mode == "train":
-            mask, labels = drop_extreme_label(labels)
-            features = features[mask]
-
-        labels = zscore(labels)
+            labels = zscore(labels)
+        else:
+            labels = None
 
         return sample_indices, features, labels
 
