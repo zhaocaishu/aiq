@@ -10,12 +10,12 @@ class DataLoader:
 
     @staticmethod
     def _read_csv(
-        file_path: str, timestamp_col: str = "Date", start: str = "", end: str = "", columns: List[str] = []
+        file_path: str, timestamp_col: str = "Date", start: str = "", end: str = "", columns: List[str] = None
     ) -> Optional[pd.DataFrame]:
         if not os.path.exists(file_path):
             return None
 
-        df = pd.read_csv(file_path)
+        df = pd.read_csv(file_path, usecols=columns)
 
         # 根据start和end日期过滤数据
         if start:
@@ -23,14 +23,11 @@ class DataLoader:
         if end:
             df = df[df[timestamp_col] <= end]
 
-        if columns:
-            df = df[columns]
-
         return df
 
     @staticmethod
     def _query_db(
-        query: str, params: tuple, timestamp_col: str = "Date", columns: List[str] = []
+        query: str, params: tuple, timestamp_col: str = "Date", columns: List[str] = None
     ) -> pd.DataFrame:
         conn = mysql.connector.connect(
             host="127.0.0.1",
@@ -39,13 +36,11 @@ class DataLoader:
             database="stock_info",
         )
         try:
-            df = pd.read_sql(query, conn, params=params)
+            df = pd.read_sql(query, conn, params=params, columns=columns)
             if timestamp_col in df.columns:
                 df[timestamp_col] = pd.to_datetime(
                     df[timestamp_col].astype(str), format="%Y%m%d"
                 ).dt.strftime("%Y-%m-%d")
-            if columns:
-                df = df[columns]
             return df
         finally:
             conn.close()
@@ -67,6 +62,7 @@ class DataLoader:
             df = DataLoader._query_db(
                 query,
                 (market_name, start_time.replace("-", ""), end_time.replace("-", "")),
+                "Date"
             )
         return df
 
@@ -99,7 +95,7 @@ class DataLoader:
         timestamp_col: str = "Date",
         start_time: str = "",
         end_time: str = "",
-        column_names: List[str] = [],
+        column_names: List[str] = None,
     ) -> Optional[pd.DataFrame]:
         if data_dir:
             path = os.path.join(data_dir, "features", f"{instrument}.csv")
@@ -154,7 +150,7 @@ class DataLoader:
         timestamp_col: str = "Date",
         start_time: str = "",
         end_time: str = "",
-        column_names: List[str] = [],
+        column_names: List[str] = None,
     ) -> Optional[pd.DataFrame]:
         if data_dir:
             path = os.path.join(data_dir, "features", f"{market_name}.csv")
