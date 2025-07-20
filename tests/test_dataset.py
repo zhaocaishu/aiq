@@ -13,7 +13,7 @@ if __name__ == "__main__":
     # train and validation dataset
     train_dataset = init_instance_by_config(
         cfg.dataset,
-        instruments=data_handler.instruments,
+        daily_instruments=data_handler.daily_instruments,
         feature_names=data_handler.feature_names,
         data=data,
         mode="train",
@@ -21,7 +21,7 @@ if __name__ == "__main__":
 
     val_dataset = init_instance_by_config(
         cfg.dataset,
-        instruments=data_handler.instruments,
+        daily_instruments=data_handler.daily_instruments,
         feature_names=data_handler.feature_names,
         data=data,
         mode="valid",

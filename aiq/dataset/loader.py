@@ -10,7 +10,7 @@ class DataLoader:
 
     @staticmethod
     def _read_csv(
-        file_path: str, timestamp_col: str, start: str = "", end: str = ""
+        file_path: str, timestamp_col: str = "Date", start: str = "", end: str = ""
     ) -> Optional[pd.DataFrame]:
         if not os.path.exists(file_path):
             return None
@@ -46,7 +46,7 @@ class DataLoader:
             conn.close()
 
     @staticmethod
-    def load_instruments(data_dir, market_name, start_time: str = "", end_time: str = "") -> Optional[pd.DataFrame]:
+    def load_instruments(data_dir: str, market_name: str, start_time: str = "", end_time: str = "") -> Optional[pd.DataFrame]:
         if data_dir:
             path = os.path.join(data_dir, "instruments", f"{market_name}.csv")
             df = DataLoader._read_csv(path, "Date", start_time, end_time)
@@ -66,33 +66,33 @@ class DataLoader:
 
     @staticmethod
     def load_calendars(
-        data_dir, timestamp_col: str = "Trade_date", start_time: str = "", end_time: str = ""
+        data_dir: str, timestamp_col: str = "Date", start_time: str = "", end_time: str = ""
     ) -> Optional[List[str]]:
         if data_dir:
             path = os.path.join(data_dir, "calendars", "day.csv")
             df = DataLoader._read_csv(path, timestamp_col, start_time, end_time)
         else:
             query = (
-                "SELECT DISTINCT exchange, DATE_FORMAT(cal_date, '%%Y-%%m-%%d') AS Trade_date "
+                "SELECT DISTINCT exchange, DATE_FORMAT(cal_date, '%%Y-%%m-%%d') AS Date "
                 "FROM ts_basic_trade_cal "
                 "WHERE is_open=1 AND cal_date >= %s AND cal_date <= %s"
             )
             df = DataLoader._query_db(
                 query,
                 (start_time.replace("-", ""), end_time.replace("-", "")),
-                ["Exchange", "Trade_date"],
+                ["Exchange", "Date"],
             )
 
         return (
-            df[df["Exchange"] == "SSE"]["Trade_date"].tolist()
+            df[df["Exchange"] == "SSE"]["Date"].tolist()
             if df is not None
             else None
         )
 
     @staticmethod
     def load_instrument_features(
-        data_dir,
-        instrument,
+        data_dir: str,
+        instrument: str,
         timestamp_col: str = "Date",
         start_time: str = "",
         end_time: str = "",
@@ -158,7 +158,7 @@ class DataLoader:
 
     @staticmethod
     def load_instruments_features(
-        data_dir, instruments: List[str], start_time: str = "", end_time: str = ""
+        data_dir: str, instruments: List[str], start_time: str = "", end_time: str = ""
     ) -> pd.DataFrame:
         dfs = [
             DataLoader.load_instrument_features(
@@ -171,8 +171,8 @@ class DataLoader:
 
     @staticmethod
     def load_market_features(
-        data_dir,
-        market_name,
+        data_dir: str,
+        market_name: str,
         timestamp_col: str = "Date",
         start_time: str = "",
         end_time: str = "",
@@ -212,7 +212,7 @@ class DataLoader:
 
     @staticmethod
     def load_markets_features(
-        data_dir, market_names: List[str], start_time: str = "", end_time: str = ""  
+        data_dir: str, market_names: List[str], start_time: str = "", end_time: str = ""  
     ) -> pd.DataFrame:
         dfs = [
             DataLoader.load_market_features(

@@ -27,7 +27,7 @@ def robust_zscore(x: pd.Series, zscore=False):
 
 
 def zscore(x):
-    return (x - x.mean()) / x.std()
+    return (x - x.mean()) / (x.std() + 1e-12)
 
 
 def neutralize(

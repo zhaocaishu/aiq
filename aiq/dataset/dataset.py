@@ -14,16 +14,16 @@ class Dataset(torch.utils.data.Dataset):
 
     def __init__(
         self,
-        instruments,
         data,
         segments,
+        daily_instruments,
         feature_names,
         label_names,
         mode="train",
     ):
         start_time, end_time = segments[mode]
-        self._instruments = instruments
         self._data = data.loc[start_time:end_time].copy()
+        self._daily_instruments = daily_instruments
         self._feature_names = feature_names
         self._label_names = label_names
 
@@ -53,23 +53,23 @@ class TSDataset(Dataset):
 
     def __init__(
         self,
-        instruments,
         data,
         segments,
         seq_len,
+        daily_instruments,
         feature_names=None,
         label_names=None,
         use_augmentation=False,
         mode="train",
     ):
-        self._instruments = instruments
         self._data = data.copy()
+        self.seq_len = seq_len
+        self._daily_instruments = daily_instruments
         self._feature_names = feature_names
         self._label_names = label_names
-        self.start_time, self.end_time = segments[mode]
-        self.seq_len = seq_len
         self.use_augmentation = use_augmentation
         self.mode = mode
+        self.start_time, self.end_time = segments[mode]
         self._setup_time_series()
 
     def _setup_time_series(self):
@@ -92,7 +92,7 @@ class TSDataset(Dataset):
                 continue
 
             # If filtering by instruments, skip missing pairs
-            if self._instruments is not None and (code, date) not in self._instruments:
+            if self._daily_instruments is not None and (code, date) not in self._daily_instruments:
                 continue
 
             daily_slices[date].append((data_slices[i], i))

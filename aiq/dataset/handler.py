@@ -47,11 +47,11 @@ class DataHandler:
             df = DataLoader.load_instruments(
                 self.data_dir, instruments, start_time, end_time
             )
+            self._daily_instruments = set(zip(df["Instrument"], df["Date"]))
             self._instruments = df["Instrument"].unique().tolist()
-            self._ts_instruments = set(zip(df["Instrument"], df["Date"]))
         else:
+            self._daily_instruments = None
             self._instruments = instruments
-            self._ts_instruments = None
         self.start_time = start_time
         self.end_time = end_time
         self.fit_start_time = fit_start_time
@@ -81,8 +81,8 @@ class DataHandler:
             print(f"Error saving processing components to {filepath}: {e}")
 
     @property
-    def instruments(self):
-        return self._ts_instruments
+    def daily_instruments(self):
+        return self._daily_instruments
 
 
 class Alpha158(DataHandler):
@@ -693,6 +693,10 @@ class MarketAlpha158(Alpha158):
         assert (
             feature_label_df.shape[0] == market_feature_label_df.shape[0]
         ), "Mismatch in row counts after merging."
+
+        print("Market feature dim: %d" % len(self._market_feature_names))
+        print("Stock feature dim: %d" % (len(self._feature_names) - len(self._market_feature_names)))
+        print("Total feature dim: %d" % len(self._feature_names))
 
         return market_feature_label_df
 
