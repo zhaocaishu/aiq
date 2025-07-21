@@ -1,44 +1,53 @@
 import torch
 import torch.nn as nn
 
-
 class RevIN(nn.Module):
-    def __init__(self, num_features: int, eps=1e-5, affine=False):
+    def __init__(self, num_features: int, eps: float = 1e-5, affine: bool = False):
         """
-        :param num_features: the number of features or channels
-        :param eps: a value added for numerical stability
-        :param affine: if True, RevIN has learnable affine parameters
+        :param num_features: 特征维度 D
+        :param eps: 数值稳定项
+        :param affine: 是否在最后加可学习的仿射变换
         """
-        super(RevIN, self).__init__()
+        super().__init__()
         self.num_features = num_features
         self.eps = eps
         self.affine = affine
+
         if self.affine:
-            self._init_params()
+            # 在最后阶段统一做 affine
+            self.weight = nn.Parameter(torch.ones(1, 1, num_features))
+            self.bias   = nn.Parameter(torch.zeros(1, 1, num_features))
 
-    def forward(self, x):
-        self._get_statistics(x)
-        x = self._normalize(x)
-        return x
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        输入 x: (N, T, D)
+        1) 对每个样本 i 在时间轴上做标准化
+        2) 对每个时间步 t 在样本维度上做标准化
+        3) （可选）仿射变换
+        """
+        # —— 第一阶段：样本内标准化 —— #
+        #  compute mean & std over time dim (T)
+        #  结果形状 (N, 1, D)，可直接广播到 (N, T, D)
+        mean_inst = x.mean(dim=1, keepdim=True)
+        var_inst  = x.var(dim=1, keepdim=True, unbiased=False)
+        std_inst  = torch.sqrt(var_inst + self.eps)
 
-    def _init_params(self):
-        # initialize RevIN params: (C,)
-        self.affine_weight = nn.Parameter(torch.ones(self.num_features))
-        self.affine_bias = nn.Parameter(torch.zeros(self.num_features))
+        x_inst_norm = (x - mean_inst) / std_inst  # shape (N, T, D)
 
-    def _get_statistics(self, x):
-        self.mean = torch.mean(x, dim=(0, 1), keepdim=True).detach()
-        self.stdev = torch.sqrt(
-            torch.var(x, dim=(0, 1), keepdim=True, unbiased=False) + self.eps
-        ).detach()
+        # —— 第二阶段：样本间标准化 —— #
+        #  compute mean & std over batch dim (N)
+        #  结果形状 (1, T, D)
+        mean_batch = x_inst_norm.mean(dim=0, keepdim=True)
+        var_batch  = x_inst_norm.var(dim=0, keepdim=True, unbiased=False)
+        std_batch  = torch.sqrt(var_batch + self.eps)
 
-    def _normalize(self, x):
-        x = x - self.mean
-        x = x / self.stdev
+        x_norm = (x_inst_norm - mean_batch) / std_batch  # shape (N, T, D)
+
+        # —— 可学习仿射变换 —— #
         if self.affine:
-            x = x * self.affine_weight
-            x = x + self.affine_bias
-        return x
+            x_norm = x_norm * self.weight + self.bias
+
+        return x_norm
 
 
 if __name__ == "__main__":
