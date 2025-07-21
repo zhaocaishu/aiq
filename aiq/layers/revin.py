@@ -30,10 +30,7 @@ class RevIN(nn.Module):
         #  compute mean & std over time dim (T)
         #  结果形状 (N, 1, D)，可直接广播到 (N, T, D)
         mean_inst = x.mean(dim=1, keepdim=True)
-        var_inst = x.var(dim=1, keepdim=True, unbiased=False)
-        std_inst = torch.sqrt(var_inst + self.eps)
-
-        x_inst_norm = (x - mean_inst) / std_inst  # shape (N, T, D)
+        x_inst_norm = x / (mean_inst + self.eps)  # shape (N, T, D)
 
         # —— 第二阶段：截面标准化 —— #
         #  compute mean & std over batch dim (N)
@@ -41,7 +38,6 @@ class RevIN(nn.Module):
         mean_batch = x_inst_norm.mean(dim=0, keepdim=True)
         var_batch = x_inst_norm.var(dim=0, keepdim=True, unbiased=False)
         std_batch = torch.sqrt(var_batch + self.eps)
-
         x_norm = (x_inst_norm - mean_batch) / std_batch  # shape (N, T, D)
 
         # —— 可学习仿射变换 —— #
