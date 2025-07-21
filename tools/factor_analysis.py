@@ -6,7 +6,9 @@ import sys
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Evaluate a model with enhanced output clarity")
+    parser = argparse.ArgumentParser(
+        description="Evaluate a model with enhanced output clarity"
+    )
     parser.add_argument(
         "--factor_file",
         type=str,
@@ -39,6 +41,7 @@ def parse_args() -> argparse.Namespace:
     )
     return parser.parse_args()
 
+
 def compute_core_statistics(df: pd.DataFrame) -> pd.DataFrame:
     """
     Compute core statistics for each column, returning a tidy DataFrame.
@@ -46,32 +49,33 @@ def compute_core_statistics(df: pd.DataFrame) -> pd.DataFrame:
     stats = []
     for col in df.columns:
         series = df[col]
-        base = {
-            'feature': col,
-            'count': series.count(),
-            'missing': series.isna().sum()
-        }
+        base = {"feature": col, "count": series.count(), "missing": series.isna().sum()}
         if pd.api.types.is_numeric_dtype(series):
-            base.update({
-                'sum': series.sum(),
-                'mean': series.mean(),
-                'median': series.median(),
-                'mode': series.mode().iloc[0] if not series.mode().empty else pd.NA,
-                'min': series.min(),
-                'q1': series.quantile(0.25),
-                'q3': series.quantile(0.75),
-                'max': series.max(),
-                'variance': series.var(),
-                'std': series.std(),
-                'cv': series.std() / series.mean() if series.mean() != 0 else pd.NA,
-                'skew': series.skew(),
-                'kurtosis': series.kurtosis()
-            })
+            base.update(
+                {
+                    "sum": series.sum(),
+                    "mean": series.mean(),
+                    "median": series.median(),
+                    "mode": series.mode().iloc[0] if not series.mode().empty else pd.NA,
+                    "min": series.min(),
+                    "q1": series.quantile(0.25),
+                    "q3": series.quantile(0.75),
+                    "max": series.max(),
+                    "variance": series.var(),
+                    "std": series.std(),
+                    "cv": series.std() / series.mean() if series.mean() != 0 else pd.NA,
+                    "skew": series.skew(),
+                    "kurtosis": series.kurtosis(),
+                }
+            )
         stats.append(base)
-    result = pd.DataFrame(stats).set_index('feature')
+    result = pd.DataFrame(stats).set_index("feature")
     return result
 
-def corr_analysis(df: pd.DataFrame, factor_names: list, threshold: float, save_fig: str = None):
+
+def corr_analysis(
+    df: pd.DataFrame, factor_names: list, threshold: float, save_fig: str = None
+):
     """
     Perform correlation analysis, reporting high-correlation pairs and plotting heatmap.
     """
@@ -83,27 +87,27 @@ def corr_analysis(df: pd.DataFrame, factor_names: list, threshold: float, save_f
     corr = sub.corr()
 
     # Report high correlations
-    pairs = (
-        corr.where(lambda x: x.abs() >= threshold)
-            .stack()
-            .reset_index()
-    )
-    pairs.columns = ['Feature 1', 'Feature 2', 'Correlation']
-    pairs = pairs[pairs['Feature 1'] < pairs['Feature 2']]
+    pairs = corr.where(lambda x: x.abs() >= threshold).stack().reset_index()
+    pairs.columns = ["Feature 1", "Feature 2", "Correlation"]
+    pairs = pairs[pairs["Feature 1"] < pairs["Feature 2"]]
 
     if not pairs.empty:
         print("\nHigh-Correlation Pairs (|r| >= {:.2f}):".format(threshold))
-        print(pairs.to_string(index=False, float_format='{:0.4f}'.format))
+        print(pairs.to_string(index=False, float_format="{:0.4f}".format))
     else:
         print(f"\nNo feature pairs with |r| >= {threshold:.2f} found.")
 
     # Plot heatmap
     plt.figure(figsize=(10, 8))
     sns.heatmap(
-        corr, annot=True, cmap='coolwarm', fmt='.2f',
-        linewidths=0.5, cbar_kws={'label': 'Correlation'}
+        corr,
+        annot=True,
+        cmap="coolwarm",
+        fmt=".2f",
+        linewidths=0.5,
+        cbar_kws={"label": "Correlation"},
     )
-    plt.title('Factor Correlation Heatmap')
+    plt.title("Factor Correlation Heatmap")
     plt.tight_layout()
 
     if save_fig:
@@ -115,7 +119,7 @@ def corr_analysis(df: pd.DataFrame, factor_names: list, threshold: float, save_f
 
 def main():
     args = parse_args()
-    names = [n.strip() for n in args.factor_names.split(',')]
+    names = [n.strip() for n in args.factor_names.split(",")]
     df = pd.read_csv(args.factor_file)
 
     # Core statistics
@@ -129,12 +133,9 @@ def main():
 
     # Correlation analysis
     corr_analysis(
-        df=df,
-        factor_names=names,
-        threshold=args.threshold,
-        save_fig=args.save_fig
+        df=df, factor_names=names, threshold=args.threshold, save_fig=args.save_fig
     )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
