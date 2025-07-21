@@ -149,33 +149,43 @@ cdef class Rsquare(Rolling):
         self.xy_sum = 0
 
     cdef double update(self, double val):
-        self.barv.push_back(val)
-        self.xy_sum = self.xy_sum - self.y_sum
-        self.x2_sum = self.x2_sum + self.i_sum - 2*self.x_sum
-        self.x_sum = self.x_sum - self.i_sum
-        cdef double _val
-        _val = self.barv.front()
-        if not isnan(_val):
+        cdef double old = self.barv.front()
+        self.barv.pop_front()
+
+        if not isnan(old):
             self.i_sum  -= 1
-            self.y_sum  -= _val
-            self.y2_sum -= _val * _val
+            self.y_sum  -= old
+            self.y2_sum -= old*old
+            self.xy_sum -= self.window * old
         else:
             self.na_count -= 1
-        self.barv.pop_front()
+
+        self.x2_sum -= 2*self.x_sum - self.i_sum
+        self.x_sum  -= self.i_sum
+        self.xy_sum -= self.y_sum
+    
+        self.barv.push_back(val)
+    
         if isnan(val):
             self.na_count += 1
         else:
             self.i_sum  += 1
+            self.y_sum  += val
+            self.y2_sum += val*val
+            self.xy_sum += self.window * val
             self.x_sum  += self.window
             self.x2_sum += self.window * self.window
-            self.y_sum  += val
-            self.y2_sum += val * val
-            self.xy_sum += self.window * val
+    
         cdef int N = self.window - self.na_count
-        cdef double rvalue
-        rvalue = (N*self.xy_sum - self.x_sum*self.y_sum) / \
-            sqrt((N*self.x2_sum - self.x_sum*self.x_sum) * (N*self.y2_sum - self.y_sum*self.y_sum))
-        return rvalue * rvalue
+        if N < 2:
+            return NAN
+
+        cdef double num = N*self.xy_sum - self.x_sum*self.y_sum
+        cdef double den = sqrt((N*self.x2_sum - self.x_sum*self.x_sum)
+                             * (N*self.y2_sum - self.y_sum*self.y_sum))
+        if den == 0:
+            return NAN
+        return (num/den)*(num/den)
 
 
 cdef np.ndarray[double, ndim=1] rolling(Rolling r, np.ndarray a):
