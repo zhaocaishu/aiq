@@ -153,8 +153,8 @@ cdef class Rsquare(Rolling):
         self.xy_sum = self.xy_sum - self.y_sum
         self.x2_sum = self.x2_sum + self.i_sum - 2*self.x_sum
         self.x_sum = self.x_sum - self.i_sum
-        
-        cdef double _val = self.barv.front()
+        cdef double _val
+        _val = self.barv.front()
         if not isnan(_val):
             self.i_sum  -= 1
             self.y_sum  -= _val
@@ -162,7 +162,6 @@ cdef class Rsquare(Rolling):
         else:
             self.na_count -= 1
         self.barv.pop_front()
-        
         if isnan(val):
             self.na_count += 1
         else:
@@ -172,19 +171,10 @@ cdef class Rsquare(Rolling):
             self.y_sum  += val
             self.y2_sum += val * val
             self.xy_sum += self.window * val
-        
         cdef int N = self.window - self.na_count
-        if N < 2:
-            return NAN
-        
-        cdef double numerator = N * self.xy_sum - self.x_sum * self.y_sum
-        cdef double denom_x = N * self.x2_sum - self.x_sum * self.x_sum
-        cdef double denom_y = N * self.y2_sum - self.y_sum * self.y_sum
-        
-        if denom_x <= 0 or denom_y <= 0:
-            return NAN
-        
-        cdef double rvalue = numerator / sqrt(denom_x * denom_y)
+        cdef double rvalue
+        rvalue = (N*self.xy_sum - self.x_sum*self.y_sum) / \
+            sqrt((N*self.x2_sum - self.x_sum*self.x_sum) * (N*self.y2_sum - self.y_sum*self.y_sum))
         return rvalue * rvalue
 
 
