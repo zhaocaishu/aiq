@@ -556,8 +556,8 @@ class MarketAlpha158(Alpha158):
         end_time: str = "",
         fit_start_time: str = "",
         fit_end_time: str = "",
-        market_names: List[str] = [],
         processors: List[Processor] = [],
+        market_names: List[str] = [],
         market_processors: List[Processor] = [],
         benchmark: str = "",
     ):

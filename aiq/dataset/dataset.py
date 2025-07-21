@@ -65,8 +65,6 @@ class TSDataset(Dataset):
     ):
         self._data = data.copy()
         self.seq_len = seq_len
-        self._feature_names = feature_names
-        self._label_names = label_names
         self.use_augmentation = use_augmentation
         self.mode = mode
         self.start_time, self.end_time = segments[mode]
@@ -77,6 +75,8 @@ class TSDataset(Dataset):
             self._daily_instruments = set(zip(df["Instrument"], df["Date"]))
         else:
             self._daily_instruments = None
+        self._feature_names = feature_names
+        self._label_names = label_names
         self._setup_time_series()
 
     def _setup_time_series(self):
