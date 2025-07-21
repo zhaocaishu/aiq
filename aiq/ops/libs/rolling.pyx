@@ -149,43 +149,43 @@ cdef class Rsquare(Rolling):
         self.xy_sum = 0
 
     cdef double update(self, double val):
-        cdef double old = self.barv.front()
-        self.barv.pop_front()
-
-        if not isnan(old):
+        self.barv.push_back(val)
+        self.xy_sum = self.xy_sum - self.y_sum
+        self.x2_sum = self.x2_sum + self.i_sum - 2*self.x_sum
+        self.x_sum = self.x_sum - self.i_sum
+        
+        cdef double _val = self.barv.front()
+        if not isnan(_val):
             self.i_sum  -= 1
-            self.y_sum  -= old
-            self.y2_sum -= old*old
-            self.xy_sum -= self.window * old
+            self.y_sum  -= _val
+            self.y2_sum -= _val * _val
         else:
             self.na_count -= 1
-
-        self.x2_sum -= 2*self.x_sum - self.i_sum
-        self.x_sum  -= self.i_sum
-        self.xy_sum -= self.y_sum
-    
-        self.barv.push_back(val)
-    
+        self.barv.pop_front()
+        
         if isnan(val):
             self.na_count += 1
         else:
             self.i_sum  += 1
-            self.y_sum  += val
-            self.y2_sum += val*val
-            self.xy_sum += self.window * val
             self.x_sum  += self.window
             self.x2_sum += self.window * self.window
-    
+            self.y_sum  += val
+            self.y2_sum += val * val
+            self.xy_sum += self.window * val
+        
         cdef int N = self.window - self.na_count
         if N < 2:
             return NAN
-
-        cdef double num = N*self.xy_sum - self.x_sum*self.y_sum
-        cdef double den = sqrt((N*self.x2_sum - self.x_sum*self.x_sum)
-                             * (N*self.y2_sum - self.y_sum*self.y_sum))
-        if den == 0:
+        
+        cdef double numerator = N * self.xy_sum - self.x_sum * self.y_sum
+        cdef double denom_x = N * self.x2_sum - self.x_sum * self.x_sum
+        cdef double denom_y = N * self.y2_sum - self.y_sum * self.y_sum
+        
+        if denom_x <= 0 or denom_y <= 0:
             return NAN
-        return (num/den)*(num/den)
+        
+        cdef double rvalue = numerator / sqrt(denom_x * denom_y)
+        return rvalue * rvalue
 
 
 cdef np.ndarray[double, ndim=1] rolling(Rolling r, np.ndarray a):
