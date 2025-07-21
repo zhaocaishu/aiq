@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 
+
 class RevIN(nn.Module):
     def __init__(self, num_features: int, eps: float = 1e-5, affine: bool = False):
         """
@@ -16,7 +17,7 @@ class RevIN(nn.Module):
         if self.affine:
             # 在最后阶段统一做 affine
             self.weight = nn.Parameter(torch.ones(1, 1, num_features))
-            self.bias   = nn.Parameter(torch.zeros(1, 1, num_features))
+            self.bias = nn.Parameter(torch.zeros(1, 1, num_features))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -29,8 +30,8 @@ class RevIN(nn.Module):
         #  compute mean & std over time dim (T)
         #  结果形状 (N, 1, D)，可直接广播到 (N, T, D)
         mean_inst = x.mean(dim=1, keepdim=True)
-        var_inst  = x.var(dim=1, keepdim=True, unbiased=False)
-        std_inst  = torch.sqrt(var_inst + self.eps)
+        var_inst = x.var(dim=1, keepdim=True, unbiased=False)
+        std_inst = torch.sqrt(var_inst + self.eps)
 
         x_inst_norm = (x - mean_inst) / std_inst  # shape (N, T, D)
 
@@ -38,8 +39,8 @@ class RevIN(nn.Module):
         #  compute mean & std over batch dim (N)
         #  结果形状 (1, T, D)
         mean_batch = x_inst_norm.mean(dim=0, keepdim=True)
-        var_batch  = x_inst_norm.var(dim=0, keepdim=True, unbiased=False)
-        std_batch  = torch.sqrt(var_batch + self.eps)
+        var_batch = x_inst_norm.var(dim=0, keepdim=True, unbiased=False)
+        std_batch = torch.sqrt(var_batch + self.eps)
 
         x_norm = (x_inst_norm - mean_batch) / std_batch  # shape (N, T, D)
 
