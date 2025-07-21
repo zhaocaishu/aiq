@@ -1,6 +1,6 @@
 import pandas as pd
 
-from aiq.ops import Rolling, Ref, Resi, Log, Rank
+from aiq.ops import Ref, Resi, Log, Rank
 
 
 if __name__ == "__main__":
