@@ -39,6 +39,70 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def compute_core_statistics(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    返回每个字段的核心统计信息，包括：
+      - 样本量（count）
+      - 缺失值数量（missing）
+      - 总和（sum）
+      - 均值（mean）
+      - 中位数（median）
+      - 众数（mode）
+      - 最小值（min）
+      - Q1（25% 分位数）
+      - Q3（75% 分位数）
+      - 最大值（max）
+      - 方差（variance）
+      - 标准差（std）
+      - 变异系数（cv）
+      - 偏度（skew）
+      - 峰度（kurtosis）
+    """
+    stats = {}
+    for col in df.columns:
+        series = df[col]
+        # 基本统计
+        count = series.count()
+        missing = series.isna().sum()
+        # 仅对数值型计算
+        if pd.api.types.is_numeric_dtype(series):
+            s_sum = series.sum()
+            mean = series.mean()
+            median = series.median()
+            mode = series.mode().iloc[0] if not series.mode().empty else None
+            minimum = series.min()
+            q1 = series.quantile(0.25)
+            q3 = series.quantile(0.75)
+            maximum = series.max()
+            variance = series.var()
+            std = series.std()
+            cv = std / mean if mean else None
+            skew = series.skew()
+            kurt = series.kurtosis()
+        else:
+            s_sum = mean = median = mode = minimum = q1 = q3 = maximum = variance = std = cv = skew = kurt = None
+
+        stats[col] = {
+            'count': count,
+            'missing': missing,
+            'sum': s_sum,
+            'mean': mean,
+            'median': median,
+            'mode': mode,
+            'min': minimum,
+            'q1': q1,
+            'q3': q3,
+            'max': maximum,
+            'variance': variance,
+            'std': std,
+            'cv': cv,
+            'skew': skew,
+            'kurtosis': kurt
+        }
+
+    return pd.DataFrame(stats).T
+
+
 def corr_analysis(factor_df, factor_names, threshold=0.9, save_fig=None):
     # 检查列是否存在
     missing_cols = [col for col in factor_names if col not in factor_df.columns]
@@ -85,6 +149,11 @@ def main():
     factor_names = [name.strip() for name in args.factor_names.split(",")]
     factor_df = pd.read_csv(args.factor_file)
 
+    # core statistics
+    core_stats = compute_core_statistics(factor_df)
+    print(core_stats)
+
+    # correlation analysis
     corr_analysis(
         factor_df=factor_df,
         factor_names=factor_names,
