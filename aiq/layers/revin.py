@@ -22,11 +22,11 @@ class RevIN(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         输入 x: (N, T, D)
-        1) 对每个样本 i 在时间轴上做标准化
-        2) 对每个时间步 t 在样本维度上做标准化
+        1) 每个样本i时序标准化
+        2) 每个时间步t截面标准化
         3) （可选）仿射变换
         """
-        # —— 第一阶段：样本内标准化 —— #
+        # —— 第一阶段：时序标准化 —— #
         #  compute mean & std over time dim (T)
         #  结果形状 (N, 1, D)，可直接广播到 (N, T, D)
         mean_inst = x.mean(dim=1, keepdim=True)
@@ -35,7 +35,7 @@ class RevIN(nn.Module):
 
         x_inst_norm = (x - mean_inst) / std_inst  # shape (N, T, D)
 
-        # —— 第二阶段：样本间标准化 —— #
+        # —— 第二阶段：截面标准化 —— #
         #  compute mean & std over batch dim (N)
         #  结果形状 (1, T, D)
         mean_batch = x_inst_norm.mean(dim=0, keepdim=True)
