@@ -125,7 +125,6 @@ class DLinear(nn.Module):
         super(DLinear, self).__init__()
         self.seq_len = seq_len
         self.pred_len = pred_len
-        self.merge_outputs = merge_outputs
 
         # Decompsition Kernel Size
         kernel_size = kernel_size
