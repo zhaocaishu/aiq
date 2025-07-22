@@ -124,3 +124,9 @@ def drop_extreme_label(x: np.ndarray, percentile: float = 2.5):
     # Extract filtered values; result has shape (M, 1)
     filtered_x = x[mask]
     return mask, filtered_x
+
+
+def fillna(x: np.ndarray, fill_value: float = 0.0):
+    mask = np.isnan(x)
+    x[mask] = fill_value
+    return x
