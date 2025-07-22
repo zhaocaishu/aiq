@@ -34,78 +34,57 @@ def neutralize(
     df: pd.DataFrame, industry_col: str, cap_col: str, factor_cols: List[str]
 ) -> pd.DataFrame:
     """
-    Neutralize specified factor columns by industry and market capitalization.
-    Supports regex/expression patterns in factor_cols to match multiple columns.
+    Neutralize specified factor columns by regressing out industry and market cap effects.
+    Supports regex patterns in factor_cols to match multiple column names.
 
     Parameters:
-    - df: DataFrame with MultiIndex columns; level 'feature' contains input columns.
-    - industry_col: Name of the industry category column under 'feature'.
-    - cap_col: Name of the market cap column under 'feature'.
-    - factor_cols: List of factor column names (under 'feature') to be neutralized.
+    - df: DataFrame with a top‑level column label “feature” containing all features.
+    - industry_col: Name of the column under “feature” that holds industry categories.
+    - cap_col: Name of the column under “feature” that holds market capitalization values.
+    - factor_cols: List of regex patterns (as strings) to select which factor columns to neutralize.
 
     Returns:
-    - DataFrame with each specified factor column replaced by its regression residuals.
+    - The same DataFrame, but with each matched factor column replaced by its regression residuals.
     """
-    # Extract the feature-level DataFrame for clarity
+    # Extract the “feature” sub‑DataFrame
     feats = df["feature"]
 
-    # Combine all patterns into one big regex using alternation (|)
-    # Each pattern is grouped to preserve its regex semantics
+    # Build a combined regex to match all requested factor columns
     combined_pattern = "|".join(f"({pat})" for pat in factor_cols)
-
-    # Filter column names in one pass; original order is preserved
     actual_factors = [
-        col for col in feats.columns if re.search(combined_pattern, str(col))
+        col for col in feats.columns
+        if re.search(combined_pattern, str(col))
     ]
 
-    # Build design matrix: industry dummies + cap + intercept
-    industry = feats[industry_col].astype("category")
-    cap = feats[cap_col].astype(float)
-
-    X = pd.get_dummies(industry, prefix="IND", drop_first=True)
-    X["CAP"] = cap
+    # Create design matrix: industry dummies + cap + constant
+    industry_dummies = pd.get_dummies(
+        feats[industry_col].astype("category"),
+        prefix="IND",
+        drop_first=True
+    )
+    cap_series = feats[[cap_col]].astype(float)
+    X = pd.concat([industry_dummies, cap_series], axis=1)
     X["CONST"] = 1.0
-    X_values = X.astype(float).values
+    X_values = X.values
 
-    # Prepare regression model (no intercept since CONST is included)
+    # Initialize linear regression (no intercept, since CONST is included)
     model = LinearRegression(fit_intercept=False)
 
-    # Identify which factors never have NaNs and which have some NaN in y
-    no_nan_factors = [f for f in actual_factors if not feats[f].isna().any()]
-    with_nan_factors = [f for f in actual_factors if feats[f].isna().any()]
-
-    # Batch fit for all-no-NaN factors
-    if no_nan_factors:
-        # construct Y (n_samples × k) array
-        Y = feats[no_nan_factors].astype(float).to_numpy()
-
-        # fit a multi-output regressor
-        model.fit(X_values, Y)
-
-        # predict and compute residuals
-        Y_pred = model.predict(X_values)
-        residuals = Y - Y_pred  # same shape
-
-        # write back into df
-        for idx, f in enumerate(no_nan_factors):
-            df.loc[:, ("feature", f)] = residuals[:, idx].astype("float32")
-
-    # Loop for each factor that has NaNs
-    for f in with_nan_factors:
-        y = feats[f].astype(float)
-
-        # mask out only the rows where y is present
-        mask = ~y.isna()
+    # Loop through each factor, fit on non‑missing rows, and store residuals
+    for factor in actual_factors:
+        y = feats[factor].astype(float)
+        mask = y.notna()
         if not mask.any():
+            # skip if all values are missing
             continue
 
-        # fit and predict on the subset
-        model.fit(X_values[mask], y[mask].to_numpy())
-        y_pred = model.predict(X_values[mask])
+        # Fit on rows where y is present
+        model.fit(X_values[mask], y[mask])
+        predictions = model.predict(X_values[mask])
+        residuals = y[mask] - predictions
 
-        # compute residuals and write back
-        residuals = y.loc[mask] - y_pred
-        df.loc[mask, ("feature", f)] = residuals.astype("float32")
+        # Write residuals back into the original DataFrame
+        df.loc[mask, ("feature", factor)] = residuals.astype("float32")
 
     return df
 
