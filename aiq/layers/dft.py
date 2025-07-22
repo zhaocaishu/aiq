@@ -181,7 +181,6 @@ class DFT(nn.Module):
             enc_in=self.d_model,
             kernel_size=3,
             individual=False,
-            merge_outputs=False,
         )
         DLinear_Init(self.dlinear, min_val=-5e-2, max_val=8e-2)
 
