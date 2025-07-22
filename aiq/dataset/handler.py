@@ -193,7 +193,7 @@ class Alpha158(DataHandler):
             # https://www.investopedia.com/ask/answers/071414/whats-difference-between-moving-average-and-weighted-moving-average.asp
             # Simple Moving Average, the simple moving average in the past d days, divided by latest close price to remove unit
             for d in windows:
-                features.append(EMA(close, d) / close)
+                features.append(Mean(close, d) / close)
                 feature_names.append("MA%d" % d)
 
         if use("STD"):
@@ -357,7 +357,7 @@ class Alpha158(DataHandler):
         if use("VMA"):
             # Simple Volume Moving average: https://www.barchart.com/education/technical-indicators/volume_moving_average
             for d in windows:
-                features.append(EMA(volume, d) / (volume + 1e-12))
+                features.append(Mean(volume, d) / (volume + 1e-12))
                 feature_names.append("VMA%d" % d)
 
         if use("VSTD"):
