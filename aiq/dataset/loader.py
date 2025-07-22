@@ -113,10 +113,10 @@ class DataLoader:
                 "daily_basic.free_share AS Free_share, daily_basic.total_mv AS Total_mv, "
                 "daily_basic.circ_mv AS Circ_mv, factor.adj_factor AS Adj_factor "
                 "FROM ts_quotation_daily daily "
-                "JOIN ts_quotation_daily_basic daily_basic ON "
-                "daily.ts_code=daily_basic.ts_code AND daily.trade_date=daily_basic.trade_date "
-                "JOIN ts_quotation_adj_factor factor ON "
-                "daily.ts_code=factor.ts_code AND daily.trade_date=factor.trade_date "
+                "JOIN ts_quotation_daily_basic daily_basic "
+                "ON daily.ts_code=daily_basic.ts_code AND daily.trade_date=daily_basic.trade_date "
+                "JOIN ts_quotation_adj_factor factor "
+                "ON daily.ts_code=factor.ts_code AND daily.trade_date=factor.trade_date "
                 "WHERE daily.ts_code=%s AND daily.trade_date>=%s AND daily.trade_date<=%s LIMIT 50000"
             )
             df = DataLoader._query_db(
