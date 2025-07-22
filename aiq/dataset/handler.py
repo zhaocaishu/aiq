@@ -150,6 +150,8 @@ class Alpha158(DataHandler):
             (2 * close - high - low) / open,
             (2 * close - high - low) / ((high - low) + 1e-12),
             Log(open / Ref(close, 1)),
+            high / close,
+            low / close
         ]
         feature_names = [
             "MKT_CLS",
@@ -168,13 +170,9 @@ class Alpha158(DataHandler):
             "KSFT",
             "KSFT2",
             "KOC",
+            "KHC",
+            "KLC",
         ]
-
-        # price
-        for field, price in zip(["Open", "High", "Low"], [open, high, low]):
-            for d in range(1):
-                features.append(Ref(price, d) / close)
-                feature_names.append(field.upper() + str(d))
 
         # rolling
         windows = [5, 10, 20, 30, 60]
