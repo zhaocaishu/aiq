@@ -106,7 +106,7 @@ def neutralize(
         # compute residuals and write back
         resid = y.copy()
         resid.loc[mask] = y.loc[mask] - y_pred
-        df.loc[mask, ("feature", f)] = resid.astype("float32")
+        df.loc[mask, ("feature", f)] = resid.loc[mask].astype("float32")
 
     return df
 
