@@ -80,8 +80,8 @@ def neutralize(
 
         # Fit on rows where y is present
         model.fit(X_values[mask], y[mask])
-        predictions = model.predict(X_values[mask])
-        residuals = y[mask] - predictions
+        y_pred = model.predict(X_values[mask])
+        residuals = y[mask] - y_pred
 
         # Write residuals back into the original DataFrame
         df.loc[mask, ("feature", factor)] = residuals.astype("float32")
