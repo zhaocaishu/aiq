@@ -123,5 +123,5 @@ def drop_extreme_label(x: np.ndarray, percentile: float = 2.5):
     mask = (x[:, 0] >= lower) & (x[:, 0] <= upper)
 
     # Extract filtered values; result has shape (M, 1)
-    filtered = x[mask]
-    return mask, filtered
+    filtered_x = x[mask]
+    return mask, filtered_x
