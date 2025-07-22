@@ -6,7 +6,7 @@ import pandas as pd
 import torch
 
 from aiq.dataset.loader import DataLoader
-from aiq.utils.functional import drop_extreme_label, zscore
+from aiq.utils.functional import drop_extreme_label, zscore, fillna
 
 
 class Dataset(torch.utils.data.Dataset):
@@ -164,6 +164,8 @@ class TSDataset(Dataset):
             labels = zscore(labels)
         else:
             labels = None
+
+        features = fillna(features)
 
         return sample_indices, features, labels
 
