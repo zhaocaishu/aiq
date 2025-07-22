@@ -3,16 +3,22 @@ import torch.nn as nn
 
 
 class RevIN(nn.Module):
-    def __init__(self, num_features: int, eps=1e-5, affine=False):
+    def __init__(
+        self, num_features: int, eps=1e-5, affine=False, clamp_bounds: tuple = None
+    ):
         """
         :param num_features: the number of features or channels
         :param eps: a value added for numerical stability
         :param affine: if True, RevIN has learnable affine parameters
+        :param clamp_bounds: optional (min, max) tuple to clip normalized values
         """
         super(RevIN, self).__init__()
         self.num_features = num_features
         self.eps = eps
         self.affine = affine
+        # clamp_bounds should be (min, max) or None
+        self.clamp_bounds = clamp_bounds
+
         if self.affine:
             self._init_params()
 
@@ -31,18 +37,27 @@ class RevIN(nn.Module):
         self.stdev = torch.sqrt(
             torch.var(x, dim=(0, 1), keepdim=True, unbiased=False) + self.eps
         ).detach()
+        print(self.mean.shape, self.stdev.shape)
 
     def _normalize(self, x):
-        x = x - self.mean
-        x = x / self.stdev
+        # subtract mean, divide by std
+        x = (x - self.mean) / self.stdev
+
+        # optional clamp
+        if self.clamp_bounds is not None:
+            min_val, max_val = self.clamp_bounds
+            x = torch.clamp(x, min=min_val, max=max_val)
+
+        # apply learnable affine after clamp
         if self.affine:
-            x = x * self.affine_weight
-            x = x + self.affine_bias
+            x = x * self.affine_weight.view(1, 1, -1)
+            x = x + self.affine_bias.view(1, 1, -1)
         return x
 
 
 if __name__ == "__main__":
     x_in = torch.randn((128, 8, 32))
-    revin_layer = RevIN(32, affine=True)
+    # Example: clip normalized outputs between -3 and 3
+    revin_layer = RevIN(32, affine=True, clamp_bounds=(-3.0, 3.0))
     x_out = revin_layer(x_in)
-    print(x_out.shape)
+    print(x_out.shape)  # torch.Size([128, 8, 32])
