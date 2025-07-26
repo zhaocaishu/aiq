@@ -91,8 +91,10 @@ class TSDataset(Dataset):
         )
         self._index = self._data.index
 
-        daily_slices = defaultdict(list)
         data_slices = self._create_ts_slices(self._index, self.seq_len)
+        daily_slices = defaultdict(list)
+        daily_indices = defaultdict(list)
+
         for i, (code, date) in enumerate(self._index):
             # Skip outside the desired time window
             if not (self.start_time <= date <= self.end_time):
@@ -105,10 +107,19 @@ class TSDataset(Dataset):
             ):
                 continue
 
-            daily_slices[date].append((data_slices[i], i))
+            # Only keep slices with length equal to seq_len
+            data_slice = data_slices[i]
+            if data_slice.stop - data_slice.start != self.seq_len:
+                continue
 
+            daily_slices[date].append(data_slice)
+            daily_indices[date].append(i)
+
+        assert daily_slices.keys() == daily_indices.keys()
+
+        self._daily_dates = list(daily_slices.keys())
         self._daily_slices = list(daily_slices.values())
-        self._daily_index = list(daily_slices.keys())
+        self._daily_indices = list(daily_indices.values())
 
         daily_summary = {date: len(slices) for date, slices in daily_slices.items()}
         print(f"Mode: {self.mode}. Sampled daily counts:", daily_summary)
@@ -130,42 +141,32 @@ class TSDataset(Dataset):
         assert len(slices) == len(index)
         return slices
 
-    def padding_zeros(self, data, seq_len):
-        if data.shape[0] < seq_len:
-            padding_zeros = np.zeros(
-                (seq_len - data.shape[0], data.shape[1]), dtype=data.dtype
-            )
-            return np.concatenate([padding_zeros, data], axis=0)
-        else:
-            return data
-
     def __getitem__(self, index):
-        """根据索引获返回样本索引、特征和标准化后的标签（若存在）"""
+        """根据索引返回样本索引、特征和标准化后的标签（若存在）"""
         daily_slices = self._daily_slices[index]
 
-        sample_indices = np.array([slice[1] for slice in daily_slices])
+        # 样本索引
+        daily_indices = np.array(self._daily_indices[index])
 
-        features = [
-            self.padding_zeros(self._feature[slice[0]], self.seq_len)
-            for slice in daily_slices
-        ]
-        features = np.stack(features)
+        # 根据切片提取对应的特征序列，并堆叠成一个三维数组
+        features = np.stack([self._feature[slice] for slice in daily_slices])
 
         if self._label_names:
-            labels = np.array(
-                [self._label[slice[0].stop - 1] for slice in daily_slices]
-            )
+            # 提取每个序列最后一个时间点的标签
+            labels = np.array([self._label[slice.stop - 1] for slice in daily_slices])
 
             if self.mode == "train":
+                # 训练模式下，过滤掉极端标签值对应的样本
                 mask, labels = drop_extreme_label(labels)
-                sample_indices = sample_indices[mask]
+                daily_indices = daily_indices[mask]
                 features = features[mask]
 
+            # 标签进行标准化（z-score标准化）
             labels = zscore(labels)
         else:
             labels = None
 
-        return sample_indices, features, labels
+        return daily_indices, features, labels
 
     def __len__(self):
-        return len(self._daily_index)
+        return len(self._daily_dates)

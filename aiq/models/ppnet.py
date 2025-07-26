@@ -69,7 +69,7 @@ class PPNetModel(BaseModel):
             dropout=self.dropout,
             gate_input_start_index=self.gate_input_start_index,
             gate_input_end_index=self.gate_input_end_index,
-            beta=beta
+            beta=beta,
         )
 
         if pretrained is not None:
@@ -149,7 +149,7 @@ class PPNetModel(BaseModel):
                 if (i + 1) % 100 == 0:
                     speed = (time.time() - time_now) / iter_count
                     left_time = speed * ((self.epochs - epoch) * train_steps_epoch - i)
-                    cur_lr = optimizer.param_groups[0]['lr']
+                    cur_lr = optimizer.param_groups[0]["lr"]
                     self.logger.info(
                         "Epoch: {0}, step: {1}, lr: {2:.8f} train loss: {3:.8f}, speed: {4:.4f}s/iter, left time: {5:.4f}s".format(
                             epoch + 1,
@@ -162,7 +162,7 @@ class PPNetModel(BaseModel):
                     )
                     iter_count = 0
                     time_now = time.time()
-                
+
                 train_loss.append(loss.item())
 
             train_loss = np.average(train_loss)
@@ -209,14 +209,14 @@ class PPNetModel(BaseModel):
         labels = []
         preds = []
         indices = []
-        for i, (sample_indices, batch_x, batch_y) in enumerate(test_loader):
+        for i, (daily_indices, batch_x, batch_y) in enumerate(test_loader):
             batch_x = self.to_device(batch_x)
             batch_y = self.to_device(batch_y)
 
             with torch.no_grad():
                 outputs = self.model(batch_x)
 
-            indices.append(sample_indices.squeeze(0).numpy())
+            indices.append(daily_indices.squeeze(0).numpy())
             labels.append(batch_y.cpu().numpy())
             preds.append(outputs.cpu().numpy())
 

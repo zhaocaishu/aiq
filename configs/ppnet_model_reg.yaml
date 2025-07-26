@@ -1,4 +1,4 @@
-market: &market 000985.SH
+market: &market 000905.SH
 data_handler:
   class: MarketAlpha158
   module_path: aiq.dataset.handler
@@ -8,7 +8,7 @@ data_handler:
     end_time: "2023-12-31"
     fit_start_time: "2014-01-01"
     fit_end_time: "2022-03-31"
-    market_names: ["000300.SH", "000905.SH", "000852.SH", "000985.SH"]
+    market_names: ["000903.SH", "000300.SH", "000905.SH"]
     processors:
       - class: CSWinsorize
         module_path: aiq.dataset.processor
@@ -63,7 +63,7 @@ model:
     pred_len: 1
     dropout: 0.5
     gate_input_start_index: 143
-    gate_input_end_index: 227
+    gate_input_end_index: 206
     beta: 3.0
     epochs: 30
     batch_size: 1

@@ -151,7 +151,7 @@ class Alpha158(DataHandler):
             (2 * close - high - low) / ((high - low) + 1e-12),
             Log(open / Ref(close, 1)),
             high / close,
-            low / close
+            low / close,
         ]
         feature_names = [
             "MKT_CLS",
@@ -684,7 +684,10 @@ class MarketAlpha158(Alpha158):
         ), "Mismatch in row counts after merging."
 
         print("Market feature dim: %d" % len(self._market_feature_names))
-        print("Stock feature dim: %d" % (len(self._feature_names) - len(self._market_feature_names)))
+        print(
+            "Stock feature dim: %d"
+            % (len(self._feature_names) - len(self._market_feature_names))
+        )
         print("Total feature dim: %d" % len(self._feature_names))
 
         return market_feature_label_df

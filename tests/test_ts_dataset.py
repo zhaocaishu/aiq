@@ -24,5 +24,5 @@ if __name__ == "__main__":
     )
 
     for i in range(len(train_dataset)):
-        sample_indices, features, labels = train_dataset[i]
-        print(sample_indices, features.shape, labels.shape)
+        daily_indices, features, labels = train_dataset[i]
+        print(daily_indices, features.shape, labels.shape)
