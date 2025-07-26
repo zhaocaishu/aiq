@@ -17,7 +17,7 @@ if __name__ == "__main__":
         segments=cfg.dataset.kwargs.segments,
         seq_len=8,
         data_dir="./data",
-        market_name=cfg.dataset.kwargs.market_name,
+        universe=cfg.dataset.kwargs.universe,
         feature_names=data_handler.feature_names,
         label_names=["RETN_5D"],
         mode="train",

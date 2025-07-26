@@ -57,7 +57,7 @@ class TSDataset(Dataset):
         segments: dict,
         seq_len: int,
         data_dir: str = "",
-        market_name: str = "",
+        universe: str = "",
         feature_names: List[str] = [],
         label_names: List[str] = [],
         use_augmentation: bool = False,
@@ -65,18 +65,18 @@ class TSDataset(Dataset):
     ):
         self._data = data.copy()
         self.seq_len = seq_len
-        self.use_augmentation = use_augmentation
-        self.mode = mode
         self.start_time, self.end_time = segments[mode]
-        if data_dir and market_name:
+        if data_dir and universe:
             df = DataLoader.load_instruments(
-                data_dir, market_name, self.start_time, self.end_time
+                data_dir, universe, self.start_time, self.end_time
             )
             self._daily_instruments = set(zip(df["Instrument"], df["Date"]))
         else:
             self._daily_instruments = None
         self._feature_names = feature_names
         self._label_names = label_names
+        self.use_augmentation = use_augmentation
+        self.mode = mode
         self._setup_time_series()
 
     def _setup_time_series(self):
