@@ -153,11 +153,13 @@ class IdxMax(Rolling):
     def __call__(self, feature: pd.Series, N):
         if N == 0:
             series = feature.expanding(min_periods=1).apply(
-                lambda x: x.argmax() + 1, raw=True
+                lambda x: (np.nanargmax(x) + 1) if not np.all(np.isnan(x)) else np.nan,
+                raw=True,
             )
         else:
             series = feature.rolling(N, min_periods=1).apply(
-                lambda x: x.argmax() + 1, raw=True
+                lambda x: (np.nanargmax(x) + 1) if not np.all(np.isnan(x)) else np.nan,
+                raw=True,
             )
         return series
 
@@ -178,11 +180,13 @@ class IdxMin(Rolling):
     def __call__(self, feature, N):
         if N == 0:
             series = feature.expanding(min_periods=1).apply(
-                lambda x: x.argmin() + 1, raw=True
+                lambda x: (np.nanargmin(x) + 1) if not np.all(np.isnan(x)) else np.nan,
+                raw=True,
             )
         else:
             series = feature.rolling(N, min_periods=1).apply(
-                lambda x: x.argmin() + 1, raw=True
+                lambda x: (np.nanargmin(x) + 1) if not np.all(np.isnan(x)) else np.nan,
+                raw=True,
             )
         return series
 
