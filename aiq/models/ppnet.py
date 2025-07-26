@@ -209,14 +209,14 @@ class PPNetModel(BaseModel):
         labels = []
         preds = []
         indices = []
-        for i, (daily_indices, batch_x, batch_y) in enumerate(test_loader):
+        for i, (bacth_indices, batch_x, batch_y) in enumerate(test_loader):
             batch_x = self.to_device(batch_x)
             batch_y = self.to_device(batch_y)
 
             with torch.no_grad():
                 outputs = self.model(batch_x)
 
-            indices.append(daily_indices.squeeze(0).numpy())
+            indices.append(bacth_indices.squeeze(0).numpy())
             labels.append(batch_y.cpu().numpy())
             preds.append(outputs.cpu().numpy())
 

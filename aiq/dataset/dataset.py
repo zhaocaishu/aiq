@@ -143,30 +143,30 @@ class TSDataset(Dataset):
 
     def __getitem__(self, index):
         """根据索引返回样本索引、特征和标准化后的标签（若存在）"""
-        daily_slices = self._daily_slices[index]
+        slices = self._daily_slices[index]
 
-        # 样本索引
-        daily_indices = np.array(self._daily_indices[index])
+        # 当前样本对应的原始索引列表
+        indices = np.array(self._daily_indices[index])
 
-        # 根据切片提取对应的特征序列，并堆叠成一个三维数组
-        features = np.stack([self._feature[slice] for slice in daily_slices])
+        # 根据每个切片提取特征序列，并堆叠为三维数组 [样本数, 时间步, 特征数]
+        features = np.stack([self._feature[slice] for slice in slices])
 
-        if self._label_names:
-            # 提取每个序列最后一个时间点的标签
-            labels = np.array([self._label[slice.stop - 1] for slice in daily_slices])
+        if not self._label_names:
+            return indices, features, None
 
-            if self.mode == "train":
-                # 训练模式下，过滤掉极端标签值对应的样本
-                mask, labels = drop_extreme_label(labels)
-                daily_indices = daily_indices[mask]
-                features = features[mask]
+        # 提取每个序列最后一个时间点的标签
+        labels = np.array([self._label[slice.stop - 1] for slice in slices])
 
-            # 标签进行标准化（z-score标准化）
-            labels = zscore(labels)
-        else:
-            labels = None
+        if self.mode == "train":
+            # 训练模式下，过滤掉极端标签值对应的样本
+            mask, labels = drop_extreme_label(labels)
+            indices = indices[mask]
+            features = features[mask]
 
-        return daily_indices, features, labels
+        # 标签进行标准化（z-score标准化）
+        labels = zscore(labels)
+
+        return indices, features, labels
 
     def __len__(self):
         return len(self._daily_dates)
