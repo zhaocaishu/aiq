@@ -58,6 +58,8 @@ model:
     pv_feature_start_index: 6
     market_feature_start_index: 143
     market_feature_end_index: 206
+    ind_feature_index: 2
+    ind_embedding_dim: 8
     seq_len: 16
     pred_len: 1
     d_feat: 137

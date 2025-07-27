@@ -21,6 +21,8 @@ class PPNetModel(BaseModel):
         pv_feature_start_index=3,
         market_feature_start_index=158,
         market_feature_end_index=221,
+        ind_feature_index=2,
+        ind_embedding_dim=8,
         seq_len=8,
         pred_len=1,
         d_feat=158,
@@ -46,6 +48,8 @@ class PPNetModel(BaseModel):
         self.pv_feature_start_index = pv_feature_start_index
         self.market_feature_start_index = market_feature_start_index
         self.market_feature_end_index = market_feature_end_index
+        self.ind_feature_index = ind_feature_index
+        self.ind_embedding_dim = ind_embedding_dim
 
         self.seq_len = seq_len
         self.pred_len = pred_len
@@ -66,6 +70,8 @@ class PPNetModel(BaseModel):
             pv_feature_start_index=self.pv_feature_start_index,
             market_feature_start_index=self.market_feature_start_index,
             market_feature_end_index=self.market_feature_end_index,
+            ind_feature_index=self.ind_feature_index,
+            ind_embedding_dim=self.ind_embedding_dim,
             seq_len=self.seq_len,
             pred_len=self.pred_len,
             d_feat=self.d_feat,

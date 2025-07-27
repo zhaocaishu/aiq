@@ -182,6 +182,8 @@ class PPNet(nn.Module):
         pv_feature_start_index,
         market_feature_start_index,
         market_feature_end_index,
+        ind_feature_index,
+        ind_embedding_dim,
         seq_len,
         pred_len,
         d_feat,
@@ -196,6 +198,9 @@ class PPNet(nn.Module):
         # price-volume-based features
         self.pv_feature_start_index = pv_feature_start_index
 
+        # industry feature index
+        self.ind_feature_index = ind_feature_index
+
         # market features
         self.market_feature_start_index = market_feature_start_index
         self.market_feature_end_index = market_feature_end_index
@@ -206,9 +211,7 @@ class PPNet(nn.Module):
         self.revin_norm = RevIN(d_feat)
 
         # industry embedding
-        self.ind_feature_index = 2
-        ind_embeding_dim = 8
-        self.ind_embeding = nn.Embedding(256, ind_embeding_dim)
+        self.ind_embedding = nn.Embedding(256, ind_embedding_dim)
 
         # feature projection
         self.feature_projection = nn.Linear(d_feat, d_model)
@@ -222,7 +225,7 @@ class PPNet(nn.Module):
         )
 
         # inter-stock attention
-        self.spatial_projection = nn.Linear(d_model + ind_embeding_dim, d_model)
+        self.spatial_projection = nn.Linear(d_model + ind_embedding_dim, d_model)
         self.spatial_attention = SAttention(
             d_model=d_model, nhead=s_nhead, dropout=dropout
         )
@@ -258,7 +261,7 @@ class PPNet(nn.Module):
 
         # Inter-stock spatial attention
         ind_ids = x[:, :, self.ind_feature_index].long()
-        x_ind = self.ind_embeding(ind_ids)  # (N, T, ind_dim)
+        x_ind = self.ind_embedding(ind_ids)  # (N, T, ind_dim)
         x_spatial_input = torch.cat([x_temporal, x_ind], dim=-1)
         x_spatial_input = self.spatial_projection(x_spatial_input)  # (N, T, d_model)
         x_spatial = self.spatial_attention(x_spatial_input)
