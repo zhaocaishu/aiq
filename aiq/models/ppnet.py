@@ -18,15 +18,16 @@ class PPNetModel(BaseModel):
         self,
         feature_names=None,
         label_names=None,
+        feature_start_index=3,
+        market_feature_start_index=158,
+        market_feature_end_index=221,
+        seq_len=8,
+        pred_len=1,
         d_feat=158,
         d_model=256,
         t_nhead=4,
         s_nhead=2,
-        seq_len=8,
-        pred_len=1,
         dropout=0.5,
-        gate_input_start_index=158,
-        gate_input_end_index=221,
         beta=5.0,
         epochs=5,
         batch_size=1,
@@ -42,15 +43,17 @@ class PPNetModel(BaseModel):
         self._feature_names = feature_names
         self._label_names = label_names
 
+        self.feature_start_index = feature_start_index
+        self.market_feature_start_index = market_feature_start_index
+        self.market_feature_end_index = market_feature_end_index
+
+        self.seq_len = seq_len
+        self.pred_len = pred_len
         self.d_feat = d_feat
         self.d_model = d_model
         self.t_nhead = t_nhead
         self.s_nhead = s_nhead
-        self.seq_len = seq_len
-        self.pred_len = pred_len
         self.dropout = dropout
-        self.gate_input_start_index = gate_input_start_index
-        self.gate_input_end_index = gate_input_end_index
         self.epochs = epochs
         self.batch_size = batch_size
         self.warmup_ratio = warmup_ratio
@@ -60,15 +63,16 @@ class PPNetModel(BaseModel):
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
         self.model = PPNet(
+            feature_start_index=self.feature_start_index,
+            market_feature_start_index=self.market_feature_start_index,
+            market_feature_end_index=self.market_feature_end_index,
+            seq_len=self.seq_len,
+            pred_len=self.pred_len,
             d_feat=self.d_feat,
             d_model=self.d_model,
             t_nhead=self.t_nhead,
             s_nhead=self.s_nhead,
-            seq_len=self.seq_len,
-            pred_len=self.pred_len,
             dropout=self.dropout,
-            gate_input_start_index=self.gate_input_start_index,
-            gate_input_end_index=self.gate_input_end_index,
             beta=beta,
         )
 

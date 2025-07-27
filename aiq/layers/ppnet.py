@@ -179,27 +179,32 @@ class TemporalAttention(nn.Module):
 class PPNet(nn.Module):
     def __init__(
         self,
+        feature_start_index,
+        market_feature_start_index,
+        market_feature_end_index,
+        seq_len,
+        pred_len,
         d_feat,
         d_model,
         t_nhead,
         s_nhead,
         dropout,
-        gate_input_start_index,
-        gate_input_end_index,
-        seq_len,
-        pred_len,
         beta,
     ):
         super(PPNet, self).__init__()
 
+        self.feature_start_index = feature_start_index
+
         # market
-        self.gate_input_start_index = gate_input_start_index
-        self.gate_input_end_index = gate_input_end_index
-        self.d_gate_input = gate_input_end_index - gate_input_start_index  # F'
-        self.feature_gate = Gate(self.d_gate_input, d_feat, beta=beta)
+        self.market_feature_start_index = market_feature_start_index
+        self.market_feature_end_index = market_feature_end_index
+        self.market_feature_dim = (
+            market_feature_end_index - market_feature_start_index
+        )  # F'
+        self.market_gating_layer = Gate(self.market_feature_dim, d_feat, beta=beta)
 
         # instrument
-        self.layers = nn.Sequential(
+        self.instrument_encoder = nn.Sequential(
             # feature layer
             nn.Linear(d_feat, d_model),
             PositionalEncoding(d_model),
@@ -213,18 +218,24 @@ class PPNet(nn.Module):
         )
 
         # pre-normalization
-        self.revin_layer = RevIN(d_feat)
+        self.revin_norm = RevIN(d_feat)
 
     def forward(self, x):
         # Extract source features and apply revin_layer to src features
-        src = x[:, :, 3 : self.gate_input_start_index]  # Shape: (N, T, D)
-        src = self.revin_layer(src)
+        instrument_features = x[
+            :, :, self.feature_start_index : self.market_feature_start_index
+        ]  # Shape: (N, T, D)
+        instrument_features = self.revin_norm(instrument_features)
 
-        # Apply feature gate to source features
-        gate_input = x[:, -1, self.gate_input_start_index : self.gate_input_end_index]
-        src_gated = src * torch.unsqueeze(self.feature_gate(gate_input), dim=1)
+        # Apply feature gate to instrument features
+        market_features = x[
+            :, -1, self.market_feature_start_index : self.market_feature_end_index
+        ]
+        gated_instrument_features = instrument_features * torch.unsqueeze(
+            self.market_gating_layer(market_features), dim=1
+        )
 
-        # Generate output through layers
-        output = self.layers(src_gated)
+        # Generate output through encoder layers
+        output = self.instrument_encoder(gated_instrument_features)
 
         return output
