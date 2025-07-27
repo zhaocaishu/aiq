@@ -179,7 +179,7 @@ class TemporalAttention(nn.Module):
 class PPNet(nn.Module):
     def __init__(
         self,
-        feature_start_index,
+        pv_feature_start_index,
         market_feature_start_index,
         market_feature_end_index,
         seq_len,
@@ -193,49 +193,80 @@ class PPNet(nn.Module):
     ):
         super(PPNet, self).__init__()
 
-        self.feature_start_index = feature_start_index
+        # price-volume-based features
+        self.pv_feature_start_index = pv_feature_start_index
 
-        # market
+        # market features
         self.market_feature_start_index = market_feature_start_index
         self.market_feature_end_index = market_feature_end_index
-        self.market_feature_dim = (
-            market_feature_end_index - market_feature_start_index
-        )  # F'
+        self.market_feature_dim = market_feature_end_index - market_feature_start_index
         self.market_gating_layer = Gate(self.market_feature_dim, d_feat, beta=beta)
-
-        # instrument
-        self.instrument_encoder = nn.Sequential(
-            # feature layer
-            nn.Linear(d_feat, d_model),
-            PositionalEncoding(d_model),
-            # intra-stock aggregation
-            TAttention(d_model=d_model, nhead=t_nhead, dropout=dropout),
-            # inter-stock aggregation
-            SAttention(d_model=d_model, nhead=s_nhead, dropout=dropout),
-            TemporalAttention(d_model=d_model),
-            # decoder
-            nn.Linear(d_model, pred_len),
-        )
 
         # pre-normalization
         self.revin_norm = RevIN(d_feat)
 
-    def forward(self, x):
-        # Extract source features and apply revin_layer to src features
-        instrument_features = x[
-            :, :, self.feature_start_index : self.market_feature_start_index
-        ]  # Shape: (N, T, D)
-        instrument_features = self.revin_norm(instrument_features)
+        # industry embedding
+        self.ind_feature_index = 2
+        ind_embeding_dim = 8
+        self.ind_embeding = nn.Embedding(256, ind_embeding_dim)
 
-        # Apply feature gate to instrument features
-        market_features = x[
-            :, -1, self.market_feature_start_index : self.market_feature_end_index
-        ]
-        gated_instrument_features = instrument_features * torch.unsqueeze(
-            self.market_gating_layer(market_features), dim=1
+        # feature projection
+        self.feature_projection = nn.Linear(d_feat, d_model)
+
+        # positional encoding
+        self.positional_encoding = PositionalEncoding(d_model)
+
+        # intra-stock attention
+        self.temporal_attention = TAttention(
+            d_model=d_model, nhead=t_nhead, dropout=dropout
         )
 
-        # Generate output through encoder layers
-        output = self.instrument_encoder(gated_instrument_features)
+        # inter-stock attention
+        self.spatial_projection = nn.Linear(d_model + ind_embeding_dim, d_model)
+        self.spatial_attention = SAttention(
+            d_model=d_model, nhead=s_nhead, dropout=dropout
+        )
+
+        # temporal aggregation
+        self.temporal_aggregation = TemporalAttention(d_model=d_model)
+
+        # decoder
+        self.decoder = nn.Linear(d_model, pred_len)
+
+    def forward(self, x):
+        # Extract instrument features and normalize
+        pv_features = x[
+            :, :, self.pv_feature_start_index : self.market_feature_start_index
+        ]  # Shape: (N, T, D)
+        pv_features = self.revin_norm(pv_features)
+
+        # Extract market features and apply gating
+        market_features = x[
+            :, -1, self.market_feature_start_index : self.market_feature_end_index
+        ]  # Shape: (N, F')
+        gated_weights = self.market_gating_layer(market_features)  # (N, D)
+        gated_pv_features = pv_features * gated_weights.unsqueeze(1)  # (N, T, D)
+
+        # Feature projection
+        x_proj = self.feature_projection(gated_pv_features)  # (N, T, d_model)
+
+        # Positional encoding
+        x_encoded = self.positional_encoding(x_proj)
+
+        # Intra-stock temporal attention
+        x_temporal = self.temporal_attention(x_encoded)
+
+        # Inter-stock spatial attention
+        ind_ids = x[:, :, self.ind_feature_index].long()
+        x_ind = self.ind_embeding(ind_ids)  # (N, T, ind_dim)
+        x_spatial_input = torch.cat([x_temporal, x_ind], dim=-1)
+        x_spatial_input = self.spatial_projection(x_spatial_input)  # (N, T, d_model)
+        x_spatial = self.spatial_attention(x_spatial_input)
+
+        # Temporal aggregation across time dimension
+        x_aggregated = self.temporal_aggregation(x_spatial)  # (N, d_model)
+
+        # Prediction decoder
+        output = self.decoder(x_aggregated)  # (N, pred_len)
 
         return output

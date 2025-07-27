@@ -18,7 +18,7 @@ class PPNetModel(BaseModel):
         self,
         feature_names=None,
         label_names=None,
-        feature_start_index=3,
+        pv_feature_start_index=3,
         market_feature_start_index=158,
         market_feature_end_index=221,
         seq_len=8,
@@ -43,7 +43,7 @@ class PPNetModel(BaseModel):
         self._feature_names = feature_names
         self._label_names = label_names
 
-        self.feature_start_index = feature_start_index
+        self.pv_feature_start_index = pv_feature_start_index
         self.market_feature_start_index = market_feature_start_index
         self.market_feature_end_index = market_feature_end_index
 
@@ -63,7 +63,7 @@ class PPNetModel(BaseModel):
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
         self.model = PPNet(
-            feature_start_index=self.feature_start_index,
+            pv_feature_start_index=self.pv_feature_start_index,
             market_feature_start_index=self.market_feature_start_index,
             market_feature_end_index=self.market_feature_end_index,
             seq_len=self.seq_len,

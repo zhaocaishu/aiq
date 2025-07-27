@@ -1,3 +1,5 @@
+import torch
+
 from aiq.utils.config import config as cfg
 from aiq.utils.module import init_instance_by_config
 from aiq.utils.logging import get_logger
@@ -16,4 +18,8 @@ if __name__ == "__main__":
         logger=logger,
     )
 
-    print("Model initialized successfully")
+    logger.info("Model initialized successfully")
+
+    x = torch.zeros(100, 16, 206)
+    out = model.model(x)
+    logger.info(out)
