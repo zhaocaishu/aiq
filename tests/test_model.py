@@ -20,6 +20,6 @@ if __name__ == "__main__":
 
     logger.info("Model initialized successfully")
 
-    x = torch.zeros(100, 16, 206)
-    out = model.model(x)
-    logger.info(out)
+    dummy_input = torch.zeros(100, 16, 206)
+    output = model.model(dummy_input)
+    logger.info(output)
