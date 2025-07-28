@@ -185,25 +185,32 @@ class RollingRobustZScoreNorm(Processor):
             abs_dev = np.abs(x - median)
             return np.nanmedian(abs_dev)
 
-        # Compute rolling median
-        rolling_median = df[cols].rolling(self.window_size, min_periods=1).median()
+        # Function to normalize one group
+        def normalize_group(group: pd.DataFrame) -> pd.DataFrame:
+            rolling_med = group[cols].rolling(self.window_size, min_periods=1).median()
+            rolling_mad = (
+                group[cols]
+                .rolling(self.window_size, min_periods=1)
+                .apply(mad, raw=True)
+            )
+            rolling_std = rolling_mad * 1.4826 + 1e-12
+            normed = (group[cols] - rolling_med) / rolling_std
+            if self.clip_outlier:
+                normed = normed.clip(-3, 3)
+            group.loc[:, cols] = normed
+            return group
 
-        # Compute rolling MAD
-        rolling_mad = df[cols].rolling(self.window_size, min_periods=1).apply(mad, raw=True)
-
-        # Compute robust standard deviation
-        rolling_std = rolling_mad * 1.4826 + 1e-12
-
-        # Normalize using statistics from the previous window
-        normalized = (df[cols] - rolling_median) / rolling_std
+        # Apply normalization per instrument
+        normalized_df = (
+            df.groupby("Instrument", group_keys=False)
+            .apply(normalize_group)
+        )
 
         # Clip outliers if specified
         if self.clip_outlier:
-            normalized = normalized.clip(-3, 3)
-
-        # Assign normalized values back to dataframe
-        df[cols] = normalized
-        return df
+            normalized_df = normalized_df.clip(-3, 3)
+        
+        return normalized_df
 
 
 class CSNeutralize(Processor):
