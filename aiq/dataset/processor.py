@@ -138,76 +138,80 @@ class RobustZScoreNorm(Processor):
         return df
 
 
-class RollingRobustZScoreNorm(Processor):
-    """Rolling Robust Z-Score Normalization
+class TSRobustZScoreNorm(Processor):
+    """Timeseries Robust Z-Score Normalization for MultiIndex DataFrames
 
-    Normalizes each data point using a robust Z-score based on a rolling window of previous data points.
-    For each data point at time t, the mean is estimated using the median of the previous `window_size` data points,
-    and the standard deviation is estimated using the Median Absolute Deviation (MAD) multiplied by 1.4826 from the same window.
-    This approach is robust to outliers and non-normal distributions.
+    Normalizes each data point using a robust Z-score based on a rolling window of previous data points,
+    including multiple instruments in each time window.
 
-    Parameters:
-    -----------
+    Statistics are computed over all instruments within the window of `window_size` dates.
+
+    Parameters
+    ----------
     window_size : int
-        The number of previous data points to use for calculating rolling statistics.
-        A larger window provides more stable estimates but is less responsive to recent changes.
+        Number of dates in the rolling window to use for statistics.
     fields_group : str or list, optional
-        The column group or list of columns to normalize. If None, all columns in the dataframe are normalized.
-    clip_outlier : bool, optional
-        If True, clips the normalized values to the range [-3, 3] to limit the impact of extreme outliers. Default is True.
+        Columns to normalize; defaults to all numeric columns.
+    clip_outlier : bool, default True
+        If True, clips normalized values to [-3, 3].
+    exclude_cols : list, optional
+        List of columns to exclude from normalization.
     """
 
     def __init__(
-        self, window_size, fields_group=None, clip_outlier=True, exclude_cols=[]
+        self,
+        window_size: int,
+        fields_group=None,
+        clip_outlier: bool = True,
+        exclude_cols: list = None,
     ):
         self.window_size = window_size
         self.fields_group = fields_group
         self.clip_outlier = clip_outlier
-        self.exclude_cols = exclude_cols
+        self.exclude_cols = exclude_cols or []
 
-    def __call__(self, df):
-        """Apply rolling robust Z-score normalization to the dataframe.
+    def __call__(self, df: pd.DataFrame) -> pd.DataFrame:
+        # 1. 校验 MultiIndex
+        if not isinstance(df.index, pd.MultiIndex) or df.index.names[0] != "Date":
+            raise ValueError("DataFrame must have MultiIndex ['Date', 'Instrument']")
 
-        Parameters:
-        -----------
-        df : pd.DataFrame
-            Input dataframe with a datetime index, assumed to be sorted by time.
-
-        Returns:
-        --------
-        pd.DataFrame
-            Dataframe with specified columns normalized.
-        """
-        # Get columns to normalize
+        # 2. 待归一化列
         cols = get_group_columns(df, self.fields_group, self.exclude_cols)
 
-        # Define MAD function handling NaNs
-        def mad(x):
-            median = np.nanmedian(x)
-            abs_dev = np.abs(x - median)
-            return np.nanmedian(abs_dev)
+        # 3. 按日期排序，准备滚动窗口的日期列表
+        dates = sorted(df.index.get_level_values("Date").unique())
 
-        # Function to normalize one group
-        def normalize_group(group: pd.DataFrame) -> pd.DataFrame:
-            rolling_med = group[cols].rolling(self.window_size, min_periods=1).median()
-            rolling_mad = (
-                group[cols]
-                .rolling(self.window_size, min_periods=1)
-                .apply(mad, raw=True)
-            )
-            rolling_std = rolling_mad * 1.4826 + 1e-12
-            normed = (group[cols] - rolling_med) / rolling_std
-            if self.clip_outlier:
-                normed = normed.clip(-3, 3)
-            group.loc[:, cols] = normed
-            return group
+        # 4. 计算每个日期的中位数和 MAD
+        stats = {}
+        for i, cur_date in enumerate(dates):
+            window = dates[max(0, i - self.window_size + 1) : i + 1]
+            block = df.loc[window, cols].values  # shape (n_rows, n_features)
 
-        # Apply normalization per instrument
-        normalized_df = df.groupby("Instrument", group_keys=False).apply(
-            normalize_group
-        )
+            med = np.nanmedian(block, axis=0)
+            # MAD: 整体偏差的中位数
+            mad = np.nanmedian(np.abs(block - med), axis=0)
+            std = mad * 1.4826 + 1e-12  # 转为与正态分布相当的 std
 
-        return normalized_df
+            stats[cur_date] = {"median": med, "std": std}
+
+        # 5. 构造两个 DataFrame，index=dates，columns=cols
+        med_values = [stats[d]["median"] for d in dates]
+        std_values = [stats[d]["std"] for d in dates]
+        med_df = pd.DataFrame(med_values, index=dates, columns=cols)
+        std_df = pd.DataFrame(std_values, index=dates, columns=cols)
+
+        # 6. 对齐到原始行：取出每行的日期，重建与原 df 同长的 med 和 std 矩阵
+        date_index = df.index.get_level_values("Date")
+        med_mat = med_df.reindex(date_index).values
+        std_mat = std_df.reindex(date_index).values
+
+        # 7. 向量化归一化
+        normed = (df[cols].values - med_mat) / std_mat
+        if self.clip_outlier:
+            normed = np.clip(normed, -3, 3)
+
+        df[cols] = normed
+        return df
 
 
 class CSNeutralize(Processor):

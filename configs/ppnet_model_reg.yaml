@@ -16,7 +16,7 @@ data_handler:
           industry_col: "IND_CLS_L1"
           cap_col: "MKT_CAP"
           factor_cols: ["BP", "EP", "^TURN_(?:MEAN|STD)_(?:5|10|20|30|60)D$"]
-      - class: RollingRobustZScoreNorm
+      - class: TSRobustZScoreNorm
         module_path: aiq.dataset.processor
         kwargs:
           window_size: 30
