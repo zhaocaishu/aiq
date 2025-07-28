@@ -157,10 +157,11 @@ class RollingRobustZScoreNorm(Processor):
         If True, clips the normalized values to the range [-3, 3] to limit the impact of extreme outliers. Default is True.
     """
 
-    def __init__(self, window_size, fields_group=None, clip_outlier=True):
+    def __init__(self, window_size, fields_group=None, clip_outlier=True, exclude_cols=[]):
         self.window_size = window_size
         self.fields_group = fields_group
         self.clip_outlier = clip_outlier
+        self.exclude_cols = exclude_cols
 
     def __call__(self, df):
         """Apply rolling robust Z-score normalization to the dataframe.
@@ -176,7 +177,7 @@ class RollingRobustZScoreNorm(Processor):
             Dataframe with specified columns normalized.
         """
         # Get columns to normalize
-        cols = get_group_columns(df, self.fields_group)
+        cols = get_group_columns(df, self.fields_group, self.exclude_cols)
 
         # Define MAD function handling NaNs
         def mad(x):
