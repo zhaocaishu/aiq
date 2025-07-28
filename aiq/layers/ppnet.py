@@ -180,8 +180,8 @@ class PPNet(nn.Module):
         pv_feature_start_index,
         market_feature_start_index,
         market_feature_end_index,
-        ind_feature_index,
-        ind_embedding_dim,
+        industry_feature_index,
+        industry_embedding_dim,
         seq_len,
         pred_len,
         d_feat,
@@ -197,7 +197,7 @@ class PPNet(nn.Module):
         self.pv_feature_start_index = pv_feature_start_index
 
         # industry feature index
-        self.ind_feature_index = ind_feature_index
+        self.industry_feature_index = industry_feature_index
 
         # market features
         self.market_feature_start_index = market_feature_start_index
@@ -206,7 +206,7 @@ class PPNet(nn.Module):
         self.market_gating_layer = Gate(self.market_feature_dim, d_feat, beta=beta)
 
         # industry embedding
-        self.ind_embedding = nn.Embedding(256, ind_embedding_dim)
+        self.industry_embedding = nn.Embedding(256, industry_embedding_dim)
 
         # feature projection
         self.feature_projection = nn.Linear(d_feat, d_model)
@@ -220,7 +220,7 @@ class PPNet(nn.Module):
         )
 
         # inter-stock attention
-        self.spatial_projection = nn.Linear(d_model + ind_embedding_dim, d_model)
+        self.spatial_projection = nn.Linear(d_model + industry_embedding_dim, d_model)
         self.spatial_attention = SAttention(
             d_model=d_model, nhead=s_nhead, dropout=dropout
         )
@@ -254,9 +254,11 @@ class PPNet(nn.Module):
         x_temporal = self.temporal_attention(x_encoded)
 
         # Inter-stock spatial attention
-        ind_ids = x[:, :, self.ind_feature_index].long()
-        x_ind = self.ind_embedding(ind_ids)  # (N, T, ind_dim)
-        x_spatial_input = torch.cat([x_temporal, x_ind], dim=-1)
+        industry_ids = x[:, :, self.industry_feature_index].long()
+        x_industry = self.industry_embedding(
+            industry_ids
+        )  # (N, T, industry_embedding_dim)
+        x_spatial_input = torch.cat([x_temporal, x_industry], dim=-1)
         x_spatial_input = self.spatial_projection(x_spatial_input)  # (N, T, d_model)
         x_spatial = self.spatial_attention(x_spatial_input)
 

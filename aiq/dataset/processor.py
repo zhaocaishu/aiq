@@ -157,7 +157,9 @@ class RollingRobustZScoreNorm(Processor):
         If True, clips the normalized values to the range [-3, 3] to limit the impact of extreme outliers. Default is True.
     """
 
-    def __init__(self, window_size, fields_group=None, clip_outlier=True, exclude_cols=[]):
+    def __init__(
+        self, window_size, fields_group=None, clip_outlier=True, exclude_cols=[]
+    ):
         self.window_size = window_size
         self.fields_group = fields_group
         self.clip_outlier = clip_outlier
@@ -201,15 +203,10 @@ class RollingRobustZScoreNorm(Processor):
             return group
 
         # Apply normalization per instrument
-        normalized_df = (
-            df.groupby("Instrument", group_keys=False)
-            .apply(normalize_group)
+        normalized_df = df.groupby("Instrument", group_keys=False).apply(
+            normalize_group
         )
 
-        # Clip outliers if specified
-        if self.clip_outlier:
-            normalized_df = normalized_df.clip(-3, 3)
-        
         return normalized_df
 
 
