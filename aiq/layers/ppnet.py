@@ -5,8 +5,6 @@ from torch.nn.modules.linear import Linear
 from torch.nn.modules.dropout import Dropout
 from torch.nn.modules.normalization import LayerNorm
 
-from aiq.layers.revin import RevIN
-
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=100):
@@ -207,9 +205,6 @@ class PPNet(nn.Module):
         self.market_feature_dim = market_feature_end_index - market_feature_start_index
         self.market_gating_layer = Gate(self.market_feature_dim, d_feat, beta=beta)
 
-        # pre-normalization
-        self.revin_norm = RevIN(d_feat)
-
         # industry embedding
         self.ind_embedding = nn.Embedding(256, ind_embedding_dim)
 
@@ -241,7 +236,6 @@ class PPNet(nn.Module):
         pv_features = x[
             :, :, self.pv_feature_start_index : self.market_feature_start_index
         ]  # Shape: (N, T, D)
-        pv_features = self.revin_norm(pv_features)
 
         # Extract market features and apply gating
         market_features = x[
