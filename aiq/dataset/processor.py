@@ -138,6 +138,73 @@ class RobustZScoreNorm(Processor):
         return df
 
 
+class RollingRobustZScoreNorm(Processor):
+    """Rolling Robust Z-Score Normalization
+
+    Normalizes each data point using a robust Z-score based on a rolling window of previous data points.
+    For each data point at time t, the mean is estimated using the median of the previous `window_size` data points,
+    and the standard deviation is estimated using the Median Absolute Deviation (MAD) multiplied by 1.4826 from the same window.
+    This approach is robust to outliers and non-normal distributions.
+
+    Parameters:
+    -----------
+    window_size : int
+        The number of previous data points to use for calculating rolling statistics.
+        A larger window provides more stable estimates but is less responsive to recent changes.
+    fields_group : str or list, optional
+        The column group or list of columns to normalize. If None, all columns in the dataframe are normalized.
+    clip_outlier : bool, optional
+        If True, clips the normalized values to the range [-3, 3] to limit the impact of extreme outliers. Default is True.
+    """
+
+    def __init__(self, window_size, fields_group=None, clip_outlier=True):
+        self.window_size = window_size
+        self.fields_group = fields_group
+        self.clip_outlier = clip_outlier
+
+    def __call__(self, df):
+        """Apply rolling robust Z-score normalization to the dataframe.
+
+        Parameters:
+        -----------
+        df : pd.DataFrame
+            Input dataframe with a datetime index, assumed to be sorted by time.
+
+        Returns:
+        --------
+        pd.DataFrame
+            Dataframe with specified columns normalized.
+        """
+        # Get columns to normalize
+        cols = get_group_columns(df, self.fields_group)
+
+        # Define MAD function handling NaNs
+        def mad(x):
+            median = np.nanmedian(x)
+            abs_dev = np.abs(x - median)
+            return np.nanmedian(abs_dev)
+
+        # Compute rolling median
+        rolling_median = df[cols].rolling(self.window_size, min_periods=1).median()
+
+        # Compute rolling MAD
+        rolling_mad = df[cols].rolling(self.window_size, min_periods=1).apply(mad, raw=True)
+
+        # Compute robust standard deviation
+        rolling_std = rolling_mad * 1.4826 + 1e-12
+
+        # Normalize using statistics from the previous window
+        normalized = (df[cols] - rolling_median) / rolling_std
+
+        # Clip outliers if specified
+        if self.clip_outlier:
+            normalized = normalized.clip(-3, 3)
+
+        # Assign normalized values back to dataframe
+        df[cols] = normalized
+        return df
+
+
 class CSNeutralize(Processor):
     """Factors Neutralization"""
 
