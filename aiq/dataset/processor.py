@@ -162,7 +162,7 @@ class TSRobustZScoreNorm(Processor):
     def __init__(
         self,
         window_size: int,
-        fields_group=None,
+        fields_group: str = None,
         clip_outlier: bool = True,
         exclude_cols: list = None,
     ):
