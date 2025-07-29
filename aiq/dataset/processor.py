@@ -1,4 +1,5 @@
 import abc
+import warnings
 from typing import List
 
 import pandas as pd
@@ -178,11 +179,12 @@ class TSRobustZScoreNorm(Processor):
         # 2. 待归一化列
         cols = get_group_columns(df, self.fields_group, self.exclude_cols)
 
-        # 3. 按日期排序，准备滚动窗口的日期列表
-        dates = sorted(df.index.get_level_values("Date").unique())
+        # 3. 日期索引
+        date_index = df.index.get_level_values("Date")
 
         # 4. 计算每个日期的中位数和 MAD
         stats = {}
+        dates = sorted(date_index.unique())
         for i, cur_date in enumerate(dates):
             window = dates[max(0, i - self.window_size + 1) : i + 1]
             block = df.loc[window, cols].values  # shape (n_rows, n_features)
@@ -201,7 +203,6 @@ class TSRobustZScoreNorm(Processor):
         std_df = pd.DataFrame(std_values, index=dates, columns=cols)
 
         # 6. 对齐到原始行：取出每行的日期，重建与原 df 同长的 med 和 std 矩阵
-        date_index = df.index.get_level_values("Date")
         med_mat = med_df.reindex(date_index).values
         std_mat = std_df.reindex(date_index).values
 
