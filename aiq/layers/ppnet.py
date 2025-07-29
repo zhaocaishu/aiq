@@ -178,6 +178,7 @@ class PPNet(nn.Module):
     def __init__(
         self,
         pv_feature_start_index,
+        pv_feature_end_index,
         market_feature_start_index,
         market_feature_end_index,
         industry_feature_index,
@@ -195,6 +196,7 @@ class PPNet(nn.Module):
 
         # price-volume-based features
         self.pv_feature_start_index = pv_feature_start_index
+        self.pv_feature_end_index = pv_feature_end_index
 
         # industry feature index
         self.industry_feature_index = industry_feature_index
@@ -234,7 +236,7 @@ class PPNet(nn.Module):
     def forward(self, x):
         # Extract instrument features and normalize
         pv_features = x[
-            :, :, self.pv_feature_start_index : self.market_feature_start_index
+            :, :, self.pv_feature_start_index : self.pv_feature_end_index
         ]  # Shape: (N, T, D)
 
         # Extract market features and apply gating
