@@ -189,11 +189,13 @@ class TSRobustZScoreNorm(Processor):
             window = dates[max(0, i - self.window_size + 1) : i + 1]
             block = df.loc[window, cols].values  # shape (n_rows, n_features)
 
-            med = np.nanmedian(block, axis=0)
-            # MAD: 整体偏差的中位数
-            mad = np.nanmedian(np.abs(block - med), axis=0)
-            std = mad * 1.4826 + 1e-12  # 转为与正态分布相当的 std
-
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=RuntimeWarning)
+                med = np.nanmedian(block, axis=0)
+                # MAD: 整体偏差的中位数
+                mad = np.nanmedian(np.abs(block - med), axis=0)
+                std = mad * 1.4826 + 1e-12  # 转为与正态分布相当的 std
+            
             stats[cur_date] = {"median": med, "std": std}
 
         # 5. 构造两个 DataFrame，index=dates，columns=cols
