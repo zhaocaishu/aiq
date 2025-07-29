@@ -193,37 +193,34 @@ class TSRobustZScoreNorm(Processor):
         )
         end_idxs = start_idxs + counts
 
-        n_dates, n_cols = len(unique_dates), values.shape[1]
-        med_arr = np.zeros((n_dates, n_cols))
-        std_arr = np.zeros((n_dates, n_cols))
-
+        stats = {}
         left = 0
-        for right in range(n_dates):
+        for right in range(len(unique_dates)):
             # Slide window
-            if right - left + 1 > self.window_size:
+            if right - left + 1 > window_size:
                 left += 1
-
+    
             # Aggregate block for current window
             block = values[start_idxs[left] : end_idxs[right]]
-
+    
             # Compute median and scaled MAD
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", category=RuntimeWarning)
                 med = np.nanmedian(block, axis=0)
                 mad = np.nanmedian(np.abs(block - med), axis=0)
                 std = mad * 1.4826 + 1e-12
-
-            med_arr[right] = med
-            std_arr[right] = std
-
-        normalized_blocks = []
-        for i, (date, grp) in enumerate(df.groupby(level="Date")):
-            med, std = med_arr[i], std_arr[i]
-            normalized_block = (grp[cols].to_numpy() - med) / std
-            if self.clip_outlier:
-                normalized_block = np.clip(normalized_block, -3, 3)
-            normalized_blocks.append(normalized_block)
-        df.loc[:, cols] = np.vstack(normalized_blocks)
+    
+            stats[unique_dates[right]] = {"median": med, "std": std}
+    
+        def normalize_group(group, date):
+            med = stats[date]["median"]
+            std = stats[date]["std"]
+            return (group[cols] - med) / std
+    
+        normalized_df = df.groupby(level="Date", group_keys=False).apply(
+            lambda x: normalize_group(x, x.name)
+        )
+        df.loc[:, cols] = normalized_df
         return df
 
 
