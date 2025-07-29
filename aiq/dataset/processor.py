@@ -179,16 +179,16 @@ class TSRobustZScoreNorm(Processor):
         cols = get_group_columns(df, self.fields_group, self.exclude_cols)
     
         # Sort by Date and extract values & dates
-        df = df.sort_index(level='Date')
+        df = df.sort_index(level="Date")
         values = df[cols].to_numpy()
-        dates = df.index.get_level_values('Date')
+        dates = df.index.get_level_values("Date")
     
         # Identify unique dates and their positions
         unique_dates, start_idxs, counts = np.unique(
             dates, return_index=True, return_counts=True
         )
         end_idxs = start_idxs + counts
-    
+
         n_dates, n_cols = len(unique_dates), values.shape[1]
         med_arr = np.zeros((n_dates, n_cols))
         std_arr = np.zeros((n_dates, n_cols))
@@ -196,11 +196,11 @@ class TSRobustZScoreNorm(Processor):
         left = 0
         for right in range(n_dates):
             # Slide window
-            if right - left + 1 > self.window_size:
+            if right - left + 1 > window_size:
                 left += 1
     
             # Aggregate block for current window
-            block = values[start_idxs[left]: end_idxs[right]]
+            block = values[start_idxs[left] : end_idxs[right]]
     
             # Compute median and scaled MAD
             med = np.nanmedian(block, axis=0)
