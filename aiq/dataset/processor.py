@@ -197,7 +197,7 @@ class TSRobustZScoreNorm(Processor):
         left = 0
         for right in range(n_dates):
             # Slide window
-            if right - left + 1 > window_size:
+            if right - left + 1 > self.window_size:
                 left += 1
     
             # Aggregate block for current window
