@@ -19,7 +19,7 @@ data_handler:
       - class: TSRobustZScoreNorm
         module_path: aiq.dataset.processor
         kwargs:
-          window_size: 30
+          window_size: 16
           fields_group: "feature"
           clip_outlier: true
           exclude_cols: ["MKT_CLS", "IND_CLS_L1", "IND_CLS_L2"]
