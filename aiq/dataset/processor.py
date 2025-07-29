@@ -178,38 +178,64 @@ class TSRobustZScoreNorm(Processor):
         # 2. 待归一化列
         cols = get_group_columns(df, self.fields_group, self.exclude_cols)
 
-        # 3. 日期索引
+        # 1. 确保按日期升序
+        df = df.sort_index(level="Date")
+        # 2. 把原始值提取为 NumPy 数组
+        values = df[cols].values  # shape = (n_rows, n_cols)
+    
+        # 3. 计算每个日期在原 df 中的起止行号（假定同一天的数据在 df 中是连续的）
+        #    得到 unique_dates，以及对应每个日期在 values 中的 [start_idx, end_idx)
         date_index = df.index.get_level_values("Date")
-
-        # 4. 计算每个日期的中位数和 MAD
-        stats = {}
-        dates = sorted(date_index.unique())
-        for i, cur_date in enumerate(dates):
-            window = dates[max(0, i - self.window_size + 1) : i + 1]
-            block = df.loc[window, cols]
-            
-            med = block.median()
-            mad = (block - med).abs().median()
+        unique_dates, start_idxs, counts = np.unique(
+            date_index, return_index=True, return_counts=True
+        )
+        # start_idxs 是第一个出现位置，counts 是每个日期的行数
+        end_idxs = (
+            start_idxs + counts
+        )  # 对应每个日期切片是 values[start_idxs[i]:end_idxs[i]]
+    
+        n_dates = len(unique_dates)
+        n_cols = values.shape[1]
+    
+        # 4. 准备用于存放滑窗结果的数组
+        med_arr = np.zeros((n_dates, n_cols), dtype=float)
+        std_arr = np.zeros((n_dates, n_cols), dtype=float)
+    
+        # 5. 滑动窗口：用两个指针维护窗口在 unique_dates 上的起止
+        left = 0
+        for right in range(n_dates):
+            # 当窗口大小超过 window_size 时，左指针右移
+            if right - left + 1 > window_size:
+                left += 1
+    
+            # 本次窗口在 values 中的起止行号
+            win_start = start_idxs[left]
+            win_end = end_idxs[right]
+            block = values[win_start:win_end]  # shape (~window_rows, n_cols)
+    
+            med = np.nanmedian(block, axis=0)  # C 实现
+            mad = np.nanmedian(np.abs(block - med), axis=0)
             std = mad * 1.4826 + 1e-12
-            
-            stats[cur_date] = {"median": med.values, "std": std.values}
-
-        # 5. 构造两个 DataFrame，index=dates，columns=cols
-        med_values = [stats[d]["median"] for d in dates]
-        std_values = [stats[d]["std"] for d in dates]
-        med_df = pd.DataFrame(med_values, index=dates, columns=cols)
-        std_df = pd.DataFrame(std_values, index=dates, columns=cols)
-
-        # 6. 对齐到原始行：取出每行的日期，重建与原 df 同长的 med 和 std 矩阵
-        med_mat = med_df.reindex(date_index).values
-        std_mat = std_df.reindex(date_index).values
-
-        # 7. 向量化归一化
-        normed = (df[cols].values - med_mat) / std_mat
+    
+            med_arr[right] = med
+            std_arr[right] = std
+    
+        # 6. 将 (n_dates, n_cols) 的 med/std 扩展回原始行数
+        #    先构建以 unique_dates 为索引的 DataFrame
+        med_df = pd.DataFrame(med_arr, index=unique_dates, columns=cols)
+        std_df = pd.DataFrame(std_arr, index=unique_dates, columns=cols)
+    
+        #    然后按原始行的日期级别来重索引并获取底层值
+        full_med = med_df.reindex(date_index).values  # shape = (n_rows, n_cols)
+        full_std = std_df.reindex(date_index).values
+    
+        # 7. 最终归一化
+        normed = (values - full_med) / full_std
         if self.clip_outlier:
             normed = np.clip(normed, -3, 3)
-
-        df[cols] = normed
+    
+        # 8. 替换回原 df 并返回
+        df.loc[:, cols] = normed
         return df
 
 
