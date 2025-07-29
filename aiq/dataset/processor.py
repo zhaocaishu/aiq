@@ -209,8 +209,9 @@ class TSRobustZScoreNorm(Processor):
                 med = np.nanmedian(block, axis=0)
                 mad = np.nanmedian(np.abs(block - med), axis=0)
                 std = mad * 1.4826 + 1e-12
-    
-            stats[unique_dates[right]] = {"median": med, "std": std}
+
+            current_date = unique_dates[right]
+            stats[current_date] = {"median": med, "std": std}
     
         def normalize_group(group, date):
             med = stats[date]["median"]
