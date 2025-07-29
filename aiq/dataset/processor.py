@@ -171,70 +171,56 @@ class TSRobustZScoreNorm(Processor):
         self.exclude_cols = exclude_cols or []
 
     def __call__(self, df: pd.DataFrame) -> pd.DataFrame:
-        # 1. 校验 MultiIndex
-        if not isinstance(df.index, pd.MultiIndex) or df.index.names[0] != "Date":
+        # Validate MultiIndex ['Date', 'Instrument']
+        if not isinstance(df.index, pd.MultiIndex) or df.index.names[:2] != ['Date', 'Instrument']:
             raise ValueError("DataFrame must have MultiIndex ['Date', 'Instrument']")
-
-        # 2. 待归一化列
+    
+        # Determine columns to normalize
         cols = get_group_columns(df, self.fields_group, self.exclude_cols)
-
-        # 1. 确保按日期升序
-        df = df.sort_index(level="Date")
-        # 2. 把原始值提取为 NumPy 数组
-        values = df[cols].values  # shape = (n_rows, n_cols)
     
-        # 3. 计算每个日期在原 df 中的起止行号（假定同一天的数据在 df 中是连续的）
-        #    得到 unique_dates，以及对应每个日期在 values 中的 [start_idx, end_idx)
-        date_index = df.index.get_level_values("Date")
+        # Sort by Date and extract values & dates
+        df = df.sort_index(level='Date')
+        values = df[cols].to_numpy()
+        dates = df.index.get_level_values('Date')
+    
+        # Identify unique dates and their positions
         unique_dates, start_idxs, counts = np.unique(
-            date_index, return_index=True, return_counts=True
+            dates, return_index=True, return_counts=True
         )
-        # start_idxs 是第一个出现位置，counts 是每个日期的行数
-        end_idxs = (
-            start_idxs + counts
-        )  # 对应每个日期切片是 values[start_idxs[i]:end_idxs[i]]
+        end_idxs = start_idxs + counts
     
-        n_dates = len(unique_dates)
-        n_cols = values.shape[1]
+        n_dates, n_cols = len(unique_dates), values.shape[1]
+        med_arr = np.zeros((n_dates, n_cols))
+        std_arr = np.zeros((n_dates, n_cols))
     
-        # 4. 准备用于存放滑窗结果的数组
-        med_arr = np.zeros((n_dates, n_cols), dtype=float)
-        std_arr = np.zeros((n_dates, n_cols), dtype=float)
-    
-        # 5. 滑动窗口：用两个指针维护窗口在 unique_dates 上的起止
         left = 0
         for right in range(n_dates):
-            # 当窗口大小超过 window_size 时，左指针右移
-            if right - left + 1 > window_size:
+            # Slide window
+            if right - left + 1 > self.window_size:
                 left += 1
     
-            # 本次窗口在 values 中的起止行号
-            win_start = start_idxs[left]
-            win_end = end_idxs[right]
-            block = values[win_start:win_end]  # shape (~window_rows, n_cols)
+            # Aggregate block for current window
+            block = values[start_idxs[left]: end_idxs[right]]
     
-            med = np.nanmedian(block, axis=0)  # C 实现
+            # Compute median and scaled MAD
+            med = np.nanmedian(block, axis=0)
             mad = np.nanmedian(np.abs(block - med), axis=0)
             std = mad * 1.4826 + 1e-12
     
             med_arr[right] = med
             std_arr[right] = std
     
-        # 6. 将 (n_dates, n_cols) 的 med/std 扩展回原始行数
-        #    先构建以 unique_dates 为索引的 DataFrame
-        med_df = pd.DataFrame(med_arr, index=unique_dates, columns=cols)
-        std_df = pd.DataFrame(std_arr, index=unique_dates, columns=cols)
+        # Map medians and stds back to each row via searchsorted
+        idx_map = np.searchsorted(unique_dates, dates)
+        med_full = med_arr[idx_map]
+        std_full = std_arr[idx_map]
     
-        #    然后按原始行的日期级别来重索引并获取底层值
-        full_med = med_df.reindex(date_index).values  # shape = (n_rows, n_cols)
-        full_std = std_df.reindex(date_index).values
-    
-        # 7. 最终归一化
-        normed = (values - full_med) / full_std
+        # Normalize and clip outliers
+        normed = (values - med_full) / std_full
         if self.clip_outlier:
             normed = np.clip(normed, -3, 3)
     
-        # 8. 替换回原 df 并返回
+        # Assign back and return
         df.loc[:, cols] = normed
         return df
 
