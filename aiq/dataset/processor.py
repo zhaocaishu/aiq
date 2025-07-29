@@ -1,5 +1,4 @@
 import abc
-import warnings
 from typing import List
 
 import pandas as pd
@@ -187,16 +186,13 @@ class TSRobustZScoreNorm(Processor):
         dates = sorted(date_index.unique())
         for i, cur_date in enumerate(dates):
             window = dates[max(0, i - self.window_size + 1) : i + 1]
-            block = df.loc[window, cols].values  # shape (n_rows, n_features)
-
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", category=RuntimeWarning)
-                med = np.nanmedian(block, axis=0)
-                # MAD: 整体偏差的中位数
-                mad = np.nanmedian(np.abs(block - med), axis=0)
-                std = mad * 1.4826 + 1e-12  # 转为与正态分布相当的 std
+            block = df.loc[window, cols]
             
-            stats[cur_date] = {"median": med, "std": std}
+            med = block.median()
+            mad = (block - med).abs().median()
+            std = mad * 1.4826 + 1e-12
+            
+            stats[cur_date] = {"median": med.values, "std": std.values}
 
         # 5. 构造两个 DataFrame，index=dates，columns=cols
         med_values = [stats[d]["median"] for d in dates]
