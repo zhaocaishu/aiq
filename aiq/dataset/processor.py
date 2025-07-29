@@ -173,17 +173,20 @@ class TSRobustZScoreNorm(Processor):
 
     def __call__(self, df: pd.DataFrame) -> pd.DataFrame:
         # Validate MultiIndex ['Date', 'Instrument']
-        if not isinstance(df.index, pd.MultiIndex) or df.index.names[:2] != ['Date', 'Instrument']:
+        if not isinstance(df.index, pd.MultiIndex) or df.index.names[:2] != [
+            "Date",
+            "Instrument",
+        ]:
             raise ValueError("DataFrame must have MultiIndex ['Date', 'Instrument']")
-    
+
         # Determine columns to normalize
         cols = get_group_columns(df, self.fields_group, self.exclude_cols)
-    
+
         # Sort by Date and extract values & dates
         df = df.sort_index(level="Date")
         values = df[cols].to_numpy()
         dates = df.index.get_level_values("Date")
-    
+
         # Identify unique dates and their positions
         unique_dates, start_idxs, counts = np.unique(
             dates, return_index=True, return_counts=True
@@ -193,36 +196,36 @@ class TSRobustZScoreNorm(Processor):
         n_dates, n_cols = len(unique_dates), values.shape[1]
         med_arr = np.zeros((n_dates, n_cols))
         std_arr = np.zeros((n_dates, n_cols))
-    
+
         left = 0
         for right in range(n_dates):
             # Slide window
             if right - left + 1 > self.window_size:
                 left += 1
-    
+
             # Aggregate block for current window
             block = values[start_idxs[left] : end_idxs[right]]
-    
+
             # Compute median and scaled MAD
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", category=RuntimeWarning)
                 med = np.nanmedian(block, axis=0)
                 mad = np.nanmedian(np.abs(block - med), axis=0)
                 std = mad * 1.4826 + 1e-12
-    
+
             med_arr[right] = med
             std_arr[right] = std
-    
+
         # Map medians and stds back to each row via searchsorted
         idx_map = np.searchsorted(unique_dates, dates)
         med_full = med_arr[idx_map]
         std_full = std_arr[idx_map]
-    
+
         # Normalize and clip outliers
         normed = (values - med_full) / std_full
         if self.clip_outlier:
             normed = np.clip(normed, -3, 3)
-    
+
         # Assign back and return
         df.loc[:, cols] = normed
         return df
