@@ -1,4 +1,5 @@
 import abc
+import warnings
 from typing import List
 
 import pandas as pd
@@ -203,9 +204,11 @@ class TSRobustZScoreNorm(Processor):
             block = values[start_idxs[left] : end_idxs[right]]
     
             # Compute median and scaled MAD
-            med = np.nanmedian(block, axis=0)
-            mad = np.nanmedian(np.abs(block - med), axis=0)
-            std = mad * 1.4826 + 1e-12
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=RuntimeWarning)
+                med = np.nanmedian(block, axis=0)
+                mad = np.nanmedian(np.abs(block - med), axis=0)
+                std = mad * 1.4826 + 1e-12
     
             med_arr[right] = med
             std_arr[right] = std
