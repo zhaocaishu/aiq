@@ -19,6 +19,7 @@ class PPNetModel(BaseModel):
         feature_names=None,
         label_names=None,
         pv_feature_start_index=3,
+        pv_feature_end_index=158,
         market_feature_start_index=158,
         market_feature_end_index=221,
         industry_feature_index=1,
@@ -46,6 +47,7 @@ class PPNetModel(BaseModel):
         self._label_names = label_names
 
         self.pv_feature_start_index = pv_feature_start_index
+        self.pv_feature_end_index = pv_feature_end_index
         self.market_feature_start_index = market_feature_start_index
         self.market_feature_end_index = market_feature_end_index
         self.industry_feature_index = industry_feature_index
@@ -68,6 +70,7 @@ class PPNetModel(BaseModel):
 
         self.model = PPNet(
             pv_feature_start_index=self.pv_feature_start_index,
+            pv_feature_end_index=self.pv_feature_end_index,
             market_feature_start_index=self.market_feature_start_index,
             market_feature_end_index=self.market_feature_end_index,
             industry_feature_index=self.industry_feature_index,
