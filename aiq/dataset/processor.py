@@ -216,18 +216,14 @@ class TSRobustZScoreNorm(Processor):
             med_arr[right] = med
             std_arr[right] = std
 
-        # Map medians and stds back to each row via searchsorted
-        idx_map = np.searchsorted(unique_dates, dates)
-        med_full = med_arr[idx_map]
-        std_full = std_arr[idx_map]
-
-        # Normalize and clip outliers
-        normed = (values - med_full) / std_full
-        if self.clip_outlier:
-            normed = np.clip(normed, -3, 3)
-
-        # Assign back and return
-        df.loc[:, cols] = normed
+        normalized_blocks = []
+        for i, (date, grp) in enumerate(df.groupby(level="Date")):
+            med, std = med_arr[i], std_arr[i]
+            normalized_block = (grp[cols].to_numpy() - med) / std
+            if self.clip_outlier:
+                normalized_block = np.clip(normalized_block, -3, 3)
+            normalized_blocks.append(normalized_block)
+        df.loc[:, cols] = np.vstack(normalized_blocks)
         return df
 
 
