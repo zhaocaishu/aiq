@@ -21,17 +21,6 @@ data_handler:
           industry_col: "IND_CLS_L1"
           cap_col: "MKT_CAP"
           factor_cols: ["BP", "EP", "^TURN_(?:MEAN|STD)_(?:5|10|20|30|60)D$"]
-      - class: TSRobustZScoreNorm
-        module_path: aiq.dataset.processor
-        kwargs:
-          window_size: 16
-          fields_group: "feature"
-          clip_outlier: true
-          exclude_cols: ["MKT_CLS", "IND_CLS_L1", "IND_CLS_L2"]
-      - class: Fillna
-        module_path: aiq.dataset.processor
-        kwargs:
-          fields_group: "feature"
       - class: Dropna
         module_path: aiq.dataset.processor
         kwargs:
@@ -57,6 +46,8 @@ dataset:
       test: ["2023-01-01", "2023-06-30"]
     seq_len: 16
     label_names: ["RETN_5D"]
+    norm_feature_start_index: 6
+    norm_feature_end_index: 143
     use_augmentation: false
 model:
   class: PPNetModel

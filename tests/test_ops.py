@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 
 from aiq.ops import Ref, Resi, Log, Rank, Sum, Corr, Std, IdxMax, IdxMin, Slope
+from aiq.utils.functional import ts_robust_zscore
 
 
 def test_ref():
@@ -295,3 +296,30 @@ def test_slope_compare_with_manual():
     expected = s.rolling(N, min_periods=1).apply(linear_slope, raw=True)
     output = Slope(s, N)
     pd.testing.assert_series_equal(output, expected)
+
+
+def test_constant_array():
+    x = np.ones((2, 3, 4), dtype=float)
+    z = ts_robust_zscore(x)
+    assert np.allclose(z, 0.0), "Constant input should produce zero z-scores"
+
+
+def test_simple_sequence():
+    x = np.array([[[1], [2], [3], [4], [5]]], dtype=float)
+    expected = (x - 3) / 1.4826  # median=3, MAD=1
+    z = ts_robust_zscore(x)
+    assert np.allclose(z, expected), "Unexpected z-scores for simple sequence"
+
+
+def test_clip_outlier():
+    # Use a dataset where MAD is zero except for one outlier to force extreme z
+    x = np.array([[[0], [0], [100]]], dtype=float)
+    z_unc = ts_robust_zscore(x, clip_outlier=False)
+    z_clp = ts_robust_zscore(x, clip_outlier=True)
+    # Check shapes
+    assert z_unc.shape == x.shape
+    assert z_clp.shape == x.shape
+    # Unclipped should produce at least one value with magnitude > 3
+    assert np.any(np.abs(z_unc) > 3), "Unclipped z-scores should exceed 3"
+    # Clipped should constrain within [-3, 3]
+    assert np.all(np.abs(z_clp) <= 3), "Clipped z-scores should be within [-3,3]"

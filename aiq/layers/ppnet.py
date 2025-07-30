@@ -222,7 +222,7 @@ class PPNet(nn.Module):
         )
 
         # inter-stock attention
-        self.spatial_projection = nn.Linear(d_model + industry_embedding_dim, d_model)
+        self.spatial_projection = nn.Linear(d_model, d_model)
         self.spatial_attention = SAttention(
             d_model=d_model, nhead=s_nhead, dropout=dropout
         )
@@ -256,13 +256,7 @@ class PPNet(nn.Module):
         x_temporal = self.temporal_attention(x_encoded)
 
         # Inter-stock spatial attention
-        industry_ids = x[:, :, self.industry_feature_index].long()
-        x_industry = self.industry_embedding(
-            industry_ids
-        )  # (N, T, industry_embedding_dim)
-        x_spatial_input = torch.cat([x_temporal, x_industry], dim=-1)
-        x_spatial_input = self.spatial_projection(x_spatial_input)  # (N, T, d_model)
-        x_spatial = self.spatial_attention(x_spatial_input)
+        x_spatial = self.spatial_attention(x_temporal)
 
         # Temporal aggregation across time dimension
         x_aggregated = self.temporal_aggregation(x_spatial)  # (N, d_model)

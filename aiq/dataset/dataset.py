@@ -6,7 +6,7 @@ import pandas as pd
 import torch
 
 from aiq.dataset.loader import DataLoader
-from aiq.utils.functional import drop_extreme_label, zscore
+from aiq.utils.functional import ts_robust_zscore, fillna, drop_extreme_label, zscore
 
 
 class Dataset(torch.utils.data.Dataset):
@@ -60,23 +60,29 @@ class TSDataset(Dataset):
         universe: str = "",
         feature_names: List[str] = [],
         label_names: List[str] = [],
+        norm_feature_start_index: int = 0,
+        norm_feature_end_index: int = None,
         use_augmentation: bool = False,
         mode: str = "train",
     ):
         self._data = data.copy()
         self.seq_len = seq_len
+        self._feature_names = feature_names
+        self._label_names = label_names
+        self.norm_feature_start_index = norm_feature_start_index
+        self.norm_feature_end_index = norm_feature_end_index or len(self._feature_names)
+        self.use_augmentation = use_augmentation
+        self.mode = mode
+
         self.start_time, self.end_time = segments[mode]
+
+        self._daily_instruments = None
         if data_dir and universe:
             df = DataLoader.load_instruments(
                 data_dir, universe, self.start_time, self.end_time
             )
             self._daily_instruments = set(zip(df["Instrument"], df["Date"]))
-        else:
-            self._daily_instruments = None
-        self._feature_names = feature_names
-        self._label_names = label_names
-        self.use_augmentation = use_augmentation
-        self.mode = mode
+
         self._setup_time_series()
 
     def _setup_time_series(self):
@@ -151,19 +157,28 @@ class TSDataset(Dataset):
         # 根据每个切片提取特征序列，并堆叠为三维数组 [样本数, 时间步, 特征数]
         features = np.stack([self._feature[slice] for slice in slices])
 
+        # 特征Robust-Zscore标准化
+        start, end = self.norm_feature_start_index, self.norm_feature_end_index
+        features[:, :, start:end] = ts_robust_zscore(
+            features[:, :, start:end], clip_outlier=True
+        )
+
+        # 特征缺失值填充
+        features = fillna(features, fill_value=0.0)
+
         if not self._label_names:
             return indices, features, None
 
         # 提取每个序列最后一个时间点的标签
         labels = np.array([self._label[slice.stop - 1] for slice in slices])
 
+        # 训练模式下，过滤掉极端标签值对应的样本
         if self.mode == "train":
-            # 训练模式下，过滤掉极端标签值对应的样本
             mask, labels = drop_extreme_label(labels)
             indices = indices[mask]
             features = features[mask]
 
-        # 标签进行标准化（z-score标准化）
+        # 标签截面Zscore标准化
         labels = zscore(labels)
 
         return indices, features, labels

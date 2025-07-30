@@ -26,6 +26,65 @@ def robust_zscore(x: pd.Series, zscore=False):
     return x
 
 
+def ts_robust_zscore(x: np.ndarray, clip_outlier: bool = False) -> np.ndarray:
+    """
+    Timeseries Robust Z-Score Normalization
+
+    This function applies robust statistics for Z-Score normalization across all samples
+    and time steps (axes 0 and 1) of a 3D array x of shape (N, T, D):
+        - Location estimate (mean) is replaced by the median over (N, T).
+        - Scale estimate (std) is replaced by MAD * 1.4826 (to make it consistent with std).
+
+    Parameters
+    ----------
+    x : np.ndarray
+        Input data of shape (N, T, D), where N is the batch size, T is the time length,
+        and D is the feature dimension.
+    clip_outlier : bool, optional
+        If True, clip the resulting z-scores to the range [-3, 3] to limit extreme outliers.
+        Default is False.
+
+    Returns
+    -------
+    np.ndarray
+        The normalized data of the same shape as input.
+
+    Reference
+    ---------
+    https://en.wikipedia.org/wiki/Median_absolute_deviation
+    """
+    if x.ndim != 3:
+        raise ValueError(f"Input array must be 3D (N, T, D), but got shape {x.shape}")
+
+    # Compute global median over samples and time: shape (1, 1, D)
+    med = np.nanmedian(x, axis=(0, 1), keepdims=True)
+
+    # Center the data
+    x_centered = x - med
+
+    # Compute MAD over samples and time: shape (1, 1, D)
+    mad = np.nanmedian(np.abs(x_centered), axis=(0, 1), keepdims=True)
+
+    # Scale factor for consistency
+    std = mad * 1.4826 + 1e-12
+
+    # Compute robust z-score
+    z = x_centered / std
+
+    if clip_outlier:
+        z = np.clip(z, -3.0, 3.0)
+
+    return z
+
+
+def fillna(x: np.ndarray, fill_value=0.0):
+    if not isinstance(x, np.ndarray):
+        raise TypeError("输入必须是 numpy.ndarray 类型")
+    
+    x_filled = np.where(np.isnan(x), fill_value, x)
+    return x_filled
+
+
 def zscore(x):
     return (x - x.mean()) / (x.std() + 1e-12)
 

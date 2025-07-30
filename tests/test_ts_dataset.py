@@ -25,4 +25,4 @@ if __name__ == "__main__":
 
     for i in range(len(train_dataset)):
         indices, features, labels = train_dataset[i]
-        print(indices, features.shape, labels.shape)
+        print(indices, features, labels)
