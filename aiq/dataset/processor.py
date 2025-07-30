@@ -182,46 +182,44 @@ class TSRobustZScoreNorm(Processor):
         # Determine columns to normalize
         cols = get_group_columns(df, self.fields_group, self.exclude_cols)
 
-        # Sort by Date and extract values & dates
-        df = df.sort_index(level="Date")
-        values = df[cols].to_numpy()
+        # 原地排序并优化数据类型
+        df.sort_index(level="Date", inplace=True)
+        cols = df.columns
+        df[cols] = df[cols].astype(np.float32)
+    
+        # 提取日期
         dates = df.index.get_level_values("Date")
-
-        # Identify unique dates and their positions
         unique_dates, start_idxs, counts = np.unique(
             dates, return_index=True, return_counts=True
         )
         end_idxs = start_idxs + counts
-
-        stats = {}
+    
+        # 使用 DataFrame 存储统计量
+        stats = pd.DataFrame(index=unique_dates, columns=["median", "std"])
+    
         left = 0
         for right in range(len(unique_dates)):
-            # Slide window
             if right - left + 1 > window_size:
                 left += 1
-    
-            # Aggregate block for current window
-            block = values[start_idxs[left] : end_idxs[right]]
-    
-            # Compute median and scaled MAD
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", category=RuntimeWarning)
-                med = np.nanmedian(block, axis=0)
-                mad = np.nanmedian(np.abs(block - med), axis=0)
-                std = mad * 1.4826 + 1e-12
-
-            current_date = unique_dates[right]
-            stats[current_date] = {"median": med, "std": std}
+            block = df[cols].iloc[start_idxs[left] : end_idxs[right]]
+            med = block.median()
+            mad = (block - med).abs().median()
+            std = mad * 1.4826 + 1e-12
+            stats.loc[unique_dates[right], "median"] = med.values
+            stats.loc[unique_dates[right], "std"] = std.values
     
         def normalize_group(group, date):
-            med = stats[date]["median"]
-            std = stats[date]["std"]
-            return (group[cols] - med) / std
+            med = stats.loc[date, "median"]
+            std = stats.loc[date, "std"]
+            group = (group - med) / std
+            if self.clip_outlier:
+                group = group.clip(-3, 3)
+            return group
     
-        normalized_df = df.groupby(level="Date", group_keys=False).apply(
+        df[cols] = df.groupby(level="Date", group_keys=False)[cols].apply(
             lambda x: normalize_group(x, x.name)
         )
-        df.loc[:, cols] = normalized_df
+    
         return df
 
 
