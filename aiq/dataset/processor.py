@@ -198,7 +198,7 @@ class TSRobustZScoreNorm(Processor):
     
         left = 0
         for right in range(len(unique_dates)):
-            if right - left + 1 > window_size:
+            if right - left + 1 > self.window_size:
                 left += 1
             block = df[cols].iloc[start_idxs[left] : end_idxs[right]]
             med = block.median()
