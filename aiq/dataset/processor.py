@@ -184,7 +184,6 @@ class TSRobustZScoreNorm(Processor):
 
         # 原地排序并优化数据类型
         df.sort_index(level="Date", inplace=True)
-        cols = df.columns
         df[cols] = df[cols].astype(np.float32)
     
         # 提取日期
