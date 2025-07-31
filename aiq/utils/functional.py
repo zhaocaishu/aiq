@@ -80,7 +80,7 @@ def ts_robust_zscore(x: np.ndarray, clip_outlier: bool = False) -> np.ndarray:
 def fillna(x: np.ndarray, fill_value=0.0):
     if not isinstance(x, np.ndarray):
         raise TypeError("输入必须是 numpy.ndarray 类型")
-    
+
     x_filled = np.where(np.isnan(x), fill_value, x)
     return x_filled
 
@@ -111,15 +111,12 @@ def neutralize(
     # Build a combined regex to match all requested factor columns
     combined_pattern = "|".join(f"({pat})" for pat in factor_cols)
     actual_factors = [
-        col for col in feats.columns
-        if re.search(combined_pattern, str(col))
+        col for col in feats.columns if re.search(combined_pattern, str(col))
     ]
 
     # Create design matrix: industry dummies + cap + constant
     industry_dummies = pd.get_dummies(
-        feats[industry_col].astype("category"),
-        prefix="IND",
-        drop_first=True
+        feats[industry_col].astype("category"), prefix="IND", drop_first=True
     )
     cap_series = feats[[cap_col]].astype(float)
     X = pd.concat([industry_dummies, cap_series], axis=1)

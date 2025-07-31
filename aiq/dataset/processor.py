@@ -185,17 +185,17 @@ class TSRobustZScoreNorm(Processor):
         # 原地排序并优化数据类型
         df.sort_index(level="Date", inplace=True)
         df[cols] = df[cols].astype(np.float32)
-    
+
         # 提取日期
         dates = df.index.get_level_values("Date")
         unique_dates, start_idxs, counts = np.unique(
             dates, return_index=True, return_counts=True
         )
         end_idxs = start_idxs + counts
-    
+
         # 使用 DataFrame 存储统计量
         stats = pd.DataFrame(index=unique_dates, columns=["median", "std"])
-    
+
         left = 0
         for right in range(len(unique_dates)):
             if right - left + 1 > self.window_size:
@@ -206,7 +206,7 @@ class TSRobustZScoreNorm(Processor):
             std = mad * 1.4826 + 1e-12
             stats.loc[unique_dates[right], "median"] = med.values
             stats.loc[unique_dates[right], "std"] = std.values
-    
+
         def normalize_group(group, date):
             med = stats.loc[date, "median"]
             std = stats.loc[date, "std"]
@@ -214,11 +214,11 @@ class TSRobustZScoreNorm(Processor):
             if self.clip_outlier:
                 group = group.clip(-3, 3)
             return group
-    
+
         df[cols] = df.groupby(level="Date", group_keys=False)[cols].apply(
             lambda x: normalize_group(x, x.name)
         )
-    
+
         return df
 
 
