@@ -118,7 +118,7 @@ def neutralize(
     industry_dummies = pd.get_dummies(
         feats[industry_col].astype("category"), prefix="IND", drop_first=True
     )
-    cap_series = feats[[cap_col]].astype(float)
+    cap_series = feats[[cap_col]]
     X = pd.concat([industry_dummies, cap_series], axis=1)
     X["CONST"] = 1.0
     X_values = X.values
@@ -128,7 +128,7 @@ def neutralize(
 
     # Loop through each factor, fit on non‑missing rows, and store residuals
     for factor in actual_factors:
-        y = feats[factor].astype(float)
+        y = feats[factor]
         mask = y.notna()
         if not mask.any():
             # skip if all values are missing

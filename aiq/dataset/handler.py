@@ -532,7 +532,7 @@ class Alpha158(DataHandler):
             label_names=self._label_names,
             processors=self.processors,
             mode=mode,
-        )
+        ).astype("float32")
 
         return feature_label_df
 
@@ -664,7 +664,7 @@ class MarketAlpha158(Alpha158):
             feature_names=self._market_feature_names,
             processors=self.market_processors,
             mode=mode,
-        )
+        ).astype("float32")
         market_feature_df = market_feature_df.reset_index()
 
         # Merge with instrument features
