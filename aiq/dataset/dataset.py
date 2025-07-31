@@ -65,7 +65,7 @@ class TSDataset(Dataset):
         use_augmentation: bool = False,
         mode: str = "train",
     ):
-        self._data = data.copy()
+        self._data = data.copy(deep=False)
         self.seq_len = seq_len
         self._feature_names = feature_names
         self._label_names = label_names
@@ -89,11 +89,9 @@ class TSDataset(Dataset):
         self._data.index = self._data.index.swaplevel()
         self._data.sort_index(inplace=True)
 
-        self._feature = self._data[self._feature_names].values.astype("float32")
+        self._feature = self._data[self._feature_names].values
         self._label = (
-            self._data[self._label_names].values.astype("float32")
-            if self._label_names
-            else None
+            self._data[self._label_names].values if self._label_names else None
         )
         self._index = self._data.index
 
