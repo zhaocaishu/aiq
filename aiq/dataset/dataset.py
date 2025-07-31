@@ -146,37 +146,39 @@ class TSDataset(Dataset):
         return slices
 
     def __getitem__(self, index):
-        """根据索引返回样本索引、特征和标准化后的标签（若存在）"""
-        slices = self._daily_slices[index]
-
-        # 当前样本对应的原始索引列表
+        """Return sample indices, features, and standardized labels (if available) based on the given index."""
+        # Original index list corresponding to the current date
         indices = np.array(self._daily_indices[index])
 
-        # 根据每个切片提取特征序列，并堆叠为三维数组 [样本数, 时间步, 特征数]
+        # Time slices for the current date
+        slices = self._daily_slices[index]
+
+        # Extract feature sequences based on each slice and stack into a 3D array [num_samples, time_steps, num_features]
         features = np.stack([self._feature[slice] for slice in slices])
 
-        # 特征Robust-Zscore标准化
+        # Apply Robust Z-score normalization to selected feature columns
         start, end = self.norm_feature_start_index, self.norm_feature_end_index
         features[:, :, start:end] = ts_robust_zscore(
             features[:, :, start:end], clip_outlier=True
         )
 
-        # 特征缺失值填充
+        # Fill missing features
         features = fillna(features, fill_value=0.0)
 
+        # If no labels are defined, return indices and features only
         if not self._label_names:
             return indices, features, None
 
-        # 提取每个序列最后一个时间点的标签
+        # Extract labels from the last time step of each sequence
         labels = np.array([self._label[slice.stop - 1] for slice in slices])
 
-        # 训练模式下，过滤掉极端标签值对应的样本
+        # In training mode, filter out samples with extreme label values
         if self.mode == "train":
             mask, labels = drop_extreme_label(labels)
             indices = indices[mask]
             features = features[mask]
 
-        # 标签截面Zscore标准化
+        # Apply cross-sectional Z-score normalization to labels
         labels = zscore(labels)
 
         return indices, features, labels
