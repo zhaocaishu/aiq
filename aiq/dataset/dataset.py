@@ -98,9 +98,9 @@ class TSDataset(Dataset):
         self._index = self._data.index
 
         data_slices = self._create_ts_slices(self._index, self.seq_len)
+        
         daily_slices = defaultdict(list)
         daily_indices = defaultdict(list)
-
         for i, (code, date) in enumerate(self._index):
             # Skip outside the desired time window
             if not (self.start_time <= date <= self.end_time):
