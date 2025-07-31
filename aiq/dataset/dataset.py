@@ -121,8 +121,6 @@ class TSDataset(Dataset):
             daily_slices[date].append(data_slice)
             daily_indices[date].append(i)
 
-        assert daily_slices.keys() == daily_indices.keys()
-
         self._daily_dates = list(daily_slices.keys())
         self._daily_slices = list(daily_slices.values())
         self._daily_indices = list(daily_indices.values())
