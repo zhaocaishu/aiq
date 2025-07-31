@@ -89,9 +89,11 @@ class TSDataset(Dataset):
         self._data.index = self._data.index.swaplevel()
         self._data.sort_index(inplace=True)
 
-        self._feature = self._data[self._feature_names].values
+        self._feature = self._data[self._feature_names].to_numpy(copy=False)
         self._label = (
-            self._data[self._label_names].values if self._label_names else None
+            self._data[self._label_names].to_numpy(copy=False)
+            if self._label_names
+            else None
         )
         self._index = self._data.index
 
