@@ -28,7 +28,7 @@ def robust_zscore(x: pd.Series, zscore=False):
 
 def ts_robust_zscore(x: np.ndarray, clip_outlier: bool = False) -> np.ndarray:
     """
-    Timeseries Robust Z-Score Normalization
+    Time-series Robust Z-Score Normalization
 
     This function applies robust statistics for Z-Score normalization across all samples
     and time steps (axes 0 and 1) of a 3D array x of shape (N, T, D):
