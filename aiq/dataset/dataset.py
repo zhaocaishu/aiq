@@ -6,7 +6,7 @@ import pandas as pd
 import torch
 
 from aiq.dataset.loader import DataLoader
-from aiq.utils.functional import ts_robust_zscore, fillna, drop_extreme_label, zscore
+from aiq.utils.functional import ts_robust_zscore, fillna, drop_extreme_label
 
 
 class Dataset(torch.utils.data.Dataset):
@@ -174,8 +174,10 @@ class TSDataset(Dataset):
             indices = indices[mask]
             features = features[mask]
 
-        # Apply cross-sectional Z-score normalization to labels
-        labels = zscore(labels)
+        # Apply cross-sectional rank percentile normalization to labels
+        ranks = labels.argsort(axis=0).argsort(axis=0)
+        labels = ranks / (labels.shape[0] - 1)
+        labels = labels.astype(np.float32)
 
         return indices, features, labels
 
