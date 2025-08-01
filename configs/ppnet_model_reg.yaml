@@ -45,9 +45,9 @@ dataset:
       valid: ["2022-07-01", "2022-12-20"]
       test: ["2023-01-01", "2023-06-30"]
     seq_len: 16
-    label_names: ["RETN_5D"]
     norm_feature_start_index: 6
     norm_feature_end_index: 143
+    label_names: ["RETN_5D"]
     use_augmentation: false
 model:
   class: PPNetModel
