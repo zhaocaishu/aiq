@@ -97,10 +97,8 @@ class TSDataset(Dataset):
         )
         self._index = self._data.index
 
-        data_slices = self._create_ts_slices(self._index, self.seq_len)
-
         daily_slices = defaultdict(list)
-        daily_indices = defaultdict(list)
+        data_slices = self._create_ts_slices(self._index, self.seq_len)
         for i, (code, date) in enumerate(self._index):
             # Skip outside the desired time window
             if not (self.start_time <= date <= self.end_time):
@@ -119,11 +117,9 @@ class TSDataset(Dataset):
                 continue
 
             daily_slices[date].append(data_slice)
-            daily_indices[date].append(i)
 
         self._daily_dates = list(daily_slices.keys())
         self._daily_slices = list(daily_slices.values())
-        self._daily_indices = list(daily_indices.values())
 
         daily_summary = {date: len(slices) for date, slices in daily_slices.items()}
         print(f"Mode: {self.mode}. Sampled daily counts:", daily_summary)
@@ -147,11 +143,11 @@ class TSDataset(Dataset):
 
     def __getitem__(self, index):
         """Return sample indices, features, and standardized labels (if available) based on the given index."""
-        # Original index list corresponding to the current date
-        indices = np.array(self._daily_indices[index])
-
         # Time slices for the current date
         slices = self._daily_slices[index]
+
+        # Original index list corresponding to the current date
+        indices = np.array([slice.stop - 1 for slice in slices])
 
         # Extract feature sequences based on each slice and stack into a 3D array [num_samples, time_steps, num_features]
         features = np.stack([self._feature[slice] for slice in slices])
