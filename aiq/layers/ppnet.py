@@ -264,4 +264,7 @@ class PPNet(nn.Module):
         # Prediction decoder
         output = self.decoder(x_aggregated)  # (N, pred_len)
 
+        # Add sigmoid activation
+        output = torch.sigmoid(output)
+
         return output

@@ -28,7 +28,7 @@ def robust_zscore(x: pd.Series, zscore=False):
 
 def ts_robust_zscore(x: np.ndarray, clip_outlier: bool = False) -> np.ndarray:
     """
-    Timeseries Robust Z-Score Normalization
+    Time-series Robust Z-Score Normalization
 
     This function applies robust statistics for Z-Score normalization across all samples
     and time steps (axes 0 and 1) of a 3D array x of shape (N, T, D):
@@ -118,7 +118,7 @@ def neutralize(
     industry_dummies = pd.get_dummies(
         feats[industry_col].astype("category"), prefix="IND", drop_first=True
     )
-    cap_series = feats[[cap_col]]
+    cap_series = feats[[cap_col]].astype(float)
     X = pd.concat([industry_dummies, cap_series], axis=1)
     X["CONST"] = 1.0
     X_values = X.values
@@ -128,7 +128,7 @@ def neutralize(
 
     # Loop through each factor, fit on non‑missing rows, and store residuals
     for factor in actual_factors:
-        y = feats[factor]
+        y = feats[factor].astype(float)
         mask = y.notna()
         if not mask.any():
             # skip if all values are missing
