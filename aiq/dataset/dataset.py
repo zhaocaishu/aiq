@@ -76,12 +76,13 @@ class TSDataset(Dataset):
 
         self.start_time, self.end_time = segments[mode]
 
-        self._daily_instruments = None
         if data_dir and universe:
             df = DataLoader.load_instruments(
                 data_dir, universe, self.start_time, self.end_time
             )
-            self._daily_instruments = set(zip(df["Instrument"], df["Date"]))
+            self.instruments_set = set(zip(df["Instrument"], df["Date"]))
+        else:
+            self.instruments_set = None
 
         self._setup_time_series()
 
@@ -106,17 +107,15 @@ class TSDataset(Dataset):
 
             # If filtering by instruments, skip missing pairs
             if (
-                self._daily_instruments is not None
-                and (code, date) not in self._daily_instruments
+                self.instruments_set is not None
+                and (code, date) not in self.instruments_set
             ):
                 continue
 
             # Only keep slices with length equal to seq_len
             data_slice = data_slices[i]
-            if data_slice.stop - data_slice.start != self.seq_len:
-                continue
-
-            daily_slices[date].append(data_slice)
+            if data_slice.stop - data_slice.start == self.seq_len:
+                daily_slices[date].append(data_slice)
 
         self._daily_dates = list(daily_slices.keys())
         self._daily_slices = list(daily_slices.values())
