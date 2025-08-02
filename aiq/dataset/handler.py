@@ -129,7 +129,7 @@ class Alpha158(DataHandler):
         close = df["Close"] * adjusted_factor
         high = df["High"] * adjusted_factor
         low = df["Low"] * adjusted_factor
-        volume = df["Volume"] * adjusted_factor
+        volume = df["Volume"]
         turn = df["Turnover_rate_f"]
 
         # kbar
