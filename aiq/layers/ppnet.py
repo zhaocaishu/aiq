@@ -185,7 +185,6 @@ class PPNet(nn.Module):
         industry_embedding_dim,
         seq_len,
         pred_len,
-        d_feat,
         d_model,
         t_nhead,
         s_nhead,
@@ -197,6 +196,7 @@ class PPNet(nn.Module):
         # price-volume-based features
         self.pv_feature_start_index = pv_feature_start_index
         self.pv_feature_end_index = pv_feature_end_index
+        self.d_feat = self.pv_feature_end_index - self.pv_feature_start_index
 
         # industry feature index
         self.industry_feature_index = industry_feature_index
@@ -205,13 +205,13 @@ class PPNet(nn.Module):
         self.market_feature_start_index = market_feature_start_index
         self.market_feature_end_index = market_feature_end_index
         self.market_feature_dim = market_feature_end_index - market_feature_start_index
-        self.market_gating_layer = Gate(self.market_feature_dim, d_feat, beta=beta)
+        self.market_gating_layer = Gate(self.market_feature_dim, self.d_feat, beta=beta)
 
         # industry embedding
         self.industry_embedding = nn.Embedding(256, industry_embedding_dim)
 
         # feature projection
-        self.feature_projection = nn.Linear(d_feat, d_model)
+        self.feature_projection = nn.Linear(self.d_feat, d_model)
 
         # positional encoding
         self.positional_encoding = PositionalEncoding(d_model)

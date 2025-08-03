@@ -47,9 +47,9 @@ class DataHandler:
             df = DataLoader.load_instruments(
                 self.data_dir, instruments, start_time, end_time
             )
-            self._instruments = df["Instrument"].unique().tolist()
+            self.instruments = df["Instrument"].unique().tolist()
         else:
-            self._instruments = instruments
+            self.instruments = instruments
         self.start_time = start_time
         self.end_time = end_time
         self.fit_start_time = fit_start_time
@@ -100,8 +100,8 @@ class Alpha158(DataHandler):
             fit_end_time,
             processors,
         )
-        self._feature_names = None
-        self._label_names = None
+        self.feature_names = []
+        self.label_names = []
 
         # Load benchmark data
         if benchmark:
@@ -413,8 +413,10 @@ class Alpha158(DataHandler):
                 feature_names.append("TURN_MEAN_%dD" % d)
                 feature_names.append("TURN_STD_%dD" % d)
 
+        # feature names
+        self.feature_names = feature_names
+
         # concat features
-        self._feature_names = feature_names.copy()
         feature_df = pd.concat(
             [
                 df[["Instrument", "Date"]],
@@ -438,7 +440,7 @@ class Alpha158(DataHandler):
         return feature_df
 
     def extract_instrument_labels(self, df):
-        self._label_names = ["RETN_5D"]
+        self.label_names = ["RETN_5D"]
         if self.benchmark_df is not None:
             merge_df = pd.merge(
                 df,
@@ -470,8 +472,8 @@ class Alpha158(DataHandler):
                 merge_df[["Instrument", "Date"]],
                 pd.concat(
                     [
-                        labels[i].rename(self._label_names[i])
-                        for i in range(len(self._label_names))
+                        labels[i].rename(self.label_names[i])
+                        for i in range(len(self.label_names))
                     ],
                     axis=1,
                 ).astype("float32"),
@@ -508,7 +510,7 @@ class Alpha158(DataHandler):
     def setup_data(self, mode="train") -> pd.DataFrame:
         # Load data
         df = DataLoader.load_instruments_features(
-            self.data_dir, self._instruments, self.start_time, self.end_time
+            self.data_dir, self.instruments, self.start_time, self.end_time
         )
 
         # Extract feature and label from data
@@ -528,21 +530,13 @@ class Alpha158(DataHandler):
         # Instrument-level feature processing
         feature_label_df = self.process(
             df=feature_label_df,
-            feature_names=self._feature_names,
-            label_names=self._label_names,
+            feature_names=self.feature_names,
+            label_names=self.label_names,
             processors=self.processors,
             mode=mode,
         ).astype("float32")
 
         return feature_label_df
-
-    @property
-    def feature_names(self):
-        return self._feature_names
-
-    @property
-    def label_names(self):
-        return self._label_names
 
 
 class MarketAlpha158(Alpha158):
@@ -574,7 +568,7 @@ class MarketAlpha158(Alpha158):
         self.market_processors = [
             init_instance_by_config(proc) for proc in market_processors
         ]
-        self._market_feature_names = None
+        self.market_feature_names = []
 
     def extract_market_features(self, df: pd.DataFrame):
         close = df["Close"]
@@ -605,7 +599,6 @@ class MarketAlpha158(Alpha158):
             )
 
         # Concat features
-        self._market_feature_names = feature_names.copy()
         feature_df = pd.concat(
             [
                 df[["Date", "Instrument"]],
@@ -619,6 +612,7 @@ class MarketAlpha158(Alpha158):
             ],
             axis=1,
         )
+        feature_df = feature_df.set_index(["Date", "Instrument"]).sort_index()
 
         return feature_df
 
@@ -641,27 +635,21 @@ class MarketAlpha158(Alpha158):
                 self.extract_market_features(
                     market_df[market_df["Instrument"] == market_name]
                 )
-                .rename(
-                    columns={
-                        feature_name: f"{market_name}_{feature_name}"
-                        for feature_name in self._market_feature_names
-                    }
-                )
-                .drop(columns=["Instrument"])
-                .set_index("Date")
-                for market_name in market_df["Instrument"].unique()
+                .add_prefix(f"{market_name}_")
+                .droplevel("Instrument")
+                for market_name in self.market_names
             ],
             axis=1,
             join="inner",
         )
 
-        self._market_feature_names = market_feature_df.columns.tolist()
-        self._feature_names.extend(self._market_feature_names)
+        self.market_feature_names = market_feature_df.columns.tolist()
+        self.feature_names.extend(self.market_feature_names)
 
         # Market-level feature processing
         market_feature_df = self.process(
             df=market_feature_df,
-            feature_names=self._market_feature_names,
+            feature_names=self.market_feature_names,
             processors=self.market_processors,
             mode=mode,
         ).astype("float32")
@@ -683,12 +671,9 @@ class MarketAlpha158(Alpha158):
             feature_label_df.shape[0] == market_feature_label_df.shape[0]
         ), "Mismatch in row counts after merging."
 
-        print("Market feature dim: %d" % len(self._market_feature_names))
         print(
-            "Stock feature dim: %d"
-            % (len(self._feature_names) - len(self._market_feature_names))
+            f"Total number of features: {len(self.feature_names)}, number of market features: {len(self.market_feature_names)}"
         )
-        print("Total feature dim: %d" % len(self._feature_names))
 
         return market_feature_label_df
 

@@ -26,7 +26,6 @@ class PPNetModel(BaseModel):
         industry_embedding_dim=8,
         seq_len=8,
         pred_len=1,
-        d_feat=158,
         d_model=256,
         t_nhead=4,
         s_nhead=2,
@@ -55,7 +54,6 @@ class PPNetModel(BaseModel):
 
         self.seq_len = seq_len
         self.pred_len = pred_len
-        self.d_feat = d_feat
         self.d_model = d_model
         self.t_nhead = t_nhead
         self.s_nhead = s_nhead
@@ -77,7 +75,6 @@ class PPNetModel(BaseModel):
             industry_embedding_dim=self.industry_embedding_dim,
             seq_len=self.seq_len,
             pred_len=self.pred_len,
-            d_feat=self.d_feat,
             d_model=self.d_model,
             t_nhead=self.t_nhead,
             s_nhead=self.s_nhead,

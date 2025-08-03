@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import List
+from typing import List, Dict, Tuple, Optional
 
 import numpy as np
 import pandas as pd
@@ -17,33 +17,21 @@ class Dataset(torch.utils.data.Dataset):
     def __init__(
         self,
         data: pd.DataFrame,
-        segments: dict,
+        segments: Dict[str, Tuple[str, str]],
         feature_names: List[str] = [],
         label_names: List[str] = [],
         mode: str = "train",
     ):
         start_time, end_time = segments[mode]
-        self._data = data.loc[start_time:end_time].copy()
-        self._feature_names = feature_names
-        self._label_names = label_names
+        self.data = data.loc[start_time:end_time].copy()
+        self.feature_names = feature_names
+        self.label_names = label_names
 
     def __getitem__(self, index):
         return self._data.iloc[[index]]
 
     def __len__(self):
         return self._data.shape[0]
-
-    @property
-    def data(self):
-        return self._data
-
-    @property
-    def feature_names(self):
-        return self._feature_names
-
-    @property
-    def label_names(self):
-        return self._label_names
 
 
 class TSDataset(Dataset):
@@ -54,49 +42,47 @@ class TSDataset(Dataset):
     def __init__(
         self,
         data: pd.DataFrame,
-        segments: dict,
+        segments: Dict[str, Tuple[str, str]],
         seq_len: int,
         data_dir: str = "",
         universe: str = "",
         feature_names: List[str] = [],
         label_names: List[str] = [],
         norm_feature_start_index: int = 0,
-        norm_feature_end_index: int = None,
-        use_augmentation: bool = False,
+        norm_feature_end_index: Optional[int] = None,
         mode: str = "train",
+        use_augmentation: bool = False,
     ):
-        self._data = data.copy(deep=False)
+        self.data = data.copy(deep=False)
         self.seq_len = seq_len
-        self._feature_names = feature_names
-        self._label_names = label_names
+        self.feature_names = feature_names
+        self.label_names = label_names
         self.norm_feature_start_index = norm_feature_start_index
-        self.norm_feature_end_index = norm_feature_end_index or len(self._feature_names)
-        self.use_augmentation = use_augmentation
+        self.norm_feature_end_index = norm_feature_end_index or len(self.feature_names)
         self.mode = mode
-
         self.start_time, self.end_time = segments[mode]
+        self.use_augmentation = use_augmentation
 
+        self.instruments_set = None
         if data_dir and universe:
             df = DataLoader.load_instruments(
                 data_dir, universe, self.start_time, self.end_time
             )
             self.instruments_set = set(zip(df["Instrument"], df["Date"]))
-        else:
-            self.instruments_set = None
 
         self._setup_time_series()
 
     def _setup_time_series(self):
-        self._data.index = self._data.index.swaplevel()
-        self._data.sort_index(inplace=True)
+        self.data.index = self.data.index.swaplevel()
+        self.data.sort_index(inplace=True)
 
-        self._feature = self._data[self._feature_names].to_numpy(copy=False)
-        self._label = (
-            self._data[self._label_names].to_numpy(copy=False)
-            if self._label_names
+        self._features = self.data[self.feature_names].to_numpy(copy=False)
+        self._labels = (
+            self.data[self.label_names].to_numpy(copy=False)
+            if self.label_names
             else None
         )
-        self._index = self._data.index
+        self._index = self.data.index
 
         daily_slices = defaultdict(list)
         data_slices = self._create_ts_slices(self._index, self.seq_len)
@@ -119,9 +105,9 @@ class TSDataset(Dataset):
 
         self._daily_dates = list(daily_slices.keys())
         self._daily_slices = list(daily_slices.values())
-
-        daily_summary = {date: len(slices) for date, slices in daily_slices.items()}
-        print(f"Mode: {self.mode}. Sampled daily counts:", daily_summary)
+        print(
+            f"Mode: {self.mode}. Sampled daily counts: {{date: len(slices) for date, slices in daily_slices.items()}}"
+        )
 
     def _create_ts_slices(self, index, seq_len):
         assert isinstance(index, pd.MultiIndex), "unsupported index type"
@@ -149,7 +135,7 @@ class TSDataset(Dataset):
         indices = np.array([slice.stop - 1 for slice in slices])
 
         # Extract feature sequences based on each slice and stack into a 3D array [num_samples, time_steps, num_features]
-        features = np.stack([self._feature[slice] for slice in slices])
+        features = np.stack([self._features[slice] for slice in slices])
 
         # Apply Robust Z-score normalization to selected feature columns
         start, end = self.norm_feature_start_index, self.norm_feature_end_index
@@ -161,11 +147,11 @@ class TSDataset(Dataset):
         features = fillna(features, fill_value=0.0)
 
         # If no labels are defined, return indices and features only
-        if not self._label_names:
+        if not self.label_names:
             return indices, features, None
 
         # Extract labels from the last time step of each sequence
-        labels = np.array([self._label[slice.stop - 1] for slice in slices])
+        labels = np.array([self._labels[slice.stop - 1] for slice in slices])
 
         # In training mode, filter out samples with extreme label values
         if self.mode == "train":

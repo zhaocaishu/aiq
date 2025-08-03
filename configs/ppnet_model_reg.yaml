@@ -61,7 +61,6 @@ model:
     industry_embedding_dim: 8
     seq_len: 16
     pred_len: 1
-    d_feat: 137
     d_model: 256
     t_nhead: 4
     s_nhead: 2
