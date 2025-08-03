@@ -17,9 +17,10 @@ if __name__ == "__main__":
         save_dir="./checkpoints",
         logger=logger,
     )
-
     logger.info("Model initialized successfully")
 
-    dummy_input = torch.zeros(100, 16, 206)
+    dummy_input = torch.zeros(100, 16, 206).to(
+        "cuda" if torch.cuda.is_available() else "cpu"
+    )
     output = model.model(dummy_input)
     logger.info(output)
