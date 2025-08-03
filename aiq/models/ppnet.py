@@ -40,24 +40,9 @@ class PPNetModel(BaseModel):
         pretrained=None,
         save_dir=None,
         logger=None,
+        early_stopping_patience=5,
     ):
-        # input parameters
-        self._feature_names = feature_names
-        self._label_names = label_names
-
-        self.pv_feature_start_index = pv_feature_start_index
-        self.pv_feature_end_index = pv_feature_end_index
-        self.market_feature_start_index = market_feature_start_index
-        self.market_feature_end_index = market_feature_end_index
-        self.industry_feature_index = industry_feature_index
-        self.industry_embedding_dim = industry_embedding_dim
-
-        self.seq_len = seq_len
-        self.pred_len = pred_len
-        self.d_model = d_model
-        self.t_nhead = t_nhead
-        self.s_nhead = s_nhead
-        self.dropout = dropout
+        # input args
         self.epochs = epochs
         self.batch_size = batch_size
         self.warmup_ratio = warmup_ratio
@@ -65,20 +50,22 @@ class PPNetModel(BaseModel):
         self.learning_rate = learning_rate
         self.criterion_name = criterion_name
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.early_stopping_patience = early_stopping_patience
 
+        # model
         self.model = PPNet(
-            pv_feature_start_index=self.pv_feature_start_index,
-            pv_feature_end_index=self.pv_feature_end_index,
-            market_feature_start_index=self.market_feature_start_index,
-            market_feature_end_index=self.market_feature_end_index,
-            industry_feature_index=self.industry_feature_index,
-            industry_embedding_dim=self.industry_embedding_dim,
-            seq_len=self.seq_len,
-            pred_len=self.pred_len,
-            d_model=self.d_model,
-            t_nhead=self.t_nhead,
-            s_nhead=self.s_nhead,
-            dropout=self.dropout,
+            pv_feature_start_index=pv_feature_start_index,
+            pv_feature_end_index=pv_feature_end_index,
+            market_feature_start_index=market_feature_start_index,
+            market_feature_end_index=market_feature_end_index,
+            industry_feature_index=industry_feature_index,
+            industry_embedding_dim=industry_embedding_dim,
+            seq_len=seq_len,
+            pred_len=pred_len,
+            d_model=d_model,
+            t_nhead=t_nhead,
+            s_nhead=s_nhead,
+            dropout=dropout,
             beta=beta,
         )
 
@@ -129,6 +116,10 @@ class PPNetModel(BaseModel):
             num_warmup_steps=num_warmup_steps,
             num_training_steps=num_training_steps,
         )
+
+        # Early stopping variables
+        best_val_loss = float("inf")
+        patience_counter = 0
 
         for epoch in range(self.epochs):
             self.logger.info("=" * 20 + " Epoch {} ".format(epoch + 1) + "=" * 20)
@@ -189,6 +180,27 @@ class PPNetModel(BaseModel):
                 self.save_dir, "model_epoch_{}.pth".format(epoch + 1)
             )
             torch.save(self.model.state_dict(), model_file)
+
+            # early stopping
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                patience_counter = 0
+                best_model_path = os.path.join(self.save_dir, "best_model.pth")
+                torch.save(self.model.state_dict(), best_model_path)
+                self.logger.info(
+                    f"New best validation loss: {best_val_loss:.8f}, saving model to {best_model_path}"
+                )
+            else:
+                patience_counter += 1
+                self.logger.info(
+                    f"No improvement in validation loss, patience counter: {patience_counter}/{self.early_stopping_patience}"
+                )
+                if patience_counter >= self.early_stopping_patience:
+                    self.logger.info(
+                        f"Early stopping triggered after {patience_counter} epochs without improvement"
+                    )
+                    self.logger.info(f"Best model saved at: {best_model_path}")
+                    break
 
     def eval(self, val_dataset: Dataset):
         self.model.eval()
