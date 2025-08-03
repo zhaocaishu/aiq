@@ -37,10 +37,10 @@ class PPNetModel(BaseModel):
         lr_scheduler_type="cosine",
         learning_rate=0.01,
         criterion_name="MSE",
+        early_stopping_patience=5,
         pretrained=None,
         save_dir=None,
         logger=None,
-        early_stopping_patience=5,
     ):
         # input args
         self.epochs = epochs
@@ -49,8 +49,8 @@ class PPNetModel(BaseModel):
         self.lr_scheduler_type = lr_scheduler_type
         self.learning_rate = learning_rate
         self.criterion_name = criterion_name
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.early_stopping_patience = early_stopping_patience
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
         # model
         self.model = PPNet(
