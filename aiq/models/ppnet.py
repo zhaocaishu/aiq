@@ -120,6 +120,7 @@ class PPNetModel(BaseModel):
         # Early stopping variables
         best_val_loss = float("inf")
         patience_counter = 0
+        best_model_path = os.path.join(self.save_dir, "model_best.pth")
 
         for epoch in range(self.epochs):
             self.logger.info("=" * 20 + " Epoch {} ".format(epoch + 1) + "=" * 20)
@@ -175,17 +176,12 @@ class PPNetModel(BaseModel):
             )
 
             # save checkpoints
-            os.makedirs(self.save_dir, exist_ok=True)
-            model_file = os.path.join(
-                self.save_dir, "model_epoch_{}.pth".format(epoch + 1)
-            )
-            torch.save(self.model.state_dict(), model_file)
+            self.save(f"model_epoch_{epoch + 1}.pth")
 
             # early stopping
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
                 patience_counter = 0
-                best_model_path = os.path.join(self.save_dir, "best_model.pth")
                 torch.save(self.model.state_dict(), best_model_path)
                 self.logger.info(
                     f"New best validation loss: {best_val_loss:.8f}, saving model to {best_model_path}"
