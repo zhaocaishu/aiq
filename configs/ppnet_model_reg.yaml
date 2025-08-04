@@ -59,15 +59,15 @@ model:
     market_feature_end_index: 206
     industry_feature_index: 1
     industry_embedding_dim: 8
-    seq_len: 16
+    seq_len: 20
     pred_len: 1
     d_model: 256
     t_nhead: 4
     s_nhead: 2
     dropout: 0.5
     beta: 3.0
-    epochs: 30
+    epochs: 100
     batch_size: 1
-    learning_rate: 0.0001
+    learning_rate: 0.001
     criterion_name: "IC"
-    early_stopping_patience: 5
+    early_stopping_patience: 10
