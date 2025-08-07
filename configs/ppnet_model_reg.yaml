@@ -59,7 +59,7 @@ model:
     market_feature_end_index: 206
     industry_feature_index: 1
     industry_embedding_dim: 8
-    seq_len: 20
+    seq_len: 16
     pred_len: 1
     d_model: 256
     t_nhead: 4
