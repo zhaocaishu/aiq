@@ -105,9 +105,9 @@ class TSDataset(Dataset):
 
         self._daily_dates = list(daily_slices.keys())
         self._daily_slices = list(daily_slices.values())
-        print(
-            f"Mode: {self.mode}. Sampled daily counts: {{date: len(slices) for date, slices in daily_slices.items()}}"
-        )
+
+        daily_counts = {date: len(slices) for date, slices in daily_slices.items()}
+        print(f"Mode: {self.mode}. Sampled daily counts: {daily_counts}")
 
     def _create_ts_slices(self, index, seq_len):
         assert isinstance(index, pd.MultiIndex), "unsupported index type"
