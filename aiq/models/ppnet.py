@@ -131,11 +131,11 @@ class PPNetModel(BaseModel):
 
             train_loss = []
             self.model.train()
-            for i, (_, batch_x, batch_y) in enumerate(train_loader):
+            for i, batch_dict in enumerate(train_loader):
                 iter_count += 1
 
-                batch_x = self.to_device(batch_x)
-                batch_y = self.to_device(batch_y)
+                batch_x = self.to_device(batch_dict["features"])
+                batch_y = self.to_device(batch_dict["labels"])
 
                 assert not torch.isnan(batch_x).any(), "NaN at batch_x"
                 assert not torch.isnan(batch_y).any(), "NaN at batch_y"
@@ -204,9 +204,9 @@ class PPNetModel(BaseModel):
         val_loader = DataLoader(val_dataset, batch_size=self.batch_size, shuffle=False)
 
         total_loss = []
-        for i, (_, batch_x, batch_y) in enumerate(val_loader):
-            batch_x = self.to_device(batch_x)
-            batch_y = self.to_device(batch_y)
+        for i, batch_dict in enumerate(val_loader):
+            batch_x = self.to_device(batch_dict["features"])
+            batch_y = self.to_device(batch_dict["labels"])
 
             with torch.no_grad():
                 outputs = self.model(batch_x)
@@ -227,9 +227,10 @@ class PPNetModel(BaseModel):
         labels = []
         preds = []
         indices = []
-        for i, (bacth_indices, batch_x, batch_y) in enumerate(test_loader):
-            batch_x = self.to_device(batch_x)
-            batch_y = self.to_device(batch_y)
+        for i, batch_dict in enumerate(test_loader):
+            bacth_indices = batch_dict["indices"]
+            batch_x = self.to_device(batch_dict["features"])
+            batch_y = self.to_device(batch_dict["labels"])
 
             with torch.no_grad():
                 outputs = self.model(batch_x)
