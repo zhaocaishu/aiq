@@ -24,5 +24,9 @@ if __name__ == "__main__":
     )
 
     for i in range(len(train_dataset)):
-        indices, features, labels = train_dataset[i]
-        print(indices, features.shape, labels.shape)
+        data_dict = train_dataset[i]
+        print(
+            data_dict["indices"].shape,
+            data_dict["features"].shape,
+            data_dict["labels"].shape,
+        )

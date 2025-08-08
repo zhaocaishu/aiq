@@ -18,11 +18,6 @@ if __name__ == "__main__":
         mode="train",
     )
 
-    val_dataset = init_instance_by_config(
-        cfg.dataset,
-        data=data,
-        feature_names=data_handler.feature_names,
-        mode="valid",
-    )
-
-    print(train_dataset.data.shape, val_dataset.data.shape)
+    for i in range(len(train_dataset)):
+        data_dict = train_dataset[i]
+        print(data_dict["features"].shape, data_dict["labels"].shape)

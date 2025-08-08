@@ -18,20 +18,26 @@ class Dataset(torch.utils.data.Dataset):
         self,
         data: pd.DataFrame,
         segments: Dict[str, Tuple[str, str]],
+        data_dir: str = "",
         feature_names: List[str] = [],
         label_names: List[str] = [],
         mode: str = "train",
     ):
         start_time, end_time = segments[mode]
         self.data = data.loc[start_time:end_time].copy()
+        self.data_dir = data_dir
         self.feature_names = feature_names
         self.label_names = label_names
 
     def __getitem__(self, index):
-        return self._data.iloc[[index]]
+        row = self.data.iloc[index]
+        data_dict = {"features": row[self.feature_names].to_numpy()}
+        if self.label_names:
+            data_dict["labels"] = row[self.label_names].to_numpy()
+        return data_dict
 
     def __len__(self):
-        return self._data.shape[0]
+        return self.data.shape[0]
 
 
 class TSDataset(Dataset):
@@ -149,9 +155,10 @@ class TSDataset(Dataset):
         # Fill missing features
         features = fillna(features, fill_value=0.0)
 
-        # If no labels are defined, return indices and features only
+        data_dict = {"indices": indices, "features": features}
+
         if not self.label_names:
-            return indices, features, None
+            return data_dict
 
         # Extract labels from the last time step of each sequence
         labels = np.array([self._labels[slice.stop - 1] for slice in slices])
@@ -167,7 +174,8 @@ class TSDataset(Dataset):
         labels = ranks / (labels.shape[0] - 1)
         labels = labels.astype(np.float32)
 
-        return indices, features, labels
+        data_dict.update({"indices": indices, "features": features, "labels": labels})
+        return data_dict
 
     def __len__(self):
         return len(self._daily_dates)
