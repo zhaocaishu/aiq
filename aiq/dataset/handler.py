@@ -568,7 +568,6 @@ class MarketAlpha158(Alpha158):
         self.market_processors = [
             init_instance_by_config(proc) for proc in market_processors
         ]
-        self.market_feature_names = []
 
     def extract_market_features(self, df: pd.DataFrame):
         close = df["Close"]
@@ -643,13 +642,13 @@ class MarketAlpha158(Alpha158):
             join="inner",
         )
 
-        self.market_feature_names = market_feature_df.columns.tolist()
-        self.feature_names.extend(self.market_feature_names)
+        market_feature_names = market_feature_df.columns.tolist()
+        self.feature_names.extend(market_feature_names)
 
         # Market-level feature processing
         market_feature_df = self.process(
             df=market_feature_df,
-            feature_names=self.market_feature_names,
+            feature_names=market_feature_names,
             processors=self.market_processors,
             mode=mode,
         ).astype("float32")
@@ -670,10 +669,6 @@ class MarketAlpha158(Alpha158):
         assert (
             feature_label_df.shape[0] == market_feature_label_df.shape[0]
         ), "Mismatch in row counts after merging."
-
-        print(
-            f"Total number of features: {len(self.feature_names)}, number of market features: {len(self.market_feature_names)}"
-        )
 
         return market_feature_label_df
 
