@@ -54,8 +54,6 @@ class TSDataset(Dataset):
         universe: str = "",
         feature_names: List[str] = [],
         label_names: List[str] = [],
-        norm_feature_start_index: int = 0,
-        norm_feature_end_index: Optional[int] = None,
         mode: str = "train",
         use_augmentation: bool = False,
     ):
@@ -63,12 +61,24 @@ class TSDataset(Dataset):
         self.seq_len = seq_len
         self.feature_names = feature_names
         self.label_names = label_names
-        self.norm_feature_start_index = norm_feature_start_index
-        self.norm_feature_end_index = norm_feature_end_index or len(self.feature_names)
         self.mode = mode
         self.start_time, self.end_time = segments[mode]
         self.use_augmentation = use_augmentation
 
+        # Precompute index positions for features
+        self.industry_indices = [
+            i for i, name in enumerate(self.feature_names) if name == "IND_CLS"
+        ]
+        self.stock_feature_indices = [
+            i
+            for i, name in enumerate(self.feature_names)
+            if name.startswith("CS_") or name.startswith("TS_")
+        ]
+        self.market_feature_indices = [
+            i for i, name in enumerate(self.feature_names) if name.startswith("MKT_")
+        ]
+
+        # Instrument filter
         self.instruments_set = None
         if data_dir and universe:
             df = DataLoader.load_instruments(
@@ -147,15 +157,19 @@ class TSDataset(Dataset):
         features = np.stack([self._features[slice] for slice in slices])
 
         # Apply Robust Z-score normalization to selected feature columns
-        start, end = self.norm_feature_start_index, self.norm_feature_end_index
-        features[:, :, start:end] = ts_robust_zscore(
-            features[:, :, start:end], clip_outlier=True
+        features[:, :, self.stock_feature_indices] = ts_robust_zscore(
+            features[:, :, self.stock_feature_indices], clip_outlier=True
         )
 
         # Fill missing features
         features = fillna(features, fill_value=0.0)
 
-        data_dict = {"indices": indices, "features": features}
+        data_dict = {
+            "indices": indices,
+            "industries": features[:, :, self.industry_indices],
+            "stock_features": features[:, :, self.stock_feature_indices],
+            "market_features": features[:, :, self.market_feature_indices],
+        }
 
         if not self.label_names:
             return data_dict
@@ -174,7 +188,15 @@ class TSDataset(Dataset):
         labels = ranks / (labels.shape[0] - 1)
         labels = labels.astype(np.float32)
 
-        data_dict.update({"indices": indices, "features": features, "labels": labels})
+        data_dict.update(
+            {
+                "indices": indices,
+                "industries": features[:, :, self.industry_indices],
+                "stock_features": features[:, :, self.stock_feature_indices],
+                "market_features": features[:, :, self.market_feature_indices],
+                "labels": labels,
+            }
+        )
         return data_dict
 
     def __len__(self):

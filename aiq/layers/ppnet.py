@@ -25,65 +25,70 @@ class PositionalEncoding(nn.Module):
 class SAttention(nn.Module):
     def __init__(self, d_model, nhead, dropout):
         super().__init__()
+        assert d_model % nhead == 0, "d_model 必须能被 nhead 整除"
 
         self.d_model = d_model
         self.nhead = nhead
-        self.temperature = math.sqrt(self.d_model / nhead)
+        self.head_dim = d_model // nhead
+        self.temperature = math.sqrt(self.head_dim)
 
         self.qtrans = nn.Linear(d_model, d_model, bias=False)
         self.ktrans = nn.Linear(d_model, d_model, bias=False)
         self.vtrans = nn.Linear(d_model, d_model, bias=False)
 
-        attn_dropout_layer = []
-        for i in range(nhead):
-            attn_dropout_layer.append(Dropout(p=dropout))
-        self.attn_dropout = nn.ModuleList(attn_dropout_layer)
+        self.attn_dropout = nn.ModuleList([nn.Dropout(p=dropout) for _ in range(nhead)])
 
         # input LayerNorm
-        self.norm1 = LayerNorm(d_model, eps=1e-5)
+        self.norm1 = nn.LayerNorm(d_model, eps=1e-5)
 
-        # FFN layerNorm
-        self.norm2 = LayerNorm(d_model, eps=1e-5)
+        # FFN
+        self.norm2 = nn.LayerNorm(d_model, eps=1e-5)
         self.ffn = nn.Sequential(
-            Linear(d_model, d_model),
+            nn.Linear(d_model, d_model),
             nn.ReLU(),
-            Dropout(p=dropout),
-            Linear(d_model, d_model),
-            Dropout(p=dropout),
+            nn.Dropout(p=dropout),
+            nn.Linear(d_model, d_model),
+            nn.Dropout(p=dropout),
         )
 
     def forward(self, x):
-        x = self.norm1(x)
-        q = self.qtrans(x).transpose(0, 1)
-        k = self.ktrans(x).transpose(0, 1)
-        v = self.vtrans(x).transpose(0, 1)
+        # x: (N, D)
+        x = self.norm1(x)  # 归一化
 
-        dim = int(self.d_model / self.nhead)
-        att_output = []
+        # 投影 Q, K, V
+        q = self.qtrans(x)  # (N, D)
+        k = self.ktrans(x)  # (N, D)
+        v = self.vtrans(x)  # (N, D)
+
+        # 拆分多头 => (N, nhead, head_dim)
+        q = q.view(-1, self.nhead, self.head_dim)
+        k = k.view(-1, self.nhead, self.head_dim)
+        v = v.view(-1, self.nhead, self.head_dim)
+
+        att_output_heads = []
         for i in range(self.nhead):
-            if i == self.nhead - 1:
-                qh = q[:, :, i * dim :]
-                kh = k[:, :, i * dim :]
-                vh = v[:, :, i * dim :]
-            else:
-                qh = q[:, :, i * dim : (i + 1) * dim]
-                kh = k[:, :, i * dim : (i + 1) * dim]
-                vh = v[:, :, i * dim : (i + 1) * dim]
+            qh = q[:, i, :]  # (N, head_dim)
+            kh = k[:, i, :]  # (N, head_dim)
+            vh = v[:, i, :]  # (N, head_dim)
 
-            atten_ave_matrixh = torch.softmax(
-                torch.matmul(qh, kh.transpose(1, 2)) / self.temperature, dim=-1
+            # 股票间 attention => N 对 N
+            attn_weights = torch.softmax(
+                torch.matmul(qh, kh.transpose(0, 1)) / self.temperature, dim=-1
             )
-            if self.attn_dropout:
-                atten_ave_matrixh = self.attn_dropout[i](atten_ave_matrixh)
-            att_output.append(torch.matmul(atten_ave_matrixh, vh).transpose(0, 1))
-        att_output = torch.concat(att_output, dim=-1)
+            attn_weights = self.attn_dropout[i](attn_weights)
 
-        # FFN
+            out = torch.matmul(attn_weights, vh)  # (N, head_dim)
+            att_output_heads.append(out)
+
+        # 合并多头
+        att_output = torch.cat(att_output_heads, dim=-1)  # (N, D)
+
+        # 残差 + FFN
         xt = x + att_output
         xt = self.norm2(xt)
-        att_output = xt + self.ffn(xt)
+        out = xt + self.ffn(xt)
 
-        return att_output
+        return out
 
 
 class TAttention(nn.Module):
@@ -177,14 +182,11 @@ class TemporalAttention(nn.Module):
 class PPNet(nn.Module):
     def __init__(
         self,
-        pv_feature_start_index,
-        pv_feature_end_index,
-        market_feature_start_index,
-        market_feature_end_index,
-        industry_feature_index,
-        industry_embedding_dim,
         seq_len,
         pred_len,
+        d_feat,
+        d_market,
+        d_emb,
         d_model,
         t_nhead,
         s_nhead,
@@ -193,25 +195,14 @@ class PPNet(nn.Module):
     ):
         super(PPNet, self).__init__()
 
-        # price-volume-based features
-        self.pv_feature_start_index = pv_feature_start_index
-        self.pv_feature_end_index = pv_feature_end_index
-        self.d_feat = self.pv_feature_end_index - self.pv_feature_start_index
-
-        # industry feature index
-        self.industry_feature_index = industry_feature_index
-
         # market features
-        self.market_feature_start_index = market_feature_start_index
-        self.market_feature_end_index = market_feature_end_index
-        self.market_feature_dim = market_feature_end_index - market_feature_start_index
-        self.market_gating_layer = Gate(self.market_feature_dim, self.d_feat, beta=beta)
+        self.market_gating_layer = Gate(d_market, d_feat, beta=beta)
 
         # industry embedding
-        self.industry_embedding = nn.Embedding(256, industry_embedding_dim)
+        self.industry_embedding = nn.Embedding(256, d_emb)
 
         # feature projection
-        self.feature_projection = nn.Linear(self.d_feat, d_model)
+        self.feature_projection = nn.Linear(d_feat, d_model)
 
         # positional encoding
         self.positional_encoding = PositionalEncoding(d_model)
@@ -222,7 +213,6 @@ class PPNet(nn.Module):
         )
 
         # inter-stock attention
-        self.spatial_projection = nn.Linear(d_model, d_model)
         self.spatial_attention = SAttention(
             d_model=d_model, nhead=s_nhead, dropout=dropout
         )
@@ -233,18 +223,11 @@ class PPNet(nn.Module):
         # decoder
         self.decoder = nn.Linear(d_model, pred_len)
 
-    def forward(self, x):
-        # Extract instrument features and normalize
-        pv_features = x[
-            :, :, self.pv_feature_start_index : self.pv_feature_end_index
-        ]  # Shape: (N, T, D)
-
+    def forward(self, stock_features, market_features, industries):
         # Extract market features and apply gating
-        market_features = x[
-            :, -1, self.market_feature_start_index : self.market_feature_end_index
-        ]  # Shape: (N, F')
+        market_features = market_features[:, -1, :]  # Shape: (N, F')
         gated_weights = self.market_gating_layer(market_features)  # (N, D)
-        gated_pv_features = pv_features * gated_weights.unsqueeze(1)  # (N, T, D)
+        gated_pv_features = stock_features * gated_weights.unsqueeze(1)  # (N, T, D)
 
         # Feature projection
         x_proj = self.feature_projection(gated_pv_features)  # (N, T, d_model)
@@ -255,14 +238,14 @@ class PPNet(nn.Module):
         # Intra-stock temporal attention
         x_temporal = self.temporal_attention(x_encoded)
 
-        # Inter-stock spatial attention
-        x_spatial = self.spatial_attention(x_temporal)
-
         # Temporal aggregation across time dimension
-        x_aggregated = self.temporal_aggregation(x_spatial)  # (N, d_model)
+        x_aggregated = self.temporal_aggregation(x_temporal)  # (N, d_model)
+
+        # Inter-stock spatial attention
+        x_spatial = self.spatial_attention(x_aggregated)
 
         # Prediction decoder
-        output = self.decoder(x_aggregated)  # (N, pred_len)
+        output = self.decoder(x_spatial)  # (N, pred_len)
 
         # Add sigmoid activation
         output = torch.sigmoid(output)

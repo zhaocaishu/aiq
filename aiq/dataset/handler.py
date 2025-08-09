@@ -116,12 +116,10 @@ class Alpha158(DataHandler):
 
     def extract_instrument_features(self, df):
         # fundamental data
-        ind_class_l1 = df["Ind_class_l1"]
-        ind_class_l2 = df["Ind_class_l2"]
-        mkt_class = df["Mkt_class"]
+        ind_class = df["Ind_class_l1"]
         ep = (1.0 / df["Pe_ttm"].replace(0, np.nan)).fillna(0)
         bp = (1.0 / df["Pb"].replace(0, np.nan)).fillna(0)
-        mkt_cap = np.log(df["Circ_mv"])
+        cap = np.log(df["Circ_mv"])
 
         # adjusted prices
         adjusted_factor = df["Adj_factor"]
@@ -134,10 +132,8 @@ class Alpha158(DataHandler):
 
         # kbar
         features = [
-            mkt_class,
-            ind_class_l1,
-            ind_class_l2,
-            mkt_cap,
+            ind_class,
+            cap,
             ep,
             bp,
             (high - low) / open,
@@ -154,173 +150,171 @@ class Alpha158(DataHandler):
             low / close,
         ]
         feature_names = [
-            "MKT_CLS",
-            "IND_CLS_L1",
-            "IND_CLS_L2",
-            "MKT_CAP",
-            "EP",
-            "BP",
-            "KLEN",
-            "KMID1",
-            "KMID2",
-            "KUP1",
-            "KUP2",
-            "KLOW1",
-            "KLOW2",
-            "KSFT1",
-            "KSFT2",
-            "OPEN0",
-            "HIGH0",
-            "LOW0",
+            "IND_CLS",
+            "FUND_CAP",
+            "FUND_EP",
+            "FUND_BP",
+            "TS_KLEN",
+            "TS_KMID1",
+            "TS_KMID2",
+            "TS_KUP1",
+            "TS_KUP2",
+            "TS_KLOW1",
+            "TS_KLOW2",
+            "TS_KSFT1",
+            "TS_KSFT2",
+            "TS_OPEN0",
+            "TS_HIGH0",
+            "TS_LOW0",
         ]
 
         # rolling
         windows = [5, 10, 20, 30, 60]
         include = None
-        exclude = ["SUMN", "SUMD", "CNTN", "CNTD", "VSUMN", "VSUMD"]
+        exclude = ["CS_SUMN", "CS_SUMD", "CS_CNTN", "CS_CNTD", "CS_VSUMN", "CS_VSUMD"]
 
         def use(x):
             return x not in exclude and (include is None or x in include)
 
-        if use("ROC"):
+        if use("CS_ROC"):
             # https://www.investopedia.com/terms/r/rateofchange.asp
             # Rate of change, the price change in the past d days, divided by latest close price to remove unit
             for d in windows:
                 features.append(Ref(close, d) / close)
-                feature_names.append("ROC%d" % d)
+                feature_names.append("CS_ROC%d" % d)
 
-        if use("MA"):
+        if use("CS_MA"):
             # https://www.investopedia.com/ask/answers/071414/whats-difference-between-moving-average-and-weighted-moving-average.asp
             # Simple Moving Average, the simple moving average in the past d days, divided by latest close price to remove unit
             for d in windows:
                 features.append(Mean(close, d) / close)
-                feature_names.append("MA%d" % d)
+                feature_names.append("CS_MA%d" % d)
 
-        if use("STD"):
+        if use("CS_STD"):
             # The standard diviation of close price for the past d days, divided by latest close price to remove unit
             for d in windows:
                 features.append(Std(close, d) / close)
-                feature_names.append("STD%d" % d)
+                feature_names.append("CS_STD%d" % d)
 
-        if use("SLOPE"):
+        if use("CS_SLOPE"):
             # The rate of close price change in the past d days, divided by latest close price to remove unit
             # For example, price increase 10 dollar per day in the past d days, then Slope will be 10.
             for d in windows:
                 features.append(Slope(close, d) / close)
-                feature_names.append("SLOPE%d" % d)
+                feature_names.append("CS_SLOPE%d" % d)
 
-        if use("RSQR"):
+        if use("CS_RSQR"):
             # The R-sqaure value of linear regression for the past d days, represent the trend linear
             for d in windows:
                 features.append(Rsquare(close, d))
-                feature_names.append("RSQR%d" % d)
+                feature_names.append("CS_RSQR%d" % d)
 
-        if use("RESI"):
+        if use("CS_RESI"):
             # The redisdual for linear regression for the past d days, represent the trend linearity for past d days.
             for d in windows:
                 features.append(Resi(close, d) / close)
-                feature_names.append("RESI%d" % d)
+                feature_names.append("CS_RESI%d" % d)
 
-        if use("MAX"):
+        if use("CS_MAX"):
             # The max price for past d days, divided by latest close price to remove unit
             for d in windows:
                 features.append(Max(high, d) / close)
-                feature_names.append("MAX%d" % d)
+                feature_names.append("CS_MAX%d" % d)
 
-        if use("MIN"):
+        if use("CS_MIN"):
             # The low price for past d days, divided by latest close price to remove unit
             for d in windows:
                 features.append(Min(low, d) / close)
-                feature_names.append("MIN%d" % d)
+                feature_names.append("CS_MIN%d" % d)
 
-        if use("QTLU"):
+        if use("CS_QTLU"):
             # The 80% quantile of past d day's close price, divided by latest close price to remove unit
             # Used with MIN and MAX
             for d in windows:
                 features.append(Quantile(close, d, 0.8) / close)
-                feature_names.append("QTLU%d" % d)
+                feature_names.append("CS_QTLU%d" % d)
 
-        if use("QTLD"):
+        if use("CS_QTLD"):
             # The 20% quantile of past d day's close price, divided by latest close price to remove unit
             for d in windows:
                 features.append(Quantile(close, d, 0.2) / close)
-                feature_names.append("QTLD%d" % d)
+                feature_names.append("CS_QTLD%d" % d)
 
-        if use("RANK"):
+        if use("CS_RANK"):
             # Get the percentile of current close price in past d day's close price.
             # Represent the current price level comparing to past N days, add additional information to moving average.
             for d in windows:
                 features.append(Rank(close, d))
-                feature_names.append("RANK%d" % d)
+                feature_names.append("CS_RANK%d" % d)
 
-        if use("RSV"):
+        if use("CS_RSV"):
             # Represent the price position between upper and lower resistent price for past d days.
             for d in windows:
                 features.append(
                     (close - Min(low, d)) / (Max(high, d) - Min(low, d) + 1e-12)
                 )
-                feature_names.append("RSV%d" % d)
+                feature_names.append("CS_RSV%d" % d)
 
-        if use("IMAX"):
+        if use("CS_IMAX"):
             # The number of days between current date and previous highest price date.
             # Part of Aroon Indicator https://www.investopedia.com/terms/a/aroon.asp
             # The indicator measures the time between highs and the time between lows over a time period.
             # The idea is that strong uptrends will regularly see new highs, and strong downtrends will regularly see new lows.
             for d in windows:
                 features.append(IdxMax(high, d) / d)
-                feature_names.append("IMAX%d" % d)
+                feature_names.append("CS_IMAX%d" % d)
 
-        if use("IMIN"):
+        if use("CS_IMIN"):
             # The number of days between current date and previous lowest price date.
             # Part of Aroon Indicator https://www.investopedia.com/terms/a/aroon.asp
             # The indicator measures the time between highs and the time between lows over a time period.
             # The idea is that strong uptrends will regularly see new highs, and strong downtrends will regularly see new lows.
             for d in windows:
                 features.append(IdxMin(low, d) / d)
-                feature_names.append("IMIN%d" % d)
+                feature_names.append("CS_IMIN%d" % d)
 
-        if use("IMXD"):
+        if use("CS_IMXD"):
             # The time period between previous lowest-price date occur after highest price date.
             # Large value suggest downward momemtum.
             for d in windows:
                 features.append((IdxMax(high, d) - IdxMin(low, d)) / d)
-                feature_names.append("IMXD%d" % d)
+                feature_names.append("CS_IMXD%d" % d)
 
-        if use("CORR"):
+        if use("CS_CORR"):
             # The correlation between absolute close price and log scaled trading volume
             for d in windows:
                 features.append(Corr(close, Log(volume + 1), d))
-                feature_names.append("CORR%d" % d)
+                feature_names.append("CS_CORR%d" % d)
 
-        if use("CORD"):
+        if use("CS_CORD"):
             # The correlation between price change ratio and volume change ratio
             for d in windows:
                 features.append(
                     Corr(close / Ref(close, 1), Log(volume / Ref(volume, 1) + 1), d)
                 )
-                feature_names.append("CORD%d" % d)
+                feature_names.append("CS_CORD%d" % d)
 
-        if use("CNTP"):
+        if use("CS_CNTP"):
             # The percentage of days in past d days that price go up.
             for d in windows:
                 features.append(Mean(close > Ref(close, 1), d))
-                feature_names.append("CNTP%d" % d)
+                feature_names.append("CS_CNTP%d" % d)
 
-        if use("CNTN"):
+        if use("CS_CNTN"):
             # The percentage of days in past d days that price go down.
             for d in windows:
                 features.append(Mean(close < Ref(close, 1), d))
-                feature_names.append("CNTN%d" % d)
+                feature_names.append("CS_CNTN%d" % d)
 
-        if use("CNTD"):
+        if use("CS_CNTD"):
             # The diff between past up day and past down day
             for d in windows:
                 features.append(
                     Mean(close > Ref(close, 1), d) - Mean(close < Ref(close, 1), d)
                 )
-                feature_names.append("CNTD%d" % d)
+                feature_names.append("CS_CNTD%d" % d)
 
-        if use("SUMP"):
+        if use("CS_SUMP"):
             # The total gain / the absolute total price changed
             # Similar to RSI indicator. https://www.investopedia.com/terms/r/rsi.asp
             for d in windows:
@@ -328,9 +322,9 @@ class Alpha158(DataHandler):
                     Sum(Greater(close - Ref(close, 1), 0), d)
                     / (Sum(Abs(close - Ref(close, 1)), d) + 1e-12)
                 )
-                feature_names.append("SUMP%d" % d)
+                feature_names.append("CS_SUMP%d" % d)
 
-        if use("SUMN"):
+        if use("CS_SUMN"):
             # The total lose / the absolute total price changed
             # Can be derived from SUMP by SUMN = 1 - SUMP
             # Similar to RSI indicator. https://www.investopedia.com/terms/r/rsi.asp
@@ -339,9 +333,9 @@ class Alpha158(DataHandler):
                     Sum(Greater(Ref(close, 1) - close, 0), d)
                     / (Sum(Abs(close - Ref(close, 1)), d) + 1e-12)
                 )
-                feature_names.append("SUMN%d" % d)
+                feature_names.append("CS_SUMN%d" % d)
 
-        if use("SUMD"):
+        if use("CS_SUMD"):
             # The diff ratio between total gain and total lose
             # Similar to RSI indicator. https://www.investopedia.com/terms/r/rsi.asp
             for d in windows:
@@ -352,48 +346,48 @@ class Alpha158(DataHandler):
                     )
                     / (Sum(Abs(close - Ref(close, 1)), d) + 1e-12)
                 )
-                feature_names.append("SUMD%d" % d)
+                feature_names.append("CS_SUMD%d" % d)
 
-        if use("VMA"):
+        if use("CS_VMA"):
             # Simple Volume Moving average: https://www.barchart.com/education/technical-indicators/volume_moving_average
             for d in windows:
                 features.append(Mean(volume, d) / (volume + 1e-12))
-                feature_names.append("VMA%d" % d)
+                feature_names.append("CS_VMA%d" % d)
 
-        if use("VSTD"):
+        if use("CS_VSTD"):
             # The standard deviation for volume in past d days.
             for d in windows:
                 features.append(Std(volume, d) / (volume + 1e-12))
-                feature_names.append("VSTD%d" % d)
+                feature_names.append("CS_VSTD%d" % d)
 
-        if use("WVMA"):
+        if use("CS_WVMA"):
             # The volume weighted price change volatility
             for d in windows:
                 features.append(
                     Std(Abs(close / Ref(close, 1) - 1) * volume, d)
                     / (Mean(Abs(close / Ref(close, 1) - 1) * volume, d) + 1e-12)
                 )
-                feature_names.append("WVMA%d" % d)
+                feature_names.append("CS_WVMA%d" % d)
 
-        if use("VSUMP"):
+        if use("CS_VSUMP"):
             # The total volume increase / the absolute total volume changed
             for d in windows:
                 features.append(
                     Sum(Greater(volume - Ref(volume, 1), 0), d)
                     / (Sum(Abs(volume - Ref(volume, 1)), d) + 1e-12)
                 )
-                feature_names.append("VSUMP%d" % d)
+                feature_names.append("CS_VSUMP%d" % d)
 
-        if use("VSUMN"):
+        if use("CS_VSUMN"):
             # The total volume increase / the absolute total volume changed
             for d in windows:
                 features.append(
                     Sum(Greater(Ref(volume, 1) - volume, 0), d)
                     / (Sum(Abs(volume - Ref(volume, 1)), d) + 1e-12)
                 )
-                feature_names.append("VSUMN%d" % d)
+                feature_names.append("CS_VSUMN%d" % d)
 
-        if use("VSUMD"):
+        if use("CS_VSUMD"):
             # The diff ratio between total volume increase and total volume decrease
             # RSI indicator for volume
             for d in windows:
@@ -404,14 +398,14 @@ class Alpha158(DataHandler):
                     )
                     / (Sum(Abs(volume - Ref(volume, 1)), d) + 1e-12)
                 )
-                feature_names.append("VSUMD%d" % d)
+                feature_names.append("CS_VSUMD%d" % d)
 
-        if use("TURN"):
+        if use("CS_TURN"):
             for d in windows:
                 features.append(EMA(turn, d))
                 features.append(Std(turn, d))
-                feature_names.append("TURN_MEAN_%dD" % d)
-                feature_names.append("TURN_STD_%dD" % d)
+                feature_names.append("CS_TURN_MEAN_%dD" % d)
+                feature_names.append("CS_TURN_STD_%dD" % d)
 
         # feature names
         self.feature_names = feature_names
@@ -576,7 +570,7 @@ class MarketAlpha158(Alpha158):
         # Define window sizes and compute features systematically
         returns = close / Ref(close, 1) - 1
         features = [returns]
-        feature_names = ["MKT_RETURN_1D"]
+        feature_names = ["RETURN_1D"]
 
         windows = [5, 10, 20, 30, 60]
         for window in windows:
@@ -590,10 +584,10 @@ class MarketAlpha158(Alpha158):
             )
             feature_names.extend(
                 [
-                    f"MKT_RETURN_MEAN_{window}D",
-                    f"MKT_RETURN_STD_{window}D",
-                    f"MKT_AMOUNT_MEAN_{window}D",
-                    f"MKT_AMOUNT_STD_{window}D",
+                    f"RETURN_MEAN_{window}D",
+                    f"RETURN_STD_{window}D",
+                    f"AMOUNT_MEAN_{window}D",
+                    f"AMOUNT_STD_{window}D",
                 ]
             )
 
@@ -634,7 +628,7 @@ class MarketAlpha158(Alpha158):
                 self.extract_market_features(
                     market_df[market_df["Instrument"] == market_name]
                 )
-                .add_prefix(f"{market_name}_")
+                .add_prefix(f"MKT_{market_name}_")
                 .droplevel("Instrument")
                 for market_name in self.market_names
             ],

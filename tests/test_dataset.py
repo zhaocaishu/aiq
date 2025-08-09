@@ -9,6 +9,7 @@ if __name__ == "__main__":
     # data handler
     data_handler = init_instance_by_config(cfg.data_handler, data_dir="./data")
     data = data_handler.setup_data()
+    print(data_handler.feature_names)
 
     # train and validation dataset
     train_dataset = init_instance_by_config(
@@ -18,6 +19,5 @@ if __name__ == "__main__":
         mode="train",
     )
 
-    for i in range(len(train_dataset)):
-        data_dict = train_dataset[i]
-        print(data_dict["features"].shape, data_dict["labels"].shape)
+    data_dict = train_dataset[0]
+    print(data_dict["features"].shape, data_dict["labels"].shape)
