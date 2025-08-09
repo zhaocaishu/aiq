@@ -18,8 +18,6 @@ class PPNetModel(BaseModel):
         self,
         feature_names=None,
         label_names=None,
-        seq_len=8,
-        pred_len=1,
         d_feat=137,
         d_market=63,
         d_emb=8,
@@ -51,8 +49,6 @@ class PPNetModel(BaseModel):
 
         # model
         self.model = PPNet(
-            seq_len=seq_len,
-            pred_len=pred_len,
             d_feat=d_feat,
             d_market=d_market,
             d_emb=d_emb,

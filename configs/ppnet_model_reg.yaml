@@ -52,8 +52,6 @@ model:
   class: PPNetModel
   module_path: aiq.models.ppnet
   kwargs:
-    seq_len: 16
-    pred_len: 1
     d_feat: 137
     d_market: 63
     d_emb: 8

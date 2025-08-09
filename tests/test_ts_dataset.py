@@ -16,9 +16,9 @@ if __name__ == "__main__":
     train_dataset = TSDataset(
         data=data,
         segments=cfg.dataset.kwargs.segments,
-        seq_len=8,
         data_dir="./data",
         universe=cfg.dataset.kwargs.universe,
+        seq_len=8,
         feature_names=data_handler.feature_names,
         label_names=["RETN_5D"],
         mode="train",

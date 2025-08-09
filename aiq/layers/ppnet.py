@@ -182,8 +182,6 @@ class TemporalAttention(nn.Module):
 class PPNet(nn.Module):
     def __init__(
         self,
-        seq_len,
-        pred_len,
         d_feat,
         d_market,
         d_emb,
@@ -221,7 +219,7 @@ class PPNet(nn.Module):
         self.temporal_aggregation = TemporalAttention(d_model=d_model)
 
         # decoder
-        self.decoder = nn.Linear(d_model, pred_len)
+        self.decoder = nn.Linear(d_model, 1)
 
     def forward(self, stock_features, market_features, industries):
         # Extract market features and apply gating
@@ -245,7 +243,7 @@ class PPNet(nn.Module):
         x_spatial = self.spatial_attention(x_aggregated)
 
         # Prediction decoder
-        output = self.decoder(x_spatial)  # (N, pred_len)
+        output = self.decoder(x_spatial)  # (N, 1)
 
         # Add sigmoid activation
         output = torch.sigmoid(output)
