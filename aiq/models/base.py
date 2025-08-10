@@ -11,17 +11,14 @@ class BaseModel(abc.ABC):
         self,
         feature_names=None,
         label_names=None,
-        model_params=None,
         save_dir=None,
         logger=None,
+        **model_params,
     ):
-        self._feature_names = feature_names
-        self._label_names = label_names
+        self.feature_names = feature_names
+        self.label_names = label_names
 
-        if model_params is not None:
-            self.model_params = copy.deepcopy(dict(model_params))
-        else:
-            self.model_params = {}
+        self.model_params = copy.deepcopy(model_params)
 
         self.model = None
 
@@ -71,11 +68,3 @@ class BaseModel(abc.ABC):
             model_name: Unique identifier for the model in storage.
         """
         raise NotImplementedError()
-
-    @property
-    def feature_names(self):
-        return self._feature_names
-
-    @property
-    def label_names(self):
-        return self._label_names

@@ -6,3 +6,5 @@ lightgbm
 xgboost
 torch
 transformers
+pytest
+mysql-connector-python

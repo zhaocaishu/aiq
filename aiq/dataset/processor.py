@@ -1,4 +1,6 @@
 import abc
+import warnings
+from typing import List
 
 import pandas as pd
 import numpy as np
@@ -7,7 +9,7 @@ from aiq.utils.functional import robust_zscore, zscore, neutralize
 
 
 def get_group_columns(
-    df: pd.DataFrame, group: str = None, exclude_discrete: bool = False
+    df: pd.DataFrame, group: str = None, exclude_cols: List[str] = []
 ):
     """
     get a group of columns from multi-index columns DataFrame
@@ -18,20 +20,18 @@ def get_group_columns(
         with multi of columns.
     group : str
         the name of the feature group, i.e. the first level value of the group index.
-    exclude_discrete : bool
-        whether exclude discrete columns
+    exclude_cols : List[str], optional
+        List of column names (from the last level) to exclude from the result.
     """
     if group is None:
         cols = df.columns
     else:
         cols = df.columns[df.columns.get_loc(group)]
 
-    if exclude_discrete:
-        filtered_cols = cols[~cols.get_level_values(-1).str.endswith("_CAT")]
-    else:
-        filtered_cols = cols
+    if exclude_cols:
+        cols = cols[~cols.get_level_values(-1).isin(exclude_cols)]
 
-    return filtered_cols
+    return cols
 
 
 class Processor(abc.ABC):
@@ -56,6 +56,18 @@ class Processor(abc.ABC):
         df : pd.DataFrame
             The raw_df of handler or result from previous processor.
         """
+
+    def is_for_infer(self) -> bool:
+        """
+        Is this processor usable for inference
+        Some processors are not usable for inference.
+
+        Returns
+        -------
+        bool:
+            if it is usable for infenrece.
+        """
+        return True
 
 
 class Dropna(Processor):
@@ -104,12 +116,13 @@ class RobustZScoreNorm(Processor):
         https://en.wikipedia.org/wiki/Median_absolute_deviation.
     """
 
-    def __init__(self, fields_group=None, clip_outlier=True):
+    def __init__(self, fields_group=None, clip_outlier=True, exclude_cols=[]):
         self.fields_group = fields_group
         self.clip_outlier = clip_outlier
+        self.exclude_cols = exclude_cols
 
     def fit(self, df: pd.DataFrame = None):
-        self.cols = get_group_columns(df, self.fields_group, exclude_discrete=True)
+        self.cols = get_group_columns(df, self.fields_group, self.exclude_cols)
         X = df[self.cols].values
         self.mean_train = np.nanmedian(X, axis=0)
         self.std_train = np.nanmedian(np.abs(X - self.mean_train), axis=0)
@@ -123,6 +136,89 @@ class RobustZScoreNorm(Processor):
         if self.clip_outlier:
             X = np.clip(X, -3, 3)
         df[self.cols] = X
+        return df
+
+
+class TSRobustZScoreNorm(Processor):
+    """Timeseries Robust Z-Score Normalization for MultiIndex DataFrames
+
+    Normalizes each data point using a robust Z-score based on a rolling window of previous data points,
+    including multiple instruments in each time window.
+
+    Statistics are computed over all instruments within the window of `window_size` dates.
+
+    Parameters
+    ----------
+    window_size : int
+        Number of dates in the rolling window to use for statistics.
+    fields_group : str or list, optional
+        Columns to normalize; defaults to all numeric columns.
+    clip_outlier : bool, default True
+        If True, clips normalized values to [-3, 3].
+    exclude_cols : list, optional
+        List of columns to exclude from normalization.
+    """
+
+    def __init__(
+        self,
+        window_size: int,
+        fields_group: str = None,
+        clip_outlier: bool = True,
+        exclude_cols: list = None,
+    ):
+        self.window_size = window_size
+        self.fields_group = fields_group
+        self.clip_outlier = clip_outlier
+        self.exclude_cols = exclude_cols or []
+
+    def __call__(self, df: pd.DataFrame) -> pd.DataFrame:
+        # Validate MultiIndex ['Date', 'Instrument']
+        if not isinstance(df.index, pd.MultiIndex) or df.index.names[:2] != [
+            "Date",
+            "Instrument",
+        ]:
+            raise ValueError("DataFrame must have MultiIndex ['Date', 'Instrument']")
+
+        # Determine columns to normalize
+        cols = get_group_columns(df, self.fields_group, self.exclude_cols)
+
+        # 原地排序并优化数据类型
+        df.sort_index(level="Date", inplace=True)
+        df[cols] = df[cols].astype(np.float32)
+
+        # 提取日期
+        dates = df.index.get_level_values("Date")
+        unique_dates, start_idxs, counts = np.unique(
+            dates, return_index=True, return_counts=True
+        )
+        end_idxs = start_idxs + counts
+
+        # 使用 DataFrame 存储统计量
+        stats = pd.DataFrame(index=unique_dates, columns=["median", "std"])
+
+        left = 0
+        for right in range(len(unique_dates)):
+            if right - left + 1 > self.window_size:
+                left += 1
+            block = df[cols].iloc[start_idxs[left] : end_idxs[right]]
+            med = block.median()
+            mad = (block - med).abs().median()
+            std = mad * 1.4826 + 1e-12
+            stats.loc[unique_dates[right], "median"] = med.values
+            stats.loc[unique_dates[right], "std"] = std.values
+
+        def normalize_group(group, date):
+            med = stats.loc[date, "median"]
+            std = stats.loc[date, "std"]
+            group = (group - med) / std
+            if self.clip_outlier:
+                group = group.clip(-3, 3)
+            return group
+
+        df[cols] = df.groupby(level="Date", group_keys=False)[cols].apply(
+            lambda x: normalize_group(x, x.name)
+        )
+
         return df
 
 
@@ -144,27 +240,30 @@ class CSNeutralize(Processor):
 class CSWinsorize(Processor):
     """Cross Sectional Winsorization: winsorize each variable within each date slice."""
 
-    def __init__(self, fields_group=None, lower_quantile=0.01, upper_quantile=0.99):
+    def __init__(
+        self,
+        fields_group=None,
+        lower_quantile=0.01,
+        upper_quantile=0.99,
+        exclude_cols=[],
+    ):
         """
-        :param fields_group: grouping key or pattern to select columns (passed to get_group_columns)
-        :param lower_quantile: lower tail cutoff (e.g. 0.01 for 1%)
-        :param upper_quantile: upper tail cutoff (e.g. 0.99 for 99%)
+        Parameters
+        ----------
+        fields_group: grouping key or pattern to select columns (passed to get_group_columns)
+        lower_quantile: lower tail cutoff (e.g. 0.01 for 1%)
+        upper_quantile: upper tail cutoff (e.g. 0.99 for 99%)
         """
         self.fields_group = fields_group
         self.lower_quantile = lower_quantile
         self.upper_quantile = upper_quantile
+        self.exclude_cols = exclude_cols
 
     def __call__(self, df: pd.DataFrame) -> pd.DataFrame:
-        # Identify numeric columns to winsorize, excluding discrete if specified
-        cols = get_group_columns(df, self.fields_group, exclude_discrete=True)
+        # Identify numeric columns to winsorize
+        cols = get_group_columns(df, self.fields_group, self.exclude_cols)
 
         def winsorize_slice(slice_df: pd.DataFrame) -> pd.DataFrame:
-            """
-            Winsorize values in each column of the slice.
-
-            :param slice_df: DataFrame subset for a single date
-            :return: winsorized DataFrame
-            """
             # Compute per-column quantiles
             lower_bounds = slice_df.quantile(self.lower_quantile)
             upper_bounds = slice_df.quantile(self.upper_quantile)
@@ -176,10 +275,54 @@ class CSWinsorize(Processor):
         return df
 
 
+class DropExtremeLabel(Processor):
+    """
+    Processor that drops extreme label values within each cross-sectional group.
+
+    For each date, this processor groups the data using `fields_group` (on the label column),
+    and removes the lowest `percent` fraction and the highest `percent` fraction of label values.
+
+    Parameters
+    ----------
+    fields_group : str
+        Column name whose values are the labels to filter.
+    percent : float
+        Fraction of data to drop at each tail (0 < percent < 0.5).
+    """
+
+    def __init__(self, fields_group=None, percent: float = 0.025):
+        if not (0.0 < percent < 0.5):
+            raise ValueError("percent must be between 0 and 0.5")
+        self.fields_group = fields_group
+        self.percent = percent
+
+    def __call__(self, df: pd.DataFrame) -> pd.DataFrame:
+        cols = get_group_columns(df, self.fields_group)
+        # Compute per-date lower and upper quantiles for each column
+        for col in cols:
+            # vectorized quantile computation via groupby-transform
+            lower = (
+                df[col]
+                .groupby("Date", group_keys=False)
+                .transform(lambda x: x.quantile(self.percent))
+            )
+            upper = (
+                df[col]
+                .groupby("Date", group_keys=False)
+                .transform(lambda x: x.quantile(1 - self.percent))
+            )
+            # Keep only rows within [lower, upper]
+            df = df[df[col].between(lower, upper)]
+        return df
+
+    def is_for_infer(self) -> bool:
+        return False
+
+
 class CSZScoreNorm(Processor):
     """Cross Sectional ZScore Normalization"""
 
-    def __init__(self, fields_group=None, method="zscore"):
+    def __init__(self, fields_group=None, method="zscore", exclude_cols=[]):
         self.fields_group = fields_group
         if method == "zscore":
             self.zscore_func = zscore
@@ -187,9 +330,10 @@ class CSZScoreNorm(Processor):
             self.zscore_func = robust_zscore
         else:
             raise NotImplementedError(f"This type of input is not supported")
+        self.exclude_cols = exclude_cols
 
     def __call__(self, df):
-        cols = get_group_columns(df, self.fields_group, exclude_discrete=True)
+        cols = get_group_columns(df, self.fields_group, self.exclude_cols)
         df[cols] = df[cols].groupby("Date", group_keys=False).apply(self.zscore_func)
         return df
 

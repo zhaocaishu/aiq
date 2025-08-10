@@ -8,6 +8,7 @@ from torch.utils.data import Dataset, DataLoader
 from transformers import get_scheduler
 
 from aiq.layers import PPNet
+from aiq.losses import MSERankLoss, ICLoss
 
 from .base import BaseModel
 
@@ -17,16 +18,13 @@ class PPNetModel(BaseModel):
         self,
         feature_names=None,
         label_names=None,
-        use_augmentation=False,
-        d_feat=158,
+        d_feat=137,
+        d_market=63,
+        d_emb=8,
         d_model=256,
         t_nhead=4,
         s_nhead=2,
-        seq_len=8,
-        pred_len=1,
         dropout=0.5,
-        gate_input_start_index=158,
-        gate_input_end_index=221,
         beta=5.0,
         epochs=5,
         batch_size=1,
@@ -34,43 +32,31 @@ class PPNetModel(BaseModel):
         lr_scheduler_type="cosine",
         learning_rate=0.01,
         criterion_name="MSE",
+        early_stopping_patience=5,
         pretrained=None,
         save_dir=None,
         logger=None,
     ):
-        # input parameters
-        self._feature_names = feature_names
-        self._label_names = label_names
-        self.use_augmentation = use_augmentation
-
-        self.d_feat = d_feat
-        self.d_model = d_model
-        self.t_nhead = t_nhead
-        self.s_nhead = s_nhead
-        self.seq_len = seq_len
-        self.pred_len = pred_len
-        self.dropout = dropout
-        self.gate_input_start_index = gate_input_start_index
-        self.gate_input_end_index = gate_input_end_index
+        # input args
         self.epochs = epochs
         self.batch_size = batch_size
         self.warmup_ratio = warmup_ratio
         self.lr_scheduler_type = lr_scheduler_type
         self.learning_rate = learning_rate
         self.criterion_name = criterion_name
+        self.early_stopping_patience = early_stopping_patience
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+        # model
         self.model = PPNet(
-            d_feat=self.d_feat,
-            d_model=self.d_model,
-            t_nhead=self.t_nhead,
-            s_nhead=self.s_nhead,
-            seq_len=self.seq_len,
-            pred_len=self.pred_len,
-            dropout=self.dropout,
-            gate_input_start_index=self.gate_input_start_index,
-            gate_input_end_index=self.gate_input_end_index,
-            beta=beta
+            d_feat=d_feat,
+            d_market=d_market,
+            d_emb=d_emb,
+            d_model=d_model,
+            t_nhead=t_nhead,
+            s_nhead=s_nhead,
+            dropout=dropout,
+            beta=beta,
         )
 
         if pretrained is not None:
@@ -84,6 +70,10 @@ class PPNetModel(BaseModel):
 
         if self.criterion_name == "MSE":
             self.criterion = nn.MSELoss()
+        elif self.criterion_name == "MR":
+            self.criterion = MSERankLoss()
+        elif self.criterion_name == "IC":
+            self.criterion = ICLoss()
         else:
             raise NotImplementedError
 
@@ -104,8 +94,6 @@ class PPNetModel(BaseModel):
         num_training_steps = self.epochs * train_steps_epoch
         num_warmup_steps = int(self.warmup_ratio * num_training_steps)
 
-        time_now = time.time()
-
         optimizer = optim.Adam(
             self.model.parameters(),
             lr=self.learning_rate,
@@ -119,42 +107,50 @@ class PPNetModel(BaseModel):
             num_training_steps=num_training_steps,
         )
 
+        # Early stopping variables
+        best_val_loss = float("inf")
+        patience_counter = 0
+        best_model_path = os.path.join(self.save_dir, "model_best.pth")
+
         for epoch in range(self.epochs):
             self.logger.info("=" * 20 + " Epoch {} ".format(epoch + 1) + "=" * 20)
 
             iter_count = 0
-            train_loss = []
-
-            self.model.train()
+            time_now = time.time()
             epoch_time = time.time()
-            for i, (_, batch_x, batch_y) in enumerate(train_loader):
+
+            train_loss = []
+            self.model.train()
+            for i, batch_dict in enumerate(train_loader):
                 iter_count += 1
 
-                if self.use_augmentation:
-                    mask_prob = 0.15
-                    mask = torch.bernoulli(torch.full(batch_x.shape, 1 - mask_prob))
-                    batch_x = batch_x * mask
-
-                batch_x = self.to_device(batch_x)
-                batch_y = self.to_device(batch_y)
+                batch_x = self.to_device(batch_dict["stock_features"])
+                batch_m = self.to_device(batch_dict["market_features"])
+                batch_i = self.to_device(batch_dict["industries"])
+                batch_y = self.to_device(batch_dict["labels"])
 
                 assert not torch.isnan(batch_x).any(), "NaN at batch_x"
+                assert not torch.isnan(batch_m).any(), "NaN at batch_m"
+                assert not torch.isnan(batch_i).any(), "NaN at batch_i"
                 assert not torch.isnan(batch_y).any(), "NaN at batch_y"
 
-                outputs = self.model(batch_x)
-
+                optimizer.zero_grad()
+                outputs = self.model(batch_x, batch_m, batch_i)
                 loss = self.criterion(outputs, batch_y)
-
-                train_loss.append(loss.item())
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 3.0)
+                optimizer.step()
+                lr_scheduler.step()
 
                 if (i + 1) % 100 == 0:
                     speed = (time.time() - time_now) / iter_count
                     left_time = speed * ((self.epochs - epoch) * train_steps_epoch - i)
+                    cur_lr = optimizer.param_groups[0]["lr"]
                     self.logger.info(
                         "Epoch: {0}, step: {1}, lr: {2:.8f} train loss: {3:.8f}, speed: {4:.4f}s/iter, left time: {5:.4f}s".format(
                             epoch + 1,
                             i + 1,
-                            lr_scheduler.get_last_lr()[0],
+                            cur_lr,
                             loss.item(),
                             speed,
                             left_time,
@@ -163,11 +159,7 @@ class PPNetModel(BaseModel):
                     iter_count = 0
                     time_now = time.time()
 
-                optimizer.zero_grad()
-                loss.backward()
-                torch.nn.utils.clip_grad_value_(self.model.parameters(), 3.0)
-                optimizer.step()
-                lr_scheduler.step()
+                train_loss.append(loss.item())
 
             train_loss = np.average(train_loss)
             val_loss = self.eval(val_dataset)
@@ -178,11 +170,27 @@ class PPNetModel(BaseModel):
             )
 
             # save checkpoints
-            os.makedirs(self.save_dir, exist_ok=True)
-            model_file = os.path.join(
-                self.save_dir, "model_epoch_{}.pth".format(epoch + 1)
-            )
-            torch.save(self.model.state_dict(), model_file)
+            self.save(f"model_epoch_{epoch + 1}.pth")
+
+            # early stopping
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                patience_counter = 0
+                torch.save(self.model.state_dict(), best_model_path)
+                self.logger.info(
+                    f"New best validation loss: {best_val_loss:.8f}, saving model to {best_model_path}"
+                )
+            else:
+                patience_counter += 1
+                self.logger.info(
+                    f"No improvement in validation loss, patience counter: {patience_counter}/{self.early_stopping_patience}"
+                )
+                if patience_counter >= self.early_stopping_patience:
+                    self.logger.info(
+                        f"Early stopping triggered after {patience_counter} epochs without improvement"
+                    )
+                    self.logger.info(f"Best model saved at: {best_model_path}")
+                    break
 
     def eval(self, val_dataset: Dataset):
         self.model.eval()
@@ -190,12 +198,14 @@ class PPNetModel(BaseModel):
         val_loader = DataLoader(val_dataset, batch_size=self.batch_size, shuffle=False)
 
         total_loss = []
-        for i, (_, batch_x, batch_y) in enumerate(val_loader):
-            batch_x = self.to_device(batch_x)
-            batch_y = self.to_device(batch_y)
+        for i, batch_dict in enumerate(val_loader):
+            batch_x = self.to_device(batch_dict["stock_features"])
+            batch_m = self.to_device(batch_dict["market_features"])
+            batch_i = self.to_device(batch_dict["industries"])
+            batch_y = self.to_device(batch_dict["labels"])
 
             with torch.no_grad():
-                outputs = self.model(batch_x)
+                outputs = self.model(batch_x, batch_m, batch_i)
 
             loss = self.criterion(outputs, batch_y)
 
@@ -213,14 +223,17 @@ class PPNetModel(BaseModel):
         labels = []
         preds = []
         indices = []
-        for i, (sample_indices, batch_x, batch_y) in enumerate(test_loader):
-            batch_x = self.to_device(batch_x)
-            batch_y = self.to_device(batch_y)
+        for i, batch_dict in enumerate(test_loader):
+            bacth_indices = batch_dict["indices"]
+            batch_x = self.to_device(batch_dict["stock_features"])
+            batch_m = self.to_device(batch_dict["market_features"])
+            batch_i = self.to_device(batch_dict["industries"])
+            batch_y = self.to_device(batch_dict["labels"])
 
             with torch.no_grad():
-                outputs = self.model(batch_x)
+                outputs = self.model(batch_x, batch_m, batch_i)
 
-            indices.append(sample_indices.squeeze(0).numpy())
+            indices.append(bacth_indices.squeeze(0).numpy())
             labels.append(batch_y.cpu().numpy())
             preds.append(outputs.cpu().numpy())
 

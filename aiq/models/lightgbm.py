@@ -22,8 +22,8 @@ class LGBModel(BaseModel):
     ):
         train_df = train_dataset.data
         x_train, y_train = (
-            train_df[self._feature_names].values,
-            train_df[self._label_names].values,
+            train_df[self.feature_names].values,
+            train_df[self.label_names].values,
         )
         dtrain = lgb.Dataset(x_train, label=y_train)
         evals = [dtrain]
@@ -31,8 +31,8 @@ class LGBModel(BaseModel):
         if val_dataset is not None:
             valid_df = val_dataset.data
             x_valid, y_valid = (
-                valid_df[self._feature_names].values,
-                valid_df[self._label_names].values,
+                valid_df[self.feature_names].values,
+                valid_df[self.label_names].values,
             )
             dvalid = lgb.Dataset(x_valid, label=y_valid)
             evals.append(dvalid)
@@ -64,10 +64,10 @@ class LGBModel(BaseModel):
     def predict(self, test_dataset: Dataset):
         if self.model is None:
             raise ValueError("model is not fitted yet!")
-        x_test = test_dataset.data[self._feature_names].values
+        x_test = test_dataset.data[self.feature_names].values
         preds = self.model.predict(x_test)
         pred_df = test_dataset.data
-        pred_df[f"PRED_{self._label_names[0]}"] = preds
+        pred_df[f"PRED_{self.label_names[0]}"] = preds
         return pred_df
 
     def get_feature_importance(self, *args, **kwargs) -> pd.Series:

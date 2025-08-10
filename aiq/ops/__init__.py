@@ -1,5 +1,4 @@
 from .ops import (
-    Rolling,
     Ref,
     Mean,
     Std,

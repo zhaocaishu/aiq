@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 from scipy.stats import spearmanr
 
 
@@ -42,7 +43,7 @@ class Evaluator:
         sse = np.sum((label - pred) ** 2)
 
         # 计算总平方和 (SST)
-        sst = np.sum((label - label.mean()) ** 2)
+        sst = np.sum(label ** 2)
 
         # 避免除以零
         return 1 - sse / sst if sst != 0 else np.nan
@@ -65,6 +66,45 @@ class Evaluator:
             return np.nan
         return spearmanr(group[self.pred_col], group[self.label_col])[0]
 
+    def compute_hit_rate(self, group, K=30):
+        """
+        计算 Top-K 和 Bottom-K 的命中率（Hit Rate）。
+
+        参数:
+            group (pd.DataFrame): 单日数据，包含预测值列和真实标签列。
+            K (int): Top-K 和 Bottom-K 的取值。
+
+        返回:
+            Tuple[float, float]: 返回 Top-K 和 Bottom-K 的命中率 (HR@TopK, HR@BottomK)。
+                                若样本数量不足或数据无效，则返回 (np.nan, np.nan)。
+        """
+        # 样本量不足时直接返回 NaN
+        if (
+            group is None
+            or not isinstance(group, pd.DataFrame)
+            or len(group) < K
+            or K <= 0
+        ):
+            return pd.DataFrame({"HR@TopK": [np.nan], "HR@BottomK": [np.nan]})
+
+        # 排序并取 Top-K
+        pred_topk = group.nlargest(K, self.pred_col)
+        gt_topk   = group.nlargest(K, self.label_col)
+        
+        pred_topk_set = set(pred_topk["Instrument"])
+        gt_topk_set   = set(gt_topk["Instrument"])
+        hr_top = len(pred_topk_set & gt_topk_set) / K
+        
+        # 排序并取 Bottom-K
+        pred_bottomk = group.nsmallest(K, self.pred_col)
+        gt_bottomk   = group.nsmallest(K, self.label_col)
+        
+        pred_bottomk_set = set(pred_bottomk["Instrument"])
+        gt_bottomk_set   = set(gt_bottomk["Instrument"])
+        hr_bottom = len(pred_bottomk_set & gt_bottomk_set) / K
+
+        return pd.DataFrame({f"HR@Top{K}": [hr_top], f"HR@Bottom{K}": [hr_bottom]})
+
     def evaluate(self, df, groupby_col="Date"):
         """
         评估预测模型性能，返回 IC、ICIR 和 R² 等指标。
@@ -78,6 +118,7 @@ class Evaluator:
                 - IC: 每日斯皮尔曼相关系数的均值。
                 - ICIR: IC 的均值除以标准差。
                 - R2: 样本外 R²。
+                - 命中率: Top-K 和 Bottom-K 的命中率。
         """
         if not groupby_col in df.columns:
             raise ValueError(f"DataFrame must contain groupby column: {groupby_col}")
@@ -94,9 +135,9 @@ class Evaluator:
         # 计算 R²
         r2 = self.compute_r2(df)
 
-        metrics = {
-            "IC": ic_mean,
-            "ICIR": icir,
-            "R2": r2,
-        }
+        # 计算命中率
+        daily_hitrate = df.groupby(groupby_col).apply(self.compute_hit_rate)
+        hitrate = daily_hitrate.mean()
+
+        metrics = {"IC": ic_mean, "ICIR": icir, "R2": r2, "HitRate": hitrate.to_dict()}
         return metrics

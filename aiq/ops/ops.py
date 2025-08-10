@@ -71,13 +71,12 @@ class Rolling(abc.ABC):
         # NOTE: remove all null check,
         # now it's user's responsibility to decide whether use features in null days
         # isnull = series.isnull() # NOTE: isnull = NaN, inf is not null
-        series = feature.copy()
         if isinstance(N, int) and N == 0:
-            series = getattr(series.expanding(min_periods=1), self.func)()
+            series = getattr(feature.expanding(min_periods=1), self.func)()
         elif isinstance(N, float) and 0 < N < 1:
-            series = series.ewm(alpha=N, min_periods=1).mean()
+            series = feature.ewm(alpha=N, min_periods=1).mean()
         else:
-            series = getattr(series.rolling(N, min_periods=1), self.func)()
+            series = getattr(feature.rolling(N, min_periods=1), self.func)()
         return series
 
 
@@ -90,10 +89,9 @@ class Ref(Rolling):
         Args:
             N (int):  N = 0, current data; N > 0, retrieve data of N periods ago; N < 0, future data
         """
-        series = feature.copy()
-        if series.empty:
-            return series  # Pandas bug, see: https://github.com/pandas-dev/pandas/issues/21049
-        series = series.shift(N)  # copy
+        if feature.empty:
+            return feature  # Pandas bug, see: https://github.com/pandas-dev/pandas/issues/21049
+        series = feature.shift(N)  # copy
         return series
 
 
@@ -153,14 +151,15 @@ class IdxMax(Rolling):
         super(IdxMax, self).__init__("idxmax")
 
     def __call__(self, feature: pd.Series, N):
-        series = feature.copy()
         if N == 0:
-            series = series.expanding(min_periods=1).apply(
-                lambda x: x.argmax() + 1, raw=True
+            series = feature.expanding(min_periods=1).apply(
+                lambda x: (np.nanargmax(x) + 1) if not np.all(np.isnan(x)) else np.nan,
+                raw=True,
             )
         else:
-            series = series.rolling(N, min_periods=1).apply(
-                lambda x: x.argmax() + 1, raw=True
+            series = feature.rolling(N, min_periods=1).apply(
+                lambda x: (np.nanargmax(x) + 1) if not np.all(np.isnan(x)) else np.nan,
+                raw=True,
             )
         return series
 
@@ -179,14 +178,15 @@ class IdxMin(Rolling):
         super(IdxMin, self).__init__("idxmin")
 
     def __call__(self, feature, N):
-        series = feature.copy()
         if N == 0:
-            series = series.expanding(min_periods=1).apply(
-                lambda x: x.argmin() + 1, raw=True
+            series = feature.expanding(min_periods=1).apply(
+                lambda x: (np.nanargmin(x) + 1) if not np.all(np.isnan(x)) else np.nan,
+                raw=True,
             )
         else:
-            series = series.rolling(N, min_periods=1).apply(
-                lambda x: x.argmin() + 1, raw=True
+            series = feature.rolling(N, min_periods=1).apply(
+                lambda x: (np.nanargmin(x) + 1) if not np.all(np.isnan(x)) else np.nan,
+                raw=True,
             )
         return series
 
@@ -198,11 +198,10 @@ class Quantile(Rolling):
         super(Quantile, self).__init__("quantile")
 
     def __call__(self, feature: pd.Series, N, qscore):
-        series = feature.copy()
         if N == 0:
-            series = series.expanding(min_periods=1).quantile(qscore)
+            series = feature.expanding(min_periods=1).quantile(qscore)
         else:
-            series = series.rolling(N, min_periods=1).quantile(qscore)
+            series = feature.rolling(N, min_periods=1).quantile(qscore)
         return series
 
 
@@ -224,11 +223,10 @@ class Mad(Rolling):
             x1 = x[~np.isnan(x)]
             return np.mean(np.abs(x1 - x1.mean()))
 
-        series = feature.copy()
         if N == 0:
-            series = series.expanding(min_periods=1).apply(mad, raw=True)
+            series = feature.expanding(min_periods=1).apply(mad, raw=True)
         else:
-            series = series.rolling(N, min_periods=1).apply(mad, raw=True)
+            series = feature.rolling(N, min_periods=1).apply(mad, raw=True)
         return series
 
 
@@ -240,11 +238,10 @@ class Rank(Rolling):
 
     # for compatiblity of python 3.7, which doesn't support pandas 1.4.0+ which implements Rolling.rank
     def __call__(self, feature: pd.Series, N):
-        series = feature.copy()
         rolling_or_expending = (
-            series.expanding(min_periods=1)
+            feature.expanding(min_periods=1)
             if N == 0
-            else series.rolling(N, min_periods=1)
+            else feature.rolling(N, min_periods=1)
         )
         return rolling_or_expending.rank(pct=True)
 
@@ -263,11 +260,10 @@ class Delta(Rolling):
         super(Delta, self).__init__("delta")
 
     def __call__(self, feature: pd.Series, N):
-        series = feature.copy()
         if N == 0:
-            series = series - series.iloc[0]
+            series = feature - feature.iloc[0]
         else:
-            series = series - series.shift(N)
+            series = feature - feature.shift(N)
         return series
 
 
@@ -280,11 +276,10 @@ class Slope(Rolling):
         super(Slope, self).__init__("slope")
 
     def __call__(self, feature: pd.Series, N):
-        series = feature.copy()
         if N == 0:
-            series = pd.Series(expanding_slope(series.values), index=series.index)
+            series = pd.Series(expanding_slope(feature.values), index=feature.index)
         else:
-            series = pd.Series(rolling_slope(series.values, N), index=series.index)
+            series = pd.Series(rolling_slope(feature.values, N), index=feature.index)
         return series
 
 
@@ -295,11 +290,10 @@ class Rsquare(Rolling):
         super(Rsquare, self).__init__("rsquare")
 
     def __call__(self, feature: pd.Series, N):
-        series = feature.copy()
         if N == 0:
-            series = pd.Series(expanding_rsquare(series.values), index=series.index)
+            series = pd.Series(expanding_rsquare(feature.values), index=feature.index)
         else:
-            series = pd.Series(rolling_rsquare(series.values, N), index=series.index)
+            series = pd.Series(rolling_rsquare(feature.values, N), index=feature.index)
             series.loc[
                 np.isclose(series.rolling(N, min_periods=1).std(), 0, atol=2e-05)
             ] = np.nan
@@ -313,11 +307,10 @@ class Resi(Rolling):
         super(Resi, self).__init__("resi")
 
     def __call__(self, feature: pd.Series, N):
-        series = feature.copy()
         if N == 0:
-            series = pd.Series(expanding_resi(series.values), index=series.index)
+            series = pd.Series(expanding_resi(feature.values), index=feature.index)
         else:
-            series = pd.Series(rolling_resi(series.values, N), index=series.index)
+            series = pd.Series(rolling_resi(feature.values, N), index=feature.index)
         return series
 
 
@@ -333,11 +326,10 @@ class WMA(Rolling):
             w = w / w.sum()
             return np.nanmean(w * x)
 
-        series = feature.copy()
         if N == 0:
-            series = series.expanding(min_periods=1).apply(weighted_mean, raw=True)
+            series = feature.expanding(min_periods=1).apply(weighted_mean, raw=True)
         else:
-            series = series.rolling(N, min_periods=1).apply(weighted_mean, raw=True)
+            series = feature.rolling(N, min_periods=1).apply(weighted_mean, raw=True)
         return series
 
 
@@ -354,13 +346,12 @@ class EMA(Rolling):
             w /= w.sum()
             return np.nansum(w * x)
 
-        series = feature.copy()
         if N == 0:
-            series = series.expanding(min_periods=1).apply(exp_weighted_mean, raw=True)
+            series = feature.expanding(min_periods=1).apply(exp_weighted_mean, raw=True)
         elif 0 < N < 1:
-            series = series.ewm(alpha=N, min_periods=1).mean()
+            series = feature.ewm(alpha=N, min_periods=1).mean()
         else:
-            series = series.ewm(span=N, min_periods=1).mean()
+            series = feature.ewm(span=N, min_periods=1).mean()
         return series
 
 

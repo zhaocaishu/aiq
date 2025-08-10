@@ -3,7 +3,7 @@ import torch.nn as nn
 
 
 class RevIN(nn.Module):
-    def __init__(self, num_features: int, eps=1e-5, affine=False):
+    def __init__(self, num_features: int, eps=1e-5, affine=True):
         """
         :param num_features: the number of features or channels
         :param eps: a value added for numerical stability
@@ -16,9 +16,14 @@ class RevIN(nn.Module):
         if self.affine:
             self._init_params()
 
-    def forward(self, x):
-        self._get_statistics(x)
-        x = self._normalize(x)
+    def forward(self, x, mode: str):
+        if mode == "norm":
+            self._get_statistics(x)
+            x = self._normalize(x)
+        elif mode == "denorm":
+            x = self._denormalize(x)
+        else:
+            raise NotImplementedError
         return x
 
     def _init_params(self):
@@ -27,9 +32,10 @@ class RevIN(nn.Module):
         self.affine_bias = nn.Parameter(torch.zeros(self.num_features))
 
     def _get_statistics(self, x):
-        self.mean = torch.mean(x, dim=(0, 1), keepdim=True).detach()
+        dim2reduce = tuple(range(1, x.ndim - 1))
+        self.mean = torch.mean(x, dim=dim2reduce, keepdim=True).detach()
         self.stdev = torch.sqrt(
-            torch.var(x, dim=(0, 1), keepdim=True, unbiased=False) + self.eps
+            torch.var(x, dim=dim2reduce, keepdim=True, unbiased=False) + self.eps
         ).detach()
 
     def _normalize(self, x):
@@ -40,9 +46,18 @@ class RevIN(nn.Module):
             x = x + self.affine_bias
         return x
 
+    def _denormalize(self, x):
+        if self.affine:
+            x = x - self.affine_bias
+            x = x / (self.affine_weight + self.eps * self.eps)
+        x = x * self.stdev
+        x = x + self.mean
+        return x
+
 
 if __name__ == "__main__":
     x_in = torch.randn((128, 8, 32))
+    # Example: clip normalized outputs between -3 and 3
     revin_layer = RevIN(32, affine=True)
-    x_out = revin_layer(x_in)
-    print(x_out.shape)
+    x_out = revin_layer(x_in, "norm")
+    print(x_out.shape)  # torch.Size([128, 8, 32])

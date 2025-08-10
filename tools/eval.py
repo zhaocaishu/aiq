@@ -18,6 +18,12 @@ def parse_args() -> argparse.Namespace:
         help="Path to the configuration file for evaluation.",
     )
     parser.add_argument(
+        "--split",
+        type=str,
+        default="test",
+        help="Data split for evaluation.",
+    )
+    parser.add_argument(
         "--eval_pred_col",
         type=str,
         default="PRED_RETN_5D",
@@ -78,20 +84,22 @@ def main():
 
     data_handler = init_instance_by_config(cfg.data_handler, data_dir=args.data_dir)
     data_handler.load(os.path.join(args.save_dir, "data_handler.pkl"))
-    data = data_handler.setup_data(mode="valid")
+    eval_data = data_handler.setup_data(mode=args.split)
+    logger.info("Data handler completed. Shape: %s", eval_data.shape)
 
     # Load dataset
-    val_dataset = init_instance_by_config(
+    eval_dataset = init_instance_by_config(
         cfg.dataset,
-        data=data,
+        data=eval_data,
+        data_dir=args.data_dir,
         feature_names=data_handler.feature_names,
-        mode="valid",
+        mode=args.split,
     )
-    logger.info("Validation dataset loaded: %d samples", len(val_dataset))
+    logger.info("Evaluation dataset loaded: %d samples", len(eval_dataset))
 
     # Load and predict
-    model = load_model(cfg, val_dataset, args.save_dir, logger)
-    pred_df = model.predict(val_dataset).reset_index()
+    model = load_model(cfg, eval_dataset, args.save_dir, logger)
+    pred_df = model.predict(eval_dataset).reset_index()
     logger.info("Prediction completed. Shape: %s", pred_df.shape)
 
     # Evaluate

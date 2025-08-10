@@ -30,7 +30,7 @@ cdef class Mean(Rolling):
     def __init__(self, int window):
         super(Mean, self).__init__(window)
         self.vsum = 0
-
+        
     cdef double update(self, double val):
         self.barv.push_back(val)
         if not isnan(self.barv.front()):
@@ -85,7 +85,7 @@ cdef class Slope(Rolling):
         return (N*self.xy_sum - self.x_sum*self.y_sum) / \
             (N*self.x2_sum - self.x_sum*self.x_sum)
 
-
+    
 cdef class Resi(Rolling):
     """1-D array rolling residuals"""
     cdef double i_sum # can be used as i2_sum
@@ -149,33 +149,48 @@ cdef class Rsquare(Rolling):
         self.xy_sum = 0
 
     cdef double update(self, double val):
+        # Add new value and remove oldest
         self.barv.push_back(val)
-        self.xy_sum = self.xy_sum - self.y_sum
-        self.x2_sum = self.x2_sum + self.i_sum - 2*self.x_sum
-        self.x_sum = self.x_sum - self.i_sum
-        cdef double _val
-        _val = self.barv.front()
-        if not isnan(_val):
-            self.i_sum  -= 1
-            self.y_sum  -= _val
-            self.y2_sum -= _val * _val
-        else:
-            self.na_count -= 1
         self.barv.pop_front()
-        if isnan(val):
-            self.na_count += 1
-        else:
-            self.i_sum  += 1
-            self.x_sum  += self.window
-            self.x2_sum += self.window * self.window
-            self.y_sum  += val
-            self.y2_sum += val * val
-            self.xy_sum += self.window * val
+        
+        # Reset accumulators
+        self.i_sum = 0
+        self.x_sum = 0
+        self.x2_sum = 0
+        self.y_sum = 0
+        self.y2_sum = 0
+        self.xy_sum = 0
+        self.na_count = 0
+        
+        # Compute sums over the window
+        cdef int i
+        cdef double x, y
+        for i in range(self.window):
+            if isnan(self.barv[i]):
+                self.na_count += 1  # Count NANs
+            else:
+                x = i + 1  # x as position [1, 2, 3, ..., window]
+                y = self.barv[i]
+                self.i_sum += 1  # Number of non-NAN values
+                self.x_sum += x
+                self.x2_sum += x * x
+                self.y_sum += y
+                self.y2_sum += y * y
+                self.xy_sum += x * y
+        
+        # Calculate R²
         cdef int N = self.window - self.na_count
-        cdef double rvalue
-        rvalue = (N*self.xy_sum - self.x_sum*self.y_sum) / \
-            sqrt((N*self.x2_sum - self.x_sum*self.x_sum) * (N*self.y2_sum - self.y_sum*self.y_sum))
-        return rvalue * rvalue
+        if N <= 1:
+            return NAN
+        
+        # compute correlation coefficient r
+        cdef double denom = sqrt((N * self.x2_sum - self.x_sum * self.x_sum)
+                                 * (N * self.y2_sum - self.y_sum * self.y_sum))
+        if denom == 0.0:
+            return NAN
+
+        cdef double r = (N * self.xy_sum - self.x_sum * self.y_sum) / denom
+        return r * r
 
 
 cdef np.ndarray[double, ndim=1] rolling(Rolling r, np.ndarray a):
