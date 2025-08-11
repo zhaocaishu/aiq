@@ -83,7 +83,7 @@ class PPNetModel(BaseModel):
 
     def to_device(self, tensor):
         """统一设备转换方法"""
-        return tensor.squeeze(0).to(device=self.device, dtype=torch.float)
+        return tensor.squeeze(0).to(device=self.device)
 
     def fit(self, train_dataset: Dataset, val_dataset: Dataset = None):
         train_loader = DataLoader(
