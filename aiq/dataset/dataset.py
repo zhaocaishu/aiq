@@ -166,7 +166,7 @@ class TSDataset(Dataset):
 
         data_dict = {
             "indices": indices,
-            "industries": features[:, :, self.industry_indices].astype(np.int64),
+            "industries": features[:, :, self.industry_indices],
             "stock_features": features[:, :, self.stock_feature_indices],
             "market_features": features[:, :, self.market_feature_indices],
         }
@@ -191,7 +191,7 @@ class TSDataset(Dataset):
         data_dict.update(
             {
                 "indices": indices,
-                "industries": features[:, :, self.industry_indices].astype(np.int64),
+                "industries": features[:, :, self.industry_indices],
                 "stock_features": features[:, :, self.stock_feature_indices],
                 "market_features": features[:, :, self.market_feature_indices],
                 "labels": labels,
