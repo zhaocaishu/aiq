@@ -54,7 +54,7 @@ model:
   kwargs:
     d_feat: 137
     d_market: 63
-    d_emb: 8
+    d_emb: 16
     d_model: 256
     t_nhead: 4
     s_nhead: 2
