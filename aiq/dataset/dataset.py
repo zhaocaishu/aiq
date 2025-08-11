@@ -84,6 +84,7 @@ class TSDataset(Dataset):
             df = DataLoader.load_instruments(
                 data_dir, universe, self.start_time, self.end_time
             )
+            df = df[df["Is_st"] == 0]
             self.instruments_set = set(zip(df["Instrument"], df["Date"]))
 
         self._setup_time_series()
