@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple
 
 import numpy as np
 import pandas as pd
@@ -66,9 +66,9 @@ class TSDataset(Dataset):
         self.use_augmentation = use_augmentation
 
         # Precompute index positions for features
-        self.industry_indices = [
+        self.industry_index = next(
             i for i, name in enumerate(self.feature_names) if name == "IND_CLS"
-        ]
+        )
         self.stock_feature_indices = [
             i
             for i, name in enumerate(self.feature_names)
@@ -166,7 +166,7 @@ class TSDataset(Dataset):
 
         data_dict = {
             "indices": indices.astype(np.int64),
-            "industries": features[:, :, self.industry_indices].astype(np.int64),
+            "industries": features[:, -1, self.industry_index].astype(np.int64),
             "stock_features": features[:, :, self.stock_feature_indices],
             "market_features": features[:, :, self.market_feature_indices],
         }
@@ -191,7 +191,7 @@ class TSDataset(Dataset):
         data_dict.update(
             {
                 "indices": indices.astype(np.int64),
-                "industries": features[:, :, self.industry_indices].astype(np.int64),
+                "industries": features[:, -1, self.industry_index].astype(np.int64),
                 "stock_features": features[:, :, self.stock_feature_indices],
                 "market_features": features[:, :, self.market_feature_indices],
                 "labels": labels,

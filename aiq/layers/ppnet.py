@@ -23,7 +23,7 @@ class PositionalEncoding(nn.Module):
 
 
 class SAttention(nn.Module):
-    def __init__(self, d_model, nhead, dropout, d_emb=None):
+    def __init__(self, d_model, nhead, dropout, d_emb):
         super().__init__()
         assert d_model % nhead == 0, "d_model 必须能被 nhead 整除"
 
@@ -32,21 +32,16 @@ class SAttention(nn.Module):
         self.head_dim = d_model // nhead
         self.temperature = math.sqrt(self.head_dim)
 
-        # 行业 embedding 投影（可选）
-        if d_emb is not None:
-            self.industry_proj = nn.Linear(d_emb, d_model, bias=False)
-        else:
-            self.industry_proj = None
-
         # Q, K, V projection
-        self.qtrans = nn.Linear(d_model, d_model, bias=False)
-        self.ktrans = nn.Linear(d_model, d_model, bias=False)
+        self.qtrans = nn.Linear(d_model + d_emb, d_model, bias=False)
+        self.ktrans = nn.Linear(d_model + d_emb, d_model, bias=False)
         self.vtrans = nn.Linear(d_model, d_model, bias=False)
 
         self.attn_dropout = nn.ModuleList([nn.Dropout(p=dropout) for _ in range(nhead)])
 
         self.norm1 = nn.LayerNorm(d_model, eps=1e-5)
-        self.norm2 = nn.LayerNorm(d_model, eps=1e-5)
+        self.norm2 = nn.LayerNorm(d_emb, eps=1e-5)
+        self.norm3 = nn.LayerNorm(d_model, eps=1e-5)
         self.ffn = nn.Sequential(
             nn.Linear(d_model, d_model),
             nn.ReLU(),
@@ -55,24 +50,20 @@ class SAttention(nn.Module):
             nn.Dropout(p=dropout),
         )
 
-    def forward(self, x, industry_emb=None):
+    def forward(self, x, industry_emb):
         # x: (N, D)  — 股票特征
         # industry_emb: (N, d_emb) — 行业 embedding
         x = self.norm1(x)
-
-        # 如果传入了行业 embedding，先映射到 d_model
-        if industry_emb is not None and self.industry_proj is not None:
-            industry_emb_proj = self.industry_proj(industry_emb)  # (N, D)
-            q_input = x + industry_emb_proj
-            k_input = x + industry_emb_proj
-        else:
-            q_input = x
-            k_input = x
+        industry_emb = self.norm2(industry_emb)
 
         # Q / K 用行业信息引导，V 只用股票特征
-        q = self.qtrans(q_input)
-        k = self.ktrans(k_input)
-        v = self.vtrans(x)
+        q = torch.cat([x, industry_emb], dim=-1)
+        k = torch.cat([x, industry_emb], dim=-1)
+        v = x
+
+        q = self.qtrans(q)
+        k = self.ktrans(k)
+        v = self.vtrans(v)
 
         # 多头拆分
         q = q.view(-1, self.nhead, self.head_dim)
@@ -96,8 +87,7 @@ class SAttention(nn.Module):
         att_output = torch.cat(att_output_heads, dim=-1)  # (N, D)
 
         xt = x + att_output
-        xt = self.norm2(xt)
-        out = xt + self.ffn(xt)
+        out = xt + self.ffn(self.norm3(xt))
         return out
 
 
@@ -156,10 +146,9 @@ class TAttention(nn.Module):
 
         # FFN
         xt = x + att_output
-        xt = self.norm2(xt)
-        att_output = xt + self.ffn(xt)
+        output = xt + self.ffn(self.norm2(xt))
 
-        return att_output
+        return output
 
 
 class Gate(nn.Module):
@@ -222,7 +211,7 @@ class PPNet(nn.Module):
 
         # inter-stock attention
         self.spatial_attention = SAttention(
-            d_model=d_model, nhead=s_nhead, dropout=dropout
+            d_model=d_model, d_emb=d_emb, nhead=s_nhead, dropout=dropout
         )
 
         # temporal aggregation
