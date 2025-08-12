@@ -54,16 +54,17 @@ class TSDataset(Dataset):
         seq_len: int = 8,
         feature_names: List[str] = [],
         label_names: List[str] = [],
-        mode: str = "train",
         use_augmentation: bool = False,
+        mode: str = "train",
     ):
         self.data = data.copy(deep=False)
         self.seq_len = seq_len
         self.feature_names = feature_names
         self.label_names = label_names
-        self.mode = mode
-        self.start_time, self.end_time = segments[mode]
         self.use_augmentation = use_augmentation
+        self.mode = mode
+
+        self.start_time, self.end_time = segments[mode]
 
         # Precompute index positions for features
         self.industry_index = next(
