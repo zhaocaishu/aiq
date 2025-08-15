@@ -174,7 +174,7 @@ class Alpha158(DataHandler):
             "TS_LOW0",
             "TS_MFD_BUYORD_RATIO",
             "TS_MFD_SELLORD_RATIO",
-            "TS_MFD_VOLINFLOWRATE",
+            "TS_MFD_VOLINFLOW_RATE",
         ]
 
         # rolling
