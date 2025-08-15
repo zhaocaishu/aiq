@@ -151,8 +151,8 @@ class Alpha158(DataHandler):
             open / Ref(close, 1),
             high / close,
             low / close,
-            mfd_buyord / (volume + 1e-12),
-            mfd_sellord / (volume + 1e-12),
+            mfd_buyord,
+            mfd_sellord,
             mfd_volinflowrate,
         ]
         feature_names = [
@@ -172,9 +172,9 @@ class Alpha158(DataHandler):
             "TS_OPEN0",
             "TS_HIGH0",
             "TS_LOW0",
-            "TS_MFD_BUYORD_RATIO",
-            "TS_MFD_SELLORD_RATIO",
-            "TS_MFD_VOLINFLOW_RATE",
+            "TS_MFD_BUYORD",
+            "TS_MFD_SELLORD",
+            "TS_MFD_VOLINFLOWRATE",
         ]
 
         # rolling
