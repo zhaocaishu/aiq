@@ -190,7 +190,6 @@ class Alpha158(DataHandler):
             "TS_MFD_VOLINFLOWRATE",
             "TS_INTRA_TAIL_RATIO",
             "TS_INTRA_RETURNS_SKEWNESS",
-            "TS_INTRA_RETURNS_KURTOSIS",
             "TS_INTRA_PRICE_VOL_CORR",
             "TS_INTRA_DOWNSIDE_RATIO",
         ]
