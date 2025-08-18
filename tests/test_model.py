@@ -19,7 +19,7 @@ if __name__ == "__main__":
     )
     logger.info("Model initialized successfully")
 
-    dummy_stock_features = torch.zeros(100, 16, 145).to(
+    dummy_stock_features = torch.zeros(100, 16, 144).to(
         "cuda" if torch.cuda.is_available() else "cpu"
     )
     dummy_market_features = torch.zeros(100, 16, 63).to(

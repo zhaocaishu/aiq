@@ -139,7 +139,6 @@ class Alpha158(DataHandler):
         # intraday features
         intra_tail_ratio = df["Intra_tail_ratio"]
         intra_returns_skewness = df["Intra_returns_skewness"]
-        intra_returns_kurtosis = df["Intra_returns_kurtosis"]
         intra_price_vol_corr = df["Intra_price_vol_corr"]
         intra_downside_ratio = df["Intra_downside_ratio"]
 
@@ -166,7 +165,6 @@ class Alpha158(DataHandler):
             mfd_volinflowrate,
             intra_tail_ratio,
             intra_returns_skewness,
-            intra_returns_kurtosis,
             intra_price_vol_corr,
             intra_downside_ratio,
         ]
