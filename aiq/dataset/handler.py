@@ -121,26 +121,24 @@ class Alpha158(DataHandler):
         bp = (1.0 / df["Pb"].replace(0, np.nan)).fillna(0)
         cap = np.log(df["Circ_mv"])
 
-        # adjusted prices
+        # prices
         adjusted_factor = df["Adj_factor"]
         open = df["Open"] * adjusted_factor
         close = df["Close"] * adjusted_factor
         high = df["High"] * adjusted_factor
         low = df["Low"] * adjusted_factor
+        vwap = df["Vwap"] * adjusted_factor
 
+        # volume
         volume = df["Volume"]
+
+        # turnover-rate
         turn = df["Turnover_rate_f"]
 
-        # moneyflow features
+        # moneyflow
         mfd_buyord = df["Mfd_buyord"]
         mfd_sellord = df["Mfd_sellord"]
         mfd_volinflowrate = df["Mfd_volinflowrate"]
-
-        # intraday features
-        intra_tail_ratio = df["Intra_tail_ratio"]
-        intra_returns_skewness = df["Intra_returns_skewness"]
-        intra_price_vol_corr = df["Intra_price_vol_corr"]
-        intra_downside_ratio = df["Intra_downside_ratio"]
 
         # kbar
         features = [
@@ -160,13 +158,10 @@ class Alpha158(DataHandler):
             open / Ref(close, 1),
             high / close,
             low / close,
+            vwap / close,
             mfd_buyord,
             mfd_sellord,
             mfd_volinflowrate,
-            intra_tail_ratio,
-            intra_returns_skewness,
-            intra_price_vol_corr,
-            intra_downside_ratio,
         ]
         feature_names = [
             "IND_CLS",
@@ -185,13 +180,10 @@ class Alpha158(DataHandler):
             "TS_OPEN0",
             "TS_HIGH0",
             "TS_LOW0",
+            "TS_VWAP0",
             "TS_MFD_BUYORD",
             "TS_MFD_SELLORD",
             "TS_MFD_VOLINFLOWRATE",
-            "TS_INTRA_TAIL_RATIO",
-            "TS_INTRA_RETURNS_SKEWNESS",
-            "TS_INTRA_PRICE_VOL_CORR",
-            "TS_INTRA_DOWNSIDE_RATIO",
         ]
 
         # rolling
