@@ -134,12 +134,12 @@ class Alpha158(DataHandler):
         volume = df["Volume"]
         amount = df["AMount"]   # Keep column name consistent in case of case sensitivity
         
-        # Volume Weighted Average Price (VWAP)
+        # volume Weighted Average Price (VWAP)
         # If original VWAP is missing, estimate by (amount * 1000) / (volume * 100),
         # then apply the adjustment factor
         vwap = df["Vwap"].fillna((amount * 1000) / (volume * 100)) * adj_factor
         
-        #turnover rate
+        # turnover rate
         turnover_rate = df["Turnover_rate_f"]
 
         # moneyflow
