@@ -121,16 +121,17 @@ class Alpha158(DataHandler):
         bp = (1.0 / df["Pb"].replace(0, np.nan)).fillna(0)
         cap = np.log(df["Circ_mv"])
 
-        # prices
+        # prices, volume and amount
         adjusted_factor = df["Adj_factor"]
         open = df["Open"] * adjusted_factor
         close = df["Close"] * adjusted_factor
         high = df["High"] * adjusted_factor
         low = df["Low"] * adjusted_factor
-        vwap = df["Vwap"] * adjusted_factor
 
-        # volume
         volume = df["Volume"]
+        amount = df["AMount"]
+        vwap = df["Vwap"]
+        vwap = vwap.fillna(amount * 1000 / (volume * 100)) * adjusted_factor
 
         # turnover-rate
         turn = df["Turnover_rate_f"]
