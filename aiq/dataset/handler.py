@@ -121,20 +121,26 @@ class Alpha158(DataHandler):
         bp = (1.0 / df["Pb"].replace(0, np.nan)).fillna(0)
         cap = np.log(df["Circ_mv"])
 
-        # prices, volume and amount
-        adjusted_factor = df["Adj_factor"]
-        open = df["Open"] * adjusted_factor
-        close = df["Close"] * adjusted_factor
-        high = df["High"] * adjusted_factor
-        low = df["Low"] * adjusted_factor
-
+        # adjustment factor
+        adj_factor = df["Adj_factor"]
+        
+        # adjusted prices
+        open_price = df["Open"] * adj_factor
+        close_price = df["Close"] * adj_factor
+        high_price = df["High"] * adj_factor
+        low_price = df["Low"] * adj_factor
+        
+        # trading volume and amount
         volume = df["Volume"]
-        amount = df["AMount"]
-        vwap = df["Vwap"]
-        vwap = vwap.fillna(amount * 1000 / (volume * 100)) * adjusted_factor
-
-        # turnover-rate
-        turn = df["Turnover_rate_f"]
+        amount = df["AMount"]   # Keep column name consistent in case of case sensitivity
+        
+        # Volume Weighted Average Price (VWAP)
+        # If original VWAP is missing, estimate by (amount * 1000) / (volume * 100),
+        # then apply the adjustment factor
+        vwap = df["Vwap"].fillna((amount * 1000) / (volume * 100)) * adj_factor
+        
+        #turnover rate
+        turnover_rate = df["Turnover_rate_f"]
 
         # moneyflow
         mfd_buyord = df["Mfd_buyord"]
