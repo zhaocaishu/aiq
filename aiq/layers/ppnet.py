@@ -220,9 +220,9 @@ class PPNet(nn.Module):
         # decoder
         self.decoder = nn.Linear(d_model, 1)
 
-    def forward(self, stock_features, market_features, industries):
+    def forward(self, industry_ids, stock_features, market_features):
         # Industry embedding
-        industry_emb = self.industry_embedding(industries)  # (N, d_emb)
+        industry_emb = self.industry_embedding(industry_ids)  # (N, d_emb)
 
         # Extract market features and apply gating
         market_features = market_features[:, -1, :]  # Shape: (N, F')

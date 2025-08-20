@@ -135,7 +135,7 @@ class PPNetModel(BaseModel):
                 assert not torch.isnan(batch_y).any(), "NaN at batch_y"
 
                 optimizer.zero_grad()
-                outputs = self.model(batch_x, batch_m, batch_i)
+                outputs = self.model(batch_i, batch_x, batch_m)
                 loss = self.criterion(outputs, batch_y)
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), 3.0)
@@ -205,7 +205,7 @@ class PPNetModel(BaseModel):
             batch_y = self.to_device(batch_dict["labels"])
 
             with torch.no_grad():
-                outputs = self.model(batch_x, batch_m, batch_i)
+                outputs = self.model(batch_i, batch_x, batch_m)
 
             loss = self.criterion(outputs, batch_y)
 
@@ -229,7 +229,7 @@ class PPNetModel(BaseModel):
             batch_m = self.to_device(batch_dict["market_features"])
 
             with torch.no_grad():
-                outputs = self.model(batch_x, batch_m, batch_i)
+                outputs = self.model(batch_i, batch_x, batch_m)
 
             indices.append(bacth_d.squeeze(0).numpy())
             preds.append(outputs.cpu().numpy())

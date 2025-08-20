@@ -8,7 +8,7 @@ from aiq.utils.functional import robust_zscore, zscore, neutralize
 
 
 def get_group_columns(
-    df: pd.DataFrame, group: str = None, exclude_cols: List[str] = []
+    df: pd.DataFrame, group: str = None, exclude_cols: List[str] = None
 ):
     """
     get a group of columns from multi-index columns DataFrame
@@ -27,6 +27,7 @@ def get_group_columns(
     else:
         cols = df.columns[df.columns.get_loc(group)]
 
+    exclude_cols = exclude_cols or []
     if exclude_cols:
         cols = cols[~cols.get_level_values(-1).isin(exclude_cols)]
 
@@ -115,10 +116,10 @@ class RobustZScoreNorm(Processor):
         https://en.wikipedia.org/wiki/Median_absolute_deviation.
     """
 
-    def __init__(self, fields_group=None, clip_outlier=True, exclude_cols=[]):
+    def __init__(self, fields_group=None, clip_outlier=True, exclude_cols=None):
         self.fields_group = fields_group
         self.clip_outlier = clip_outlier
-        self.exclude_cols = exclude_cols
+        self.exclude_cols = exclude_cols or []
 
     def fit(self, df: pd.DataFrame = None):
         self.cols = get_group_columns(df, self.fields_group, self.exclude_cols)
@@ -133,7 +134,7 @@ class RobustZScoreNorm(Processor):
         X -= self.mean_train
         X /= self.std_train
         if self.clip_outlier:
-            X = np.clip(X, -3, 3)
+            X = X.clip(-3, 3)
         df[self.cols] = X
         return df
 
@@ -203,8 +204,8 @@ class TSRobustZScoreNorm(Processor):
             med = block.median()
             mad = (block - med).abs().median()
             std = mad * 1.4826 + 1e-12
-            stats.loc[unique_dates[right], "median"] = med.values
-            stats.loc[unique_dates[right], "std"] = std.values
+            stats.loc[unique_dates[right], "median"] = med
+            stats.loc[unique_dates[right], "std"] = std
 
         def normalize_group(group, date):
             med = stats.loc[date, "median"]
@@ -230,7 +231,7 @@ class CSNeutralize(Processor):
         self.factor_cols = factor_cols
 
     def __call__(self, df):
-        df = df.groupby("Date", group_keys=False).apply(
+        df = df.groupby(level="Date", group_keys=False).apply(
             neutralize, self.industry_col, self.cap_col, self.factor_cols
         )
         return df
@@ -244,7 +245,7 @@ class CSWinsorize(Processor):
         fields_group=None,
         lower_quantile=0.01,
         upper_quantile=0.99,
-        exclude_cols=[],
+        exclude_cols=None,
     ):
         """
         Parameters
@@ -256,21 +257,21 @@ class CSWinsorize(Processor):
         self.fields_group = fields_group
         self.lower_quantile = lower_quantile
         self.upper_quantile = upper_quantile
-        self.exclude_cols = exclude_cols
+        self.exclude_cols = exclude_cols or []
 
     def __call__(self, df: pd.DataFrame) -> pd.DataFrame:
         # Identify numeric columns to winsorize
         cols = get_group_columns(df, self.fields_group, self.exclude_cols)
 
-        def winsorize_slice(slice_df: pd.DataFrame) -> pd.DataFrame:
+        def winsorize(group: pd.DataFrame) -> pd.DataFrame:
             # Compute per-column quantiles
-            lower_bounds = slice_df.quantile(self.lower_quantile)
-            upper_bounds = slice_df.quantile(self.upper_quantile)
+            lower_bounds = group.quantile(self.lower_quantile)
+            upper_bounds = group.quantile(self.upper_quantile)
             # Clip values to bounds
-            return slice_df.clip(lower=lower_bounds, upper=upper_bounds, axis=1)
+            return group.clip(lower=lower_bounds, upper=upper_bounds, axis=1)
 
         # Apply winsorization within each date group
-        df[cols] = df[cols].groupby("Date", group_keys=False).apply(winsorize_slice)
+        df[cols] = df[cols].groupby(level="Date", group_keys=False).apply(winsorize)
         return df
 
 
@@ -302,12 +303,12 @@ class DropExtremeLabel(Processor):
             # vectorized quantile computation via groupby-transform
             lower = (
                 df[col]
-                .groupby("Date", group_keys=False)
+                .groupby(level="Date", group_keys=False)
                 .transform(lambda x: x.quantile(self.percent))
             )
             upper = (
                 df[col]
-                .groupby("Date", group_keys=False)
+                .groupby(level="Date", group_keys=False)
                 .transform(lambda x: x.quantile(1 - self.percent))
             )
             # Keep only rows within [lower, upper]
@@ -321,7 +322,7 @@ class DropExtremeLabel(Processor):
 class CSZScoreNorm(Processor):
     """Cross Sectional ZScore Normalization"""
 
-    def __init__(self, fields_group=None, method="zscore", exclude_cols=[]):
+    def __init__(self, fields_group=None, method="zscore", exclude_cols=None):
         self.fields_group = fields_group
         if method == "zscore":
             self.zscore_func = zscore
@@ -329,11 +330,13 @@ class CSZScoreNorm(Processor):
             self.zscore_func = robust_zscore
         else:
             raise NotImplementedError(f"This type of input is not supported")
-        self.exclude_cols = exclude_cols
+        self.exclude_cols = exclude_cols or []
 
     def __call__(self, df):
         cols = get_group_columns(df, self.fields_group, self.exclude_cols)
-        df[cols] = df[cols].groupby("Date", group_keys=False).apply(self.zscore_func)
+        df[cols] = (
+            df[cols].groupby(level="Date", group_keys=False).apply(self.zscore_func)
+        )
         return df
 
 
@@ -357,6 +360,8 @@ class CSRankNorm(Processor):
             return (ranks - ranks.mean()) / ranks.std(ddof=0)  # z-score
 
         for col in cols:
-            df[col] = df[col].groupby("Date", group_keys=False).apply(normalize_group)
+            df[col] = (
+                df[col].groupby(level="Date", group_keys=False).apply(normalize_group)
+            )
 
         return df

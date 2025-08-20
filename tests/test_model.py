@@ -19,14 +19,16 @@ if __name__ == "__main__":
     )
     logger.info("Model initialized successfully")
 
+    dummy_industry_ids = (
+        torch.zeros(100).to("cuda" if torch.cuda.is_available() else "cpu").long()
+    )
     dummy_stock_features = torch.zeros(100, 16, 141).to(
         "cuda" if torch.cuda.is_available() else "cpu"
     )
     dummy_market_features = torch.zeros(100, 16, 63).to(
         "cuda" if torch.cuda.is_available() else "cpu"
     )
-    dummy_industries = (
-        torch.zeros(100).to("cuda" if torch.cuda.is_available() else "cpu").long()
+    output = model.model(
+        dummy_industry_ids, dummy_stock_features, dummy_market_features
     )
-    output = model.model(dummy_stock_features, dummy_market_features, dummy_industries)
     logger.info(output)
