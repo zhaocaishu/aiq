@@ -7,4 +7,5 @@ xgboost
 torch
 transformers
 pytest
+tabulate
 mysql-connector-python

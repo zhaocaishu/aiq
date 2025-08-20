@@ -172,21 +172,11 @@ class TSDataset(Dataset):
             "market_features": features[:, :, self.market_feature_indices],
         }
 
-        if not self.label_names:
-            return data_dict
+        if self.label_names:
+            # Extract labels from the last time step of each sequence
+            labels = np.array([self._labels[slice.stop - 1] for slice in slices])
+            data_dict["labels"] = labels
 
-        # Extract labels from the last time step of each sequence
-        labels = np.array([self._labels[slice.stop - 1] for slice in slices])
-
-        data_dict.update(
-            {
-                "sample_indices": indices.astype(np.int64),
-                "industry_ids": features[:, -1, self.industry_index].astype(np.int64),
-                "stock_features": features[:, :, self.stock_feature_indices],
-                "market_features": features[:, :, self.market_feature_indices],
-                "labels": labels,
-            }
-        )
         return data_dict
 
     def __len__(self):
