@@ -8,7 +8,7 @@ from aiq.utils.functional import robust_zscore, zscore, neutralize
 
 
 def get_group_columns(
-    df: pd.DataFrame, group: str = None, exclude_cols: List[str] = None
+    df: pd.DataFrame, group: str = None, exclude_cols: List[str] = []
 ):
     """
     get a group of columns from multi-index columns DataFrame
@@ -19,7 +19,7 @@ def get_group_columns(
         with multi of columns.
     group : str
         the name of the feature group, i.e. the first level value of the group index.
-    exclude_cols : List[str], optional
+    exclude_cols : List[str]
         List of column names (from the last level) to exclude from the result.
     """
     if group is None:
@@ -27,7 +27,6 @@ def get_group_columns(
     else:
         cols = df.columns[df.columns.get_loc(group)]
 
-    exclude_cols = exclude_cols or []
     if exclude_cols:
         cols = cols[~cols.get_level_values(-1).isin(exclude_cols)]
 
@@ -215,8 +214,10 @@ class TSRobustZScoreNorm(Processor):
                 group = group.clip(-3, 3)
             return group
 
-        df[cols] = df.groupby(level="Date", group_keys=False)[cols].apply(
-            lambda x: normalize_group(x, x.name)
+        df[cols] = (
+            df[cols]
+            .groupby(level="Date", group_keys=False)
+            .apply(lambda x: normalize_group(x, x.name))
         )
 
         return df
