@@ -123,24 +123,24 @@ class Alpha158(DataHandler):
 
         # adjustment factor
         adj_factor = df["Adj_factor"]
-        
+
         # adjusted prices
-        open_price = df["Open"] * adj_factor
-        close_price = df["Close"] * adj_factor
-        high_price = df["High"] * adj_factor
-        low_price = df["Low"] * adj_factor
-        
+        open = df["Open"] * adj_factor
+        close = df["Close"] * adj_factor
+        high = df["High"] * adj_factor
+        low = df["Low"] * adj_factor
+
         # trading volume and amount
         volume = df["Volume"]
-        amount = df["AMount"]   # Keep column name consistent in case of case sensitivity
-        
+        amount = df["AMount"]  # Keep column name consistent in case of case sensitivity
+
         # volume Weighted Average Price (VWAP)
         # If original VWAP is missing, estimate by (amount * 1000) / (volume * 100),
         # then apply the adjustment factor
-        vwap = df["Vwap"].fillna((amount * 1000) / (volume * 100)) * adj_factor
-        
+        vwap = df["Vwap"].fillna((amount * 1000) / (volume * 100 + 1e-12)) * adj_factor
+
         # turnover rate
-        turnover_rate = df["Turnover_rate_f"]
+        turn = df["Turnover_rate_f"]
 
         # moneyflow
         mfd_buyord = df["Mfd_buyord"]

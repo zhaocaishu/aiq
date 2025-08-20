@@ -26,8 +26,8 @@ if __name__ == "__main__":
 
     data_dict = train_dataset[0]
     print(
-        data_dict["indices"].shape,
-        data_dict["industries"].shape,
+        data_dict["sample_indices"].shape,
+        data_dict["industry_ids"].shape,
         data_dict["stock_features"].shape,
         data_dict["market_features"].shape,
         data_dict["labels"].shape,

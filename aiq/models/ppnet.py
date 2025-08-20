@@ -124,9 +124,9 @@ class PPNetModel(BaseModel):
             for i, batch_dict in enumerate(train_loader):
                 iter_count += 1
 
+                batch_i = self.to_device(batch_dict["industry_ids"])
                 batch_x = self.to_device(batch_dict["stock_features"])
                 batch_m = self.to_device(batch_dict["market_features"])
-                batch_i = self.to_device(batch_dict["industries"])
                 batch_y = self.to_device(batch_dict["labels"])
 
                 assert not torch.isnan(batch_x).any(), "NaN at batch_x"
@@ -199,9 +199,9 @@ class PPNetModel(BaseModel):
 
         total_loss = []
         for i, batch_dict in enumerate(val_loader):
+            batch_i = self.to_device(batch_dict["industry_ids"])
             batch_x = self.to_device(batch_dict["stock_features"])
             batch_m = self.to_device(batch_dict["market_features"])
-            batch_i = self.to_device(batch_dict["industries"])
             batch_y = self.to_device(batch_dict["labels"])
 
             with torch.no_grad():
@@ -220,30 +220,25 @@ class PPNetModel(BaseModel):
             test_dataset, batch_size=self.batch_size, shuffle=False
         )
 
-        labels = []
-        preds = []
         indices = []
+        preds = []
         for i, batch_dict in enumerate(test_loader):
-            bacth_indices = batch_dict["indices"]
+            bacth_d = batch_dict["sample_indices"]
+            batch_i = self.to_device(batch_dict["industry_ids"])
             batch_x = self.to_device(batch_dict["stock_features"])
             batch_m = self.to_device(batch_dict["market_features"])
-            batch_i = self.to_device(batch_dict["industries"])
-            batch_y = self.to_device(batch_dict["labels"])
 
             with torch.no_grad():
                 outputs = self.model(batch_x, batch_m, batch_i)
 
-            indices.append(bacth_indices.squeeze(0).numpy())
-            labels.append(batch_y.cpu().numpy())
+            indices.append(bacth_d.squeeze(0).numpy())
             preds.append(outputs.cpu().numpy())
 
         indices = np.concatenate(indices, axis=0)
-        labels = np.concatenate(labels, axis=0)
         preds = np.concatenate(preds, axis=0)
 
         label_names = test_dataset.label_names
         pred_df = test_dataset.data.iloc[indices].copy()
-        pred_df[label_names] = labels
         pred_df[[f"PRED_{name}" for name in label_names]] = preds
         return pred_df
 

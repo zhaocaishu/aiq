@@ -247,7 +247,4 @@ class PPNet(nn.Module):
         # Prediction decoder
         output = self.decoder(x_spatial)  # (N, 1)
 
-        # Add sigmoid activation
-        output = torch.sigmoid(output)
-
         return output

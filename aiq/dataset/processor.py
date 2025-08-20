@@ -341,34 +341,23 @@ class CSZScoreNorm(Processor):
 class CSRankNorm(Processor):
     """
     Cross Sectional Rank Normalization.
-    "Cross Sectional" is often used to describe data operations.
-    The operations across different stocks are often called Cross Sectional Operation.
 
-    For example, CSRankNorm is an operation that grouping the data by each day and rank `across` all the stocks in each day.
-
-    Explanation about 3.46 & 0.5
-
-    .. code-block:: python
-
-        import numpy as np
-        import pandas as pd
-        x = np.random.random(10000)  # for any variable
-        x_rank = pd.Series(x).rank(pct=True)  # if it is converted to rank, it will be a uniform distributed
-        x_rank_norm = (x_rank - x_rank.mean()) / x_rank.std()  # Normally, we will normalize it to make it like normal distribution
-
-        x_rank.mean()   # accounts for 0.5
-        1 / x_rank.std()  # accounts for 3.46
-
+    This processor ranks values across all stocks for each day and
+    then normalizes the ranks to have zero mean and unit variance.
     """
 
     def __init__(self, fields_group=None):
         self.fields_group = fields_group
 
     def __call__(self, df):
-        # try not modify original dataframe
         cols = get_group_columns(df, self.fields_group)
-        t = df[cols].groupby("Date").rank(pct=True)
-        t -= 0.5
-        t *= 3.46  # NOTE: towards unit std
-        df[cols] = t
+
+        def normalize_group(group):
+            ranks = group.rank(method="average")  # rank from 1
+            ranks = (ranks - 1) / (len(ranks) - 1)  # scale to [0,1]
+            return (ranks - ranks.mean()) / ranks.std(ddof=0)  # z-score
+
+        for col in cols:
+            df[col] = df[col].groupby("Date", group_keys=False).apply(normalize_group)
+
         return df
