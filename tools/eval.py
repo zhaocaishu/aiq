@@ -103,7 +103,10 @@ def main():
     logger.info("Prediction completed. Shape: %s", pred_df.shape)
 
     # Evaluate
-    evaluator = Evaluator(pred_col=args.eval_pred_col, label_col=args.eval_label_col)
+    evaluator = init_instance_by_config(
+        cfg.evaluator,
+        data_dir=args.data_dir,
+    )
     metrics = evaluator.evaluate(pred_df)
     logger.info("Evaluation metrics:\n%s", metrics)
 

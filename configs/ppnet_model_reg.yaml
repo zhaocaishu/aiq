@@ -69,3 +69,13 @@ model:
     learning_rate: 0.001
     criterion_name: "IC"
     early_stopping_patience: 10
+evaluator:
+  class: Evaluator
+  module_path: aiq.evaluation.evaluator
+  kwargs:
+    start_time: "2023-01-01"
+    end_time: "2023-06-30"
+    benchmark: "000905.SH"
+    pred_col: "PRED_RETN_5D"
+    label_col: "RETN_5D"
+    top_k: 30
