@@ -117,9 +117,9 @@ class Evaluator:
 
         return {f"RET@Top{self.top_k}": avg_return}
 
-    def evaluate(self, df, groupby_col="Date"):
+    def evaluate(self, pred_df, groupby_col="Date"):
         """Evaluate model performance with IC, ICIR, and Hit Rate metrics."""
-        df = self._setup_data(df)
+        df = self._setup_data(pred_df)
 
         self._validate_columns(df, extra_cols=[groupby_col, "Instrument", "Return"])
 
