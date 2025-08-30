@@ -130,21 +130,13 @@ class Alpha158(DataHandler):
         high = df["High"] * adj_factor
         low = df["Low"] * adj_factor
 
-        # trading volume and amount
+        # volume
         volume = df["Volume"]
-        amount = df["AMount"]  # Keep column name consistent in case of case sensitivity
-
-        # volume Weighted Average Price (VWAP)
-        # If original VWAP is missing, estimate by (amount * 1000) / (volume * 100),
-        # then apply the adjustment factor
-        vwap = df["Vwap"].fillna((amount * 1000) / (volume * 100 + 1e-12)) * adj_factor
 
         # turnover rate
         turn = df["Turnover_rate_f"]
 
         # moneyflow
-        mfd_buyord = df["Mfd_buyord"]
-        mfd_sellord = df["Mfd_sellord"]
         mfd_volinflowrate = df["Mfd_volinflowrate"]
 
         # kbar
@@ -165,9 +157,6 @@ class Alpha158(DataHandler):
             open / Ref(close, 1),
             high / close,
             low / close,
-            vwap / close,
-            mfd_buyord,
-            mfd_sellord,
             mfd_volinflowrate,
         ]
         feature_names = [
@@ -187,9 +176,6 @@ class Alpha158(DataHandler):
             "TS_OPEN0",
             "TS_HIGH0",
             "TS_LOW0",
-            "TS_VWAP0",
-            "TS_MFD_BUYORD",
-            "TS_MFD_SELLORD",
             "TS_MFD_VOLINFLOWRATE",
         ]
 
@@ -228,17 +214,17 @@ class Alpha158(DataHandler):
                 features.append(Slope(close, d) / close)
                 feature_names.append("CS_SLOPE%d" % d)
 
-        if use("CS_RSQR"):
-            # The R-sqaure value of linear regression for the past d days, represent the trend linear
-            for d in windows:
-                features.append(Rsquare(close, d))
-                feature_names.append("CS_RSQR%d" % d)
-
         if use("CS_RESI"):
             # The redisdual for linear regression for the past d days, represent the trend linearity for past d days.
             for d in windows:
                 features.append(Resi(close, d) / close)
                 feature_names.append("CS_RESI%d" % d)
+
+        if use("CS_RSQR"):
+            # The R-sqaure value of linear regression for the past d days, represent the trend linear
+            for d in windows:
+                features.append(Rsquare(close, d))
+                feature_names.append("CS_RSQR%d" % d)
 
         if use("CS_MAX"):
             # The max price for past d days, divided by latest close price to remove unit
@@ -376,13 +362,13 @@ class Alpha158(DataHandler):
         if use("CS_VMA"):
             # Simple Volume Moving average: https://www.barchart.com/education/technical-indicators/volume_moving_average
             for d in windows:
-                features.append(Mean(volume, d) / (volume + 1e-12))
+                features.append(volume / (Mean(volume, d) + 1e-12))
                 feature_names.append("CS_VMA%d" % d)
 
         if use("CS_VSTD"):
             # The standard deviation for volume in past d days.
             for d in windows:
-                features.append(Std(volume, d) / (volume + 1e-12))
+                features.append(Std(volume, d) / (Mean(volume, d) + 1e-12))
                 feature_names.append("CS_VSTD%d" % d)
 
         if use("CS_WVMA"):
@@ -603,8 +589,8 @@ class MarketAlpha158(Alpha158):
                 [
                     Mean(returns, window),
                     Std(returns, window),
-                    Mean(amount, window) / amount,
-                    Std(amount, window) / amount,
+                    amount / Mean(amount, window),
+                    Std(amount, window) / Mean(amount, window),
                 ]
             )
             feature_names.extend(
