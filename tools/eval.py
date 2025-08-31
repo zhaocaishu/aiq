@@ -5,7 +5,6 @@ import pickle
 from aiq.utils.config import config as cfg
 from aiq.utils.module import init_instance_by_config
 from aiq.utils.logging import get_logger
-from aiq.evaluation import Evaluator
 
 
 def parse_args() -> argparse.Namespace:
@@ -18,24 +17,6 @@ def parse_args() -> argparse.Namespace:
         help="Path to the configuration file for evaluation.",
     )
     parser.add_argument(
-        "--split",
-        type=str,
-        default="test",
-        help="Data split for evaluation.",
-    )
-    parser.add_argument(
-        "--eval_pred_col",
-        type=str,
-        default="PRED_RETN_5D",
-        help="Column name representing model predictions.",
-    )
-    parser.add_argument(
-        "--eval_label_col",
-        type=str,
-        default="RETN_5D",
-        help="Column name representing true labels.",
-    )
-    parser.add_argument(
         "--data_dir", type=str, required=True, help="Directory path of evaluation data."
     )
     parser.add_argument(
@@ -43,6 +24,12 @@ def parse_args() -> argparse.Namespace:
         type=str,
         required=True,
         help="Directory to save evaluation results.",
+    )
+    parser.add_argument(
+        "--split",
+        type=str,
+        default="test",
+        help="Data split for evaluation.",
     )
 
     return parser.parse_args()
