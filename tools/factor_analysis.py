@@ -1,8 +1,9 @@
+import sys
 import argparse
+
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-import sys
 
 
 def parse_args() -> argparse.Namespace:
@@ -22,6 +23,12 @@ def parse_args() -> argparse.Namespace:
         help="Comma-separated list of factor names, e.g., 'factor1,factor2,factor3'.",
     )
     parser.add_argument(
+        "--return_col",
+        type=str,
+        required=True,
+        help="Column name of returns/labels for IC analysis.",
+    )
+    parser.add_argument(
         "--threshold",
         type=float,
         default=0.9,
@@ -39,10 +46,16 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Path to save the core statistics CSV. If not set, print to console.",
     )
+    parser.add_argument(
+        "--ic_output",
+        type=str,
+        default=None,
+        help="Path to save the factor IC results CSV. If not set, print to console.",
+    )
     return parser.parse_args()
 
 
-def compute_core_statistics(df: pd.DataFrame) -> pd.DataFrame:
+def core_statistics(df: pd.DataFrame) -> pd.DataFrame:
     """
     Compute core statistics for each column, returning a tidy DataFrame.
     """
@@ -117,13 +130,70 @@ def corr_analysis(
         plt.show()
 
 
+def ic_analysis(
+    df: pd.DataFrame,
+    factor_names: list,
+    return_col: str,
+    output: str = None,
+    date_col: str = "Date",
+):
+    """
+    Compute cross-sectional IC (Spearman) summary for each factor vs return.
+    Requires a date column for grouping.
+    Output: IC_mean, IC_std, IC_t, IC_IR
+    """
+    if return_col not in df.columns:
+        sys.exit(f"Error: Return column '{return_col}' not found in input file.")
+    if date_col not in df.columns:
+        sys.exit(f"Error: Date column '{date_col}' not found in input file.")
+
+    summary_list = []
+
+    for fac in factor_names:
+        if fac not in df.columns:
+            continue
+
+        # 每日截面计算IC
+        daily_ic = (
+            df[[date_col, fac, return_col]]
+            .dropna()
+            .groupby(date_col, group_keys=False)
+            .apply(lambda x: x[fac].corr(x[return_col], method="spearman"))
+        )
+
+        # 统计指标
+        ic_mean = daily_ic.mean()
+        ic_std = daily_ic.std(ddof=1)
+        ic_ir = ic_mean / ic_std if ic_std > 0 else pd.NA
+
+        summary_list.append(
+            {
+                "factor": fac,
+                "IC_mean": ic_mean,
+                "IC_std": ic_std,
+                "IC_IR": ic_ir,
+            }
+        )
+
+    summary_df = pd.DataFrame(summary_list).set_index("factor")
+
+    if output:
+        summary_df.to_csv(output)
+        print(f"IC summary saved to: {output}")
+    else:
+        print("\nFactor IC Summary (Spearman, cross-sectional):")
+        print(summary_df.round(4).to_string())
+
+    return summary_df
+
+
 def main():
     args = parse_args()
     names = [n.strip() for n in args.factor_names.split(",")]
     df = pd.read_csv(args.factor_file)
 
     # Core statistics
-    stats = compute_core_statistics(df)
+    stats = core_statistics(df)
     if args.stats_output:
         stats.to_csv(args.stats_output)
         print(f"Core statistics saved to: {args.stats_output}")
@@ -134,6 +204,11 @@ def main():
     # Correlation analysis
     corr_analysis(
         df=df, factor_names=names, threshold=args.threshold, save_fig=args.save_fig
+    )
+
+    # IC analysis
+    ic_analysis(
+        df=df, factor_names=names, return_col=args.return_col, output=args.ic_output
     )
 
 
