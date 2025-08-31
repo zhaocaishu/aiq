@@ -39,9 +39,11 @@ class SAttention(nn.Module):
 
         self.attn_dropout = nn.ModuleList([nn.Dropout(p=dropout) for _ in range(nhead)])
 
-        self.norm1 = nn.LayerNorm(d_model, eps=1e-5)
-        self.norm2 = nn.LayerNorm(d_emb, eps=1e-5)
-        self.norm3 = nn.LayerNorm(d_model, eps=1e-5)
+        self.out_proj = nn.Linear(d_model, d_model)
+
+        self.norm_x = nn.LayerNorm(d_model, eps=1e-5)
+        self.norm_ind = nn.LayerNorm(d_emb, eps=1e-5)
+        self.norm_ffn = nn.LayerNorm(d_model, eps=1e-5)
         self.ffn = nn.Sequential(
             nn.Linear(d_model, d_model),
             nn.ReLU(),
@@ -53,13 +55,13 @@ class SAttention(nn.Module):
     def forward(self, x, industry_emb):
         # x: (N, D)  — 股票特征
         # industry_emb: (N, d_emb) — 行业 embedding
-        x = self.norm1(x)
-        industry_emb = self.norm2(industry_emb)
+        x_states = self.norm_x(x)
+        ind_states = self.norm_ind(industry_emb)
 
         # Q / K 用行业信息引导，V 只用股票特征
-        q = torch.cat([x, industry_emb], dim=-1)
-        k = torch.cat([x, industry_emb], dim=-1)
-        v = x
+        q = torch.cat([x_states, ind_states], dim=-1)
+        k = torch.cat([x_states, ind_states], dim=-1)
+        v = x_states
 
         q = self.qtrans(q)
         k = self.ktrans(k)
@@ -70,7 +72,7 @@ class SAttention(nn.Module):
         k = k.view(-1, self.nhead, self.head_dim)
         v = v.view(-1, self.nhead, self.head_dim)
 
-        att_output_heads = []
+        attn_outputs = []
         for i in range(self.nhead):
             qh = q[:, i, :]  # (N, head_dim)
             kh = k[:, i, :]  # (N, head_dim)
@@ -82,12 +84,13 @@ class SAttention(nn.Module):
             attn_weights = self.attn_dropout[i](attn_weights)
 
             out = torch.matmul(attn_weights, vh)
-            att_output_heads.append(out)
+            attn_outputs.append(out)
 
-        att_output = torch.cat(att_output_heads, dim=-1)  # (N, D)
+        attn_output = torch.cat(attn_outputs, dim=-1)  # (N, D)
+        attn_output = self.out_proj(attn_output)
 
-        xt = x + att_output
-        out = xt + self.ffn(self.norm3(xt))
+        xt = x + attn_output
+        out = xt + self.ffn(self.norm_ffn(xt))
         return out
 
 
@@ -100,16 +103,14 @@ class TAttention(nn.Module):
         self.ktrans = nn.Linear(d_model, d_model, bias=False)
         self.vtrans = nn.Linear(d_model, d_model, bias=False)
 
-        self.attn_dropout = []
-        if dropout > 0:
-            for i in range(nhead):
-                self.attn_dropout.append(Dropout(p=dropout))
-            self.attn_dropout = nn.ModuleList(self.attn_dropout)
+        self.attn_dropout = nn.ModuleList([nn.Dropout(p=dropout) for _ in range(nhead)])
 
-        # input LayerNorm
-        self.norm1 = LayerNorm(d_model, eps=1e-5)
+        self.out_proj = nn.Linear(d_model, d_model)
+
+        # Input LayerNorm
+        self.norm_x = LayerNorm(d_model, eps=1e-5)
         # FFN layerNorm
-        self.norm2 = LayerNorm(d_model, eps=1e-5)
+        self.norm_ffn = LayerNorm(d_model, eps=1e-5)
         # FFN
         self.ffn = nn.Sequential(
             Linear(d_model, d_model),
@@ -120,13 +121,13 @@ class TAttention(nn.Module):
         )
 
     def forward(self, x):
-        x = self.norm1(x)
-        q = self.qtrans(x)
-        k = self.ktrans(x)
-        v = self.vtrans(x)
+        x_states = self.norm_x(x)
+        q = self.qtrans(x_states)
+        k = self.ktrans(x_states)
+        v = self.vtrans(x_states)
 
         dim = int(self.d_model / self.nhead)
-        att_output = []
+        attn_outputs = []
         for i in range(self.nhead):
             if i == self.nhead - 1:
                 qh = q[:, :, i * dim :]
@@ -136,17 +137,18 @@ class TAttention(nn.Module):
                 qh = q[:, :, i * dim : (i + 1) * dim]
                 kh = k[:, :, i * dim : (i + 1) * dim]
                 vh = v[:, :, i * dim : (i + 1) * dim]
-            atten_ave_matrixh = torch.softmax(
-                torch.matmul(qh, kh.transpose(1, 2)), dim=-1
+            attn_weights = torch.softmax(
+                torch.matmul(qh, kh.transpose(1, 2)) / math.sqrt(dim), dim=-1
             )
-            if self.attn_dropout:
-                atten_ave_matrixh = self.attn_dropout[i](atten_ave_matrixh)
-            att_output.append(torch.matmul(atten_ave_matrixh, vh))
-        att_output = torch.concat(att_output, dim=-1)
+            attn_weights = self.attn_dropout[i](attn_weights)
+            attn_outputs.append(torch.matmul(attn_weights, vh))
+
+        attn_output = torch.concat(attn_outputs, dim=-1)
+        attn_output = self.out_proj(attn_output)
 
         # FFN
-        xt = x + att_output
-        output = xt + self.ffn(self.norm2(xt))
+        xt = x + attn_output
+        output = xt + self.ffn(self.norm_ffn(xt))
 
         return output
 
