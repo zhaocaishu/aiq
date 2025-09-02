@@ -22,11 +22,11 @@ class ICLoss(nn.Module):
         t_centered = targets - t_mean
 
         # 协方差
-        cov = (p_centered * t_centered).mean()
+        cov = (p_centered * t_centered).sum()
 
         # 标准差
-        p_var = (p_centered.pow(2)).mean()
-        t_var = (t_centered.pow(2)).mean()
+        p_var = (p_centered.pow(2)).sum()
+        t_var = (t_centered.pow(2)).sum()
         denom = torch.sqrt(p_var * t_var + self.eps)
 
         ic = cov / denom
