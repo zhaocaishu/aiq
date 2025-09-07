@@ -18,14 +18,14 @@ class PPNetModel(BaseModel):
         self,
         feature_names=None,
         label_names=None,
-        d_feat=137,
+        d_ts_feat=137,
+        d_cs_feat=137,
         d_market=63,
         d_emb=8,
         d_model=256,
         t_nhead=4,
         s_nhead=2,
         dropout=0.5,
-        beta=5.0,
         epochs=5,
         batch_size=1,
         warmup_ratio=0.1,
@@ -49,14 +49,14 @@ class PPNetModel(BaseModel):
 
         # model
         self.model = PPNet(
-            d_feat=d_feat,
+            d_ts_feat=d_ts_feat,
+            d_cs_feat=d_cs_feat,
             d_market=d_market,
             d_emb=d_emb,
             d_model=d_model,
             t_nhead=t_nhead,
             s_nhead=s_nhead,
             dropout=dropout,
-            beta=beta,
         )
 
         if pretrained is not None:
@@ -125,17 +125,19 @@ class PPNetModel(BaseModel):
                 iter_count += 1
 
                 batch_i = self.to_device(batch_dict["industry_ids"])
-                batch_x = self.to_device(batch_dict["stock_features"])
+                batch_ts_x = self.to_device(batch_dict["stock_ts_features"])
+                batch_cs_x = self.to_device(batch_dict["stock_ts_features"])
                 batch_m = self.to_device(batch_dict["market_features"])
                 batch_y = self.to_device(batch_dict["labels"])
 
-                assert not torch.isnan(batch_x).any(), "NaN at batch_x"
+                assert not torch.isnan(batch_ts_x).any(), "NaN at batch_ts_x"
+                assert not torch.isnan(batch_cs_x).any(), "NaN at batch_cs_x"
                 assert not torch.isnan(batch_m).any(), "NaN at batch_m"
                 assert not torch.isnan(batch_i).any(), "NaN at batch_i"
                 assert not torch.isnan(batch_y).any(), "NaN at batch_y"
 
                 optimizer.zero_grad()
-                outputs = self.model(batch_i, batch_x, batch_m)
+                outputs = self.model(batch_i, batch_ts_x, batch_cs_x, batch_m)
                 loss = self.criterion(outputs, batch_y)
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), 3.0)
@@ -200,12 +202,13 @@ class PPNetModel(BaseModel):
         total_loss = []
         for i, batch_dict in enumerate(val_loader):
             batch_i = self.to_device(batch_dict["industry_ids"])
-            batch_x = self.to_device(batch_dict["stock_features"])
+            batch_ts_x = self.to_device(batch_dict["stock_ts_features"])
+            batch_cs_x = self.to_device(batch_dict["stock_cs_features"])
             batch_m = self.to_device(batch_dict["market_features"])
             batch_y = self.to_device(batch_dict["labels"])
 
             with torch.no_grad():
-                outputs = self.model(batch_i, batch_x, batch_m)
+                outputs = self.model(batch_i, batch_ts_x, batch_cs_x, batch_m)
 
             loss = self.criterion(outputs, batch_y)
 
@@ -225,11 +228,12 @@ class PPNetModel(BaseModel):
         for i, batch_dict in enumerate(test_loader):
             bacth_d = batch_dict["sample_indices"]
             batch_i = self.to_device(batch_dict["industry_ids"])
-            batch_x = self.to_device(batch_dict["stock_features"])
+            batch_ts_x = self.to_device(batch_dict["stock_ts_features"])
+            batch_cs_x = self.to_device(batch_dict["stock_cs_features"])
             batch_m = self.to_device(batch_dict["market_features"])
 
             with torch.no_grad():
-                outputs = self.model(batch_i, batch_x, batch_m)
+                outputs = self.model(batch_i, batch_ts_x, batch_cs_x, batch_m)
 
             indices.append(bacth_d.squeeze(0).numpy())
             preds.append(outputs.cpu().numpy())

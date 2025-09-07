@@ -1,4 +1,5 @@
 import math
+
 import torch
 from torch import nn
 from torch.nn.modules.linear import Linear
@@ -153,19 +154,6 @@ class TAttention(nn.Module):
         return output
 
 
-class Gate(nn.Module):
-    def __init__(self, d_input, d_output, beta=1.0):
-        super().__init__()
-        self.trans = nn.Linear(d_input, d_output)
-        self.d_output = d_output
-        self.t = beta
-
-    def forward(self, gate_input):
-        output = self.trans(gate_input)
-        output = torch.softmax(output / self.t, dim=-1)
-        return self.d_output * output
-
-
 class TemporalAttention(nn.Module):
     def __init__(self, d_model):
         super().__init__()
@@ -180,73 +168,163 @@ class TemporalAttention(nn.Module):
         return output
 
 
+class CrossAttention(nn.Module):
+    def __init__(self, d_model, nhead, dropout=0.1):
+        super(CrossAttention, self).__init__()
+        self.cross_attn = nn.MultiheadAttention(
+            embed_dim=d_model, num_heads=nhead, dropout=dropout, batch_first=True
+        )
+        self.norm = nn.LayerNorm(d_model)
+        self.ff = nn.Sequential(
+            nn.Linear(d_model, d_model * 2),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(d_model * 2, d_model),
+        )
+
+    def forward(self, x, context):
+        """
+        Args:
+            x: (N, d_model) stock representations
+            context: (N, d_model) market representations
+        Returns:
+            out: (N, d_model) stock updated with market context
+        """
+        # (N, d_model) -> (N, 1, d_model)
+        q = x.unsqueeze(1)
+        k = v = context.unsqueeze(1)
+
+        attn_out, _ = self.cross_attn(q, k, v)  # (N, 1, d_model)
+        x = x + attn_out.squeeze(1)  # residual
+        x = self.norm(x)
+
+        # Feed-forward
+        out = self.ff(x) + x
+        return out
+
+
+class MLP(nn.Module):
+    def __init__(self, input_dim, hidden_dims, output_dim, dropout=0.0):
+        """
+        参数:
+        - input_dim: 输入特征维度
+        - hidden_dims: list, 每一层的隐藏层维度, e.g. [128, 64]
+        - output_dim: 输出维度 (分类任务一般是类别数)
+        - dropout: dropout比例
+        """
+        super(MLP, self).__init__()
+
+        layers = []
+        in_dim = input_dim
+        for h_dim in hidden_dims:
+            layers.append(nn.Linear(in_dim, h_dim))
+            layers.append(nn.ReLU())  # 可换成 GELU, LeakyReLU 等
+            if dropout > 0:
+                layers.append(nn.Dropout(dropout))
+            in_dim = h_dim
+
+        layers.append(nn.Linear(in_dim, output_dim))  # 输出层
+        self.net = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.net(x)
+
+
 class PPNet(nn.Module):
     def __init__(
         self,
-        d_feat,
+        d_ts_feat,
+        d_cs_feat,
         d_market,
         d_emb,
         d_model,
         t_nhead,
         s_nhead,
         dropout,
-        beta,
     ):
         super(PPNet, self).__init__()
 
-        # market features
-        self.market_gating_layer = Gate(d_market, d_feat, beta=beta)
-
-        # industry embedding
-        self.industry_embedding = nn.Embedding(256, d_emb)
-
-        # feature projection
-        self.feature_projection = nn.Linear(d_feat, d_model)
-
-        # positional encoding
+        # Temporal processing layers
+        self.feature_projection = nn.Linear(d_ts_feat, d_model)
         self.positional_encoding = PositionalEncoding(d_model)
-
-        # intra-stock attention
         self.temporal_attention = TAttention(
             d_model=d_model, nhead=t_nhead, dropout=dropout
         )
-
-        # inter-stock attention
-        self.spatial_attention = SAttention(
-            d_model=d_model, d_emb=d_emb, nhead=s_nhead, dropout=dropout
-        )
-
-        # temporal aggregation
         self.temporal_aggregation = TemporalAttention(d_model=d_model)
 
-        # decoder
+        # Cross-sectional processing layers
+        self.mlp = MLP(
+            input_dim=d_cs_feat,
+            hidden_dims=[256, 128],
+            output_dim=d_model,
+            dropout=dropout,
+        )
+
+        # Fusion layer
+        self.fusion_proj = nn.Linear(d_model * 2, d_model)
+
+        # Industry embedding
+        self.industry_embedding = nn.Embedding(256, d_emb)
+
+        # Spatial attention
+        self.spatial_attention = SAttention(
+            d_model=d_model,
+            d_emb=d_emb,
+            nhead=s_nhead,
+            dropout=dropout,
+        )
+
+        # Market processing
+        self.market_proj = nn.Linear(d_market, d_model)
+
+        # Cross attention (stock ↔ market)
+        self.cross_attention = CrossAttention(
+            d_model=d_model, nhead=s_nhead, dropout=dropout
+        )
+
+        # Prediction head
         self.decoder = nn.Linear(d_model, 1)
 
-    def forward(self, industry_ids, stock_features, market_features):
-        # Industry embedding
-        industry_emb = self.industry_embedding(industry_ids)  # (N, d_emb)
+    def forward(
+        self, industry_ids, stock_ts_features, stock_cs_features, market_features
+    ):
+        """
+        Args:
+            industry_ids: (N,) industry index of each stock
+            stock_ts_features: (N, T, d_ts_feat) temporal features of stocks
+            stock_cs_features: (N, d_cs_feat) cross-sectional features of stocks
+            market_features: (N, d_market) market features
+        Returns:
+            output: (N, 1) prediction for each stock
+        """
 
-        # Extract market features and apply gating
-        market_features = market_features[:, -1, :]  # Shape: (N, F')
-        gated_weights = self.market_gating_layer(market_features)  # (N, D)
-        gated_pv_features = stock_features * gated_weights.unsqueeze(1)  # (N, T, D)
-
-        # Feature projection
-        x_proj = self.feature_projection(gated_pv_features)  # (N, T, d_model)
-
-        # Positional encoding
+        # Process temporal stock features
+        x_proj = self.feature_projection(stock_ts_features)  # (N, T, d_model)
         x_encoded = self.positional_encoding(x_proj)
+        x_temporal = self.temporal_attention(
+            x_encoded
+        )  # Intra-stock temporal attention
+        x_aggregated = self.temporal_aggregation(
+            x_temporal
+        )  # (N, d_model), aggregate over time
 
-        # Intra-stock temporal attention
-        x_temporal = self.temporal_attention(x_encoded)
+        # Process cross-sectional stock features
+        x_cs = self.mlp(stock_cs_features)  # (N, d_model)
 
-        # Temporal aggregation across time dimension
-        x_aggregated = self.temporal_aggregation(x_temporal)  # (N, d_model)
+        # Fuse temporal and cross-sectional representations
+        x_combined = self.fusion_proj(
+            torch.cat([x_aggregated, x_cs], dim=-1)
+        )  # (N, d_model)
 
-        # Inter-stock spatial attention
-        x_spatial = self.spatial_attention(x_aggregated, industry_emb=industry_emb)
+        # Embed industries and apply spatial attention
+        industry_emb = self.industry_embedding(industry_ids)  # (N, d_emb)
+        x_stock = self.spatial_attention(
+            x_combined, industry_emb=industry_emb
+        )  # (N, d_model)
 
-        # Prediction decoder
-        output = self.decoder(x_spatial)  # (N, 1)
+        # Process market features and apply cross attention
+        x_market = self.market_proj(market_features)  # (N, d_model)
+        x_out = self.cross_attention(x_stock, x_market)  # (N, d_model)
 
-        return output
+        # Generate final prediction
+        return self.decoder(x_out)  # (N, 1)2.8sHow can Grok help?

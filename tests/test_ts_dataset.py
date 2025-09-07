@@ -28,7 +28,8 @@ if __name__ == "__main__":
     print(
         data_dict["sample_indices"].shape,
         data_dict["industry_ids"].shape,
-        data_dict["stock_features"].shape,
+        data_dict["stock_ts_features"].shape,
+        data_dict["stock_cs_features"].shape,
         data_dict["market_features"].shape,
         data_dict["labels"].shape,
     )

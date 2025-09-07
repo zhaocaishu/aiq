@@ -22,13 +22,19 @@ if __name__ == "__main__":
     dummy_industry_ids = (
         torch.zeros(100).to("cuda" if torch.cuda.is_available() else "cpu").long()
     )
-    dummy_stock_features = torch.zeros(100, 16, 138).to(
+    dummy_stock_ts_features = torch.zeros(100, 16, 13).to(
         "cuda" if torch.cuda.is_available() else "cpu"
     )
-    dummy_market_features = torch.zeros(100, 16, 63).to(
+    dummy_stock_cs_features = torch.zeros(100, 125).to(
+        "cuda" if torch.cuda.is_available() else "cpu"
+    )
+    dummy_market_features = torch.zeros(100, 63).to(
         "cuda" if torch.cuda.is_available() else "cpu"
     )
     output = model.model(
-        dummy_industry_ids, dummy_stock_features, dummy_market_features
+        dummy_industry_ids,
+        dummy_stock_ts_features,
+        dummy_stock_cs_features,
+        dummy_market_features,
     )
     logger.info(output)
