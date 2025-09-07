@@ -18,8 +18,8 @@ class PPNetModel(BaseModel):
         self,
         feature_names=None,
         label_names=None,
-        d_ts_feat=137,
-        d_cs_feat=137,
+        d_ts_feat=13,
+        d_cs_feat=125,
         d_market=63,
         d_emb=8,
         d_model=256,
@@ -126,7 +126,7 @@ class PPNetModel(BaseModel):
 
                 batch_i = self.to_device(batch_dict["industry_ids"])
                 batch_ts_x = self.to_device(batch_dict["stock_ts_features"])
-                batch_cs_x = self.to_device(batch_dict["stock_ts_features"])
+                batch_cs_x = self.to_device(batch_dict["stock_cs_features"])
                 batch_m = self.to_device(batch_dict["market_features"])
                 batch_y = self.to_device(batch_dict["labels"])
 
