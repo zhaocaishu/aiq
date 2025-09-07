@@ -231,7 +231,7 @@ class PPNet(nn.Module):
         # Cross-sectional processing layers
         self.cross_sectional_mlp = MLP(
             input_dim=d_cs_feat,
-            hidden_dims=[2 * d_model],
+            hidden_dims=[2 * d_model, d_model],
             output_dim=d_model,
             dropout=dropout,
         )
