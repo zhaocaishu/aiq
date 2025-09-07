@@ -26,6 +26,7 @@ class PPNetModel(BaseModel):
         t_nhead=4,
         s_nhead=2,
         dropout=0.5,
+        beta=5.0,
         epochs=5,
         batch_size=1,
         warmup_ratio=0.1,
@@ -57,6 +58,7 @@ class PPNetModel(BaseModel):
             t_nhead=t_nhead,
             s_nhead=s_nhead,
             dropout=dropout,
+            beta=beta,
         )
 
         if pretrained is not None:

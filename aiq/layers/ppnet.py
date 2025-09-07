@@ -165,39 +165,17 @@ class TemporalAttention(nn.Module):
         return output
 
 
-class CrossAttention(nn.Module):
-    def __init__(self, d_model, nhead, dropout=0.1):
-        super(CrossAttention, self).__init__()
-        self.cross_attn = nn.MultiheadAttention(
-            embed_dim=d_model, num_heads=nhead, dropout=dropout, batch_first=True
-        )
-        self.norm = nn.LayerNorm(d_model)
-        self.ffn = nn.Sequential(
-            nn.Linear(d_model, d_model * 2),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(d_model * 2, d_model),
-        )
+class Gate(nn.Module):
+    def __init__(self, d_input, d_output, beta=1.0):
+        super().__init__()
+        self.trans = nn.Linear(d_input, d_output)
+        self.d_output = d_output
+        self.t = beta
 
-    def forward(self, x, context):
-        """
-        Args:
-            x: (N, d_model) stock representations
-            context: (N, d_model) market representations
-        Returns:
-            out: (N, d_model) stock updated with market context
-        """
-        # (N, d_model) -> (N, 1, d_model)
-        q = x.unsqueeze(1)
-        k = v = context.unsqueeze(1)
-
-        attn_out, _ = self.cross_attn(q, k, v)  # (N, 1, d_model)
-        x = x + attn_out.squeeze(1)  # residual
-        x = self.norm(x)
-
-        # Feed-forward
-        out = self.ffn(x) + x
-        return out
+    def forward(self, gate_input):
+        output = self.trans(gate_input)
+        output = torch.softmax(output / self.t, dim=-1)
+        return self.d_output * output
 
 
 class MLP(nn.Module):
@@ -238,6 +216,7 @@ class PPNet(nn.Module):
         t_nhead,
         s_nhead,
         dropout,
+        beta,
     ):
         super(PPNet, self).__init__()
 
@@ -272,12 +251,7 @@ class PPNet(nn.Module):
         )
 
         # Market processing
-        self.market_proj = nn.Linear(d_market, d_model)
-
-        # Cross attention (stock ↔ market)
-        self.cross_attn = CrossAttention(
-            d_model=d_model, nhead=s_nhead, dropout=dropout
-        )
+        self.market_gate = Gate(d_market, d_model, beta=beta)
 
         # Prediction head
         self.prediction_head = nn.Linear(d_model, 1)
@@ -323,9 +297,9 @@ class PPNet(nn.Module):
             fused_states, industry_embeds=industry_embeds
         )  # (N, model_dim)
 
-        # Process market features and apply cross attention
-        market_states = self.market_proj(market_features)  # (N, model_dim)
-        attn_output = self.cross_attn(stock_states, market_states)  # (N, model_dim)
+        # Apply gating to market features and modulate stock states
+        gated_weights = self.market_gate(market_features)
+        attn_output = stock_states * gated_weights  # (N, model_dim)
 
         # Generate final prediction
         predictions = self.prediction_head(attn_output)  # (N, 1)
