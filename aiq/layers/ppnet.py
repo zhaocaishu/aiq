@@ -53,20 +53,17 @@ class SAttention(nn.Module):
             nn.Dropout(p=dropout),
         )
 
-    def forward(self, x, industry_emb):
+    def forward(self, x, industry_embeds):
         # x: (N, D)  — 股票特征
-        # industry_emb: (N, d_emb) — 行业 embedding
+        # industry_embeds: (N, d_emb) — 行业 embedding
         x_states = self.norm_x(x)
-        ind_states = self.norm_ind(industry_emb)
+        ind_states = self.norm_ind(industry_embeds)
 
         # Q / K 用行业信息引导，V 只用股票特征
-        q = torch.cat([x_states, ind_states], dim=-1)
-        k = torch.cat([x_states, ind_states], dim=-1)
-        v = x_states
-
-        q = self.qtrans(q)
-        k = self.ktrans(k)
-        v = self.vtrans(v)
+        qk_input = torch.cat([x_states, ind_states], dim=-1)
+        q = self.qtrans(qk_input)
+        k = self.ktrans(qk_input)
+        v = self.vtrans(x_states)
 
         # 多头拆分
         q = q.view(-1, self.nhead, self.head_dim)
@@ -245,17 +242,17 @@ class PPNet(nn.Module):
         super(PPNet, self).__init__()
 
         # Temporal processing layers
-        self.feature_projection = nn.Linear(d_ts_feat, d_model)
-        self.positional_encoding = PositionalEncoding(d_model)
-        self.temporal_attention = TAttention(
+        self.temporal_proj = nn.Linear(d_ts_feat, d_model)
+        self.temporal_pos_embed = PositionalEncoding(d_model)
+        self.temporal_self_attn = TAttention(
             d_model=d_model, nhead=t_nhead, dropout=dropout
         )
-        self.temporal_aggregation = TemporalAttention(d_model=d_model)
+        self.temporal_aggregator = TemporalAttention(d_model=d_model)
 
         # Cross-sectional processing layers
-        self.mlp = MLP(
+        self.cross_sectional_mlp = MLP(
             input_dim=d_cs_feat,
-            hidden_dims=[256, 128],
+            hidden_dims=[2 * d_model],
             output_dim=d_model,
             dropout=dropout,
         )
@@ -264,10 +261,10 @@ class PPNet(nn.Module):
         self.fusion_proj = nn.Linear(d_model * 2, d_model)
 
         # Industry embedding
-        self.industry_embedding = nn.Embedding(256, d_emb)
+        self.industry_embed = nn.Embedding(256, d_emb)
 
         # Spatial attention
-        self.spatial_attention = SAttention(
+        self.spatial_attn = SAttention(
             d_model=d_model,
             d_emb=d_emb,
             nhead=s_nhead,
@@ -278,53 +275,58 @@ class PPNet(nn.Module):
         self.market_proj = nn.Linear(d_market, d_model)
 
         # Cross attention (stock ↔ market)
-        self.cross_attention = CrossAttention(
+        self.cross_attn = CrossAttention(
             d_model=d_model, nhead=s_nhead, dropout=dropout
         )
 
         # Prediction head
-        self.decoder = nn.Linear(d_model, 1)
+        self.prediction_head = nn.Linear(d_model, 1)
 
     def forward(
-        self, industry_ids, stock_ts_features, stock_cs_features, market_features
+        self,
+        industry_indices,
+        stock_ts_features,
+        stock_cs_features,
+        market_features,
     ):
         """
         Args:
-            industry_ids: (N,) industry index of each stock
-            stock_ts_features: (N, T, d_ts_feat) temporal features of stocks
-            stock_cs_features: (N, d_cs_feat) cross-sectional features of stocks
-            market_features: (N, d_market) market features
+            industry_indices: (N,) industry index for each stock
+            stock_ts_features: (N, T, ts_feature_dim) temporal features of stocks
+            stock_cs_features: (N, cs_feature_dim) cross-sectional features of stocks
+            market_features: (N, market_feature_dim) market features
         Returns:
-            output: (N, 1) prediction for each stock
+            predictions: (N, 1) prediction for each stock
         """
 
         # Process temporal stock features
-        x_proj = self.feature_projection(stock_ts_features)  # (N, T, d_model)
-        x_encoded = self.positional_encoding(x_proj)
-        x_temporal = self.temporal_attention(
-            x_encoded
+        temporal_states = self.temporal_proj(stock_ts_features)  # (N, T, model_dim)
+        temporal_embed = self.temporal_pos_embed(temporal_states)
+        temporal_attn_output = self.temporal_self_attn(
+            temporal_embed
         )  # Intra-stock temporal attention
-        x_aggregated = self.temporal_aggregation(
-            x_temporal
-        )  # (N, d_model), aggregate over time
+        temporal_aggregated = self.temporal_aggregator(
+            temporal_attn_output
+        )  # (N, model_dim), aggregate over time
 
         # Process cross-sectional stock features
-        x_cs = self.mlp(stock_cs_features)  # (N, d_model)
+        cs_states = self.cross_sectional_mlp(stock_cs_features)  # (N, model_dim)
 
         # Fuse temporal and cross-sectional representations
-        x_combined = self.fusion_proj(
-            torch.cat([x_aggregated, x_cs], dim=-1)
-        )  # (N, d_model)
+        fused_states = self.fusion_proj(
+            torch.cat([temporal_aggregated, cs_states], dim=-1)
+        )  # (N, model_dim)
 
         # Embed industries and apply spatial attention
-        industry_emb = self.industry_embedding(industry_ids)  # (N, d_emb)
-        x_stock = self.spatial_attention(
-            x_combined, industry_emb=industry_emb
-        )  # (N, d_model)
+        industry_embeds = self.industry_embed(industry_indices)  # (N, embed_dim)
+        stock_states = self.spatial_attn(
+            fused_states, industry_embeds=industry_embeds
+        )  # (N, model_dim)
 
         # Process market features and apply cross attention
-        x_market = self.market_proj(market_features)  # (N, d_model)
-        x_out = self.cross_attention(x_stock, x_market)  # (N, d_model)
+        market_states = self.market_proj(market_features)  # (N, model_dim)
+        attn_output = self.cross_attn(stock_states, market_states)  # (N, model_dim)
 
         # Generate final prediction
-        return self.decoder(x_out)  # (N, 1)2.8sHow can Grok help?
+        predictions = self.prediction_head(attn_output)  # (N, 1)
+        return predictions
