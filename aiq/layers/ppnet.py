@@ -172,7 +172,7 @@ class CrossAttention(nn.Module):
             embed_dim=d_model, num_heads=nhead, dropout=dropout, batch_first=True
         )
         self.norm = nn.LayerNorm(d_model)
-        self.ff = nn.Sequential(
+        self.ffn = nn.Sequential(
             nn.Linear(d_model, d_model * 2),
             nn.ReLU(),
             nn.Dropout(dropout),
@@ -196,7 +196,7 @@ class CrossAttention(nn.Module):
         x = self.norm(x)
 
         # Feed-forward
-        out = self.ff(x) + x
+        out = self.ffn(x) + x
         return out
 
 
