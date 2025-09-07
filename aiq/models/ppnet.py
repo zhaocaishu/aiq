@@ -226,7 +226,7 @@ class PPNetModel(BaseModel):
         indices = []
         preds = []
         for i, batch_dict in enumerate(test_loader):
-            bacth_d = batch_dict["sample_indices"]
+            batch_d = batch_dict["sample_indices"]
             batch_i = self.to_device(batch_dict["industry_ids"])
             batch_ts_x = self.to_device(batch_dict["stock_ts_features"])
             batch_cs_x = self.to_device(batch_dict["stock_cs_features"])
@@ -235,7 +235,7 @@ class PPNetModel(BaseModel):
             with torch.no_grad():
                 outputs = self.model(batch_i, batch_ts_x, batch_cs_x, batch_m)
 
-            indices.append(bacth_d.squeeze(0).numpy())
+            indices.append(batch_d.squeeze(0).numpy())
             preds.append(outputs.cpu().numpy())
 
         indices = np.concatenate(indices, axis=0)
