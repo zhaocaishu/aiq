@@ -221,23 +221,21 @@ class PPNet(nn.Module):
         super(PPNet, self).__init__()
 
         # Temporal processing layers
-        self.temporal_proj = nn.Linear(d_ts_feat, d_model)
-        self.temporal_pos_embed = PositionalEncoding(d_model)
+        self.temporal_hidden_dim = 64
+        self.temporal_proj = nn.Linear(d_ts_feat, self.temporal_hidden_dim)
+        self.temporal_pos_embed = PositionalEncoding(self.temporal_hidden_dim)
         self.temporal_self_attn = TAttention(
-            d_model=d_model, nhead=t_nhead, dropout=dropout
+            d_model=self.temporal_hidden_dim, nhead=t_nhead, dropout=dropout
         )
-        self.temporal_aggregator = TemporalAttention(d_model=d_model)
+        self.temporal_aggregator = TemporalAttention(d_model=self.temporal_hidden_dim)
 
-        # Cross-sectional processing layers
-        self.cross_sectional_mlp = MLP(
-            input_dim=d_cs_feat,
+        # Fusion layer
+        self.fusion_proj = MLP(
+            input_dim=self.temporal_hidden_dim + d_cs_feat,
             hidden_dims=[2 * d_model, d_model],
             output_dim=d_model,
             dropout=dropout,
         )
-
-        # Fusion layer
-        self.fusion_proj = nn.Linear(d_model * 2, d_model)
 
         # Industry embedding
         self.industry_embed = nn.Embedding(256, d_emb)
@@ -266,40 +264,39 @@ class PPNet(nn.Module):
         """
         Args:
             industry_indices: (N,) industry index for each stock
-            stock_ts_features: (N, T, ts_feature_dim) temporal features of stocks
-            stock_cs_features: (N, cs_feature_dim) cross-sectional features of stocks
-            market_features: (N, market_feature_dim) market features
+            stock_ts_features: (N, T, d_ts_feat) temporal features of stocks
+            stock_cs_features: (N, d_cs_feat) cross-sectional features of stocks
+            market_features: (N, d_market) market features
         Returns:
             predictions: (N, 1) prediction for each stock
         """
 
         # Process temporal stock features
-        temporal_states = self.temporal_proj(stock_ts_features)  # (N, T, model_dim)
+        temporal_states = self.temporal_proj(
+            stock_ts_features
+        )  # (N, T, temporal_hidden_dim)
         temporal_embed = self.temporal_pos_embed(temporal_states)
         temporal_attn_output = self.temporal_self_attn(
             temporal_embed
         )  # Intra-stock temporal attention
         temporal_aggregated = self.temporal_aggregator(
             temporal_attn_output
-        )  # (N, model_dim), aggregate over time
-
-        # Process cross-sectional stock features
-        cs_states = self.cross_sectional_mlp(stock_cs_features)  # (N, model_dim)
+        )  # (N, temporal_hidden_dim), aggregate over time
 
         # Fuse temporal and cross-sectional representations
         fused_states = self.fusion_proj(
-            torch.cat([temporal_aggregated, cs_states], dim=-1)
-        )  # (N, model_dim)
+            torch.cat([temporal_aggregated, stock_cs_features], dim=-1)
+        )  # (N, temporal_hidden_dim)
 
         # Embed industries and apply spatial attention
-        industry_embeds = self.industry_embed(industry_indices)  # (N, embed_dim)
+        industry_embeds = self.industry_embed(industry_indices)  # (N, d_emb)
         stock_states = self.spatial_attn(
             fused_states, industry_embeds=industry_embeds
-        )  # (N, model_dim)
+        )  # (N, d_model)
 
         # Apply gating to market features and modulate stock states
         gated_weights = self.market_gate(market_features)
-        attn_output = stock_states * gated_weights  # (N, model_dim)
+        attn_output = stock_states * gated_weights  # (N, d_model)
 
         # Generate final prediction
         predictions = self.prediction_head(attn_output)  # (N, 1)
