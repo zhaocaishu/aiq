@@ -229,7 +229,12 @@ class PPNet(nn.Module):
         )
         self.temporal_aggregator = TemporalAttention(d_model=self.temporal_hidden_dim)
 
-        # Fusion layer
+        # Market processing layers
+        self.market_gate = Gate(
+            d_market, self.temporal_hidden_dim + d_cs_feat, beta=beta
+        )
+
+        # Fusion layers
         self.fusion_proj = MLP(
             input_dim=self.temporal_hidden_dim + d_cs_feat,
             hidden_dims=[2 * d_model, d_model],
@@ -247,9 +252,6 @@ class PPNet(nn.Module):
             nhead=s_nhead,
             dropout=dropout,
         )
-
-        # Market processing
-        self.market_gate = Gate(d_market, d_model, beta=beta)
 
         # Prediction head
         self.prediction_head = nn.Linear(d_model, 1)
@@ -283,20 +285,23 @@ class PPNet(nn.Module):
             temporal_attn_output
         )  # (N, temporal_hidden_dim), aggregate over time
 
-        # Fuse temporal and cross-sectional representations
-        fused_states = self.fusion_proj(
-            torch.cat([temporal_aggregated, stock_cs_features], dim=-1)
-        )  # (N, temporal_hidden_dim)
-
-        # Embed industries and apply spatial attention
-        industry_embeds = self.industry_embed(industry_indices)  # (N, d_emb)
-        stock_states = self.spatial_attn(
-            fused_states, industry_embeds=industry_embeds
-        )  # (N, d_model)
+        # Concat temporal and cross-sectional representations
+        concat_states = torch.cat([temporal_aggregated, stock_cs_features], dim=-1)
 
         # Apply gating to market features and modulate stock states
         gated_weights = self.market_gate(market_features)
-        attn_output = stock_states * gated_weights  # (N, d_model)
+        gated_states = (
+            concat_states * gated_weights
+        )  # (N, temporal_hidden_dim + d_cs_feat)
+
+        # Fuse temporal and cross-sectional representations
+        fused_states = self.fusion_proj(gated_states)  # (N, d_model)
+
+        # Embed industries and apply spatial attention
+        industry_embeds = self.industry_embed(industry_indices)  # (N, d_emb)
+        attn_output = self.spatial_attn(
+            fused_states, industry_embeds=industry_embeds
+        )  # (N, d_model)
 
         # Generate final prediction
         predictions = self.prediction_head(attn_output)  # (N, 1)

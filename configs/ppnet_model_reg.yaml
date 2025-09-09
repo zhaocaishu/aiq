@@ -26,7 +26,7 @@ data_handler:
         module_path: aiq.dataset.processor
         kwargs:
           fields_group: "label"
-      - class: CSRankNorm
+      - class: CSZScoreNorm
         module_path: aiq.dataset.processor
         kwargs:
           fields_group: "label"

@@ -4,9 +4,16 @@ import torch.nn.functional as F
 
 
 class MSERankLoss(nn.Module):
-    def __init__(self, alpha=3.0, eps=1e-8):
+    def __init__(self, alpha=2.0, top_p=0.3, eps=1e-8):
+        """
+        Args:
+            alpha: 排序损失的权重
+            top_p: 只对收益率最高的前 p 比例样本计算 MSE 损失 (0.0-1.0)
+            eps: 数值稳定性的小常数
+        """
         super(MSERankLoss, self).__init__()
         self.alpha = alpha
+        self.top_p = top_p
         self.eps = eps
 
     def _ic_loss(self, preds: torch.Tensor, targets: torch.Tensor):
@@ -38,10 +45,24 @@ class MSERankLoss(nn.Module):
         preds = preds.view(-1)
         targets = targets.view(-1)
 
-        # 回归损失（MSE）
-        reg_loss = F.mse_loss(preds, targets)
+        # 回归损失（MSE） - 只对 top_p 比例的样本计算
+        if self.top_p < 1.0:
+            # 计算需要保留的样本数
+            k = int(self.top_p * len(targets))
 
-        # 排序损失（IC)
+            # 按目标值排序（不使用绝对值），选择最大的 k 个
+            _, indices = torch.topk(targets, k)
+
+            # 选择 top k 样本
+            top_preds = preds[indices]
+            top_targets = targets[indices]
+
+            reg_loss = F.mse_loss(top_preds, top_targets)
+        else:
+            # 使用所有样本计算 MSE
+            reg_loss = F.mse_loss(preds, targets)
+
+        # 排序损失（IC) - 仍然使用所有样本
         ic_loss = self._ic_loss(preds, targets)
 
         loss = reg_loss + self.alpha * ic_loss
