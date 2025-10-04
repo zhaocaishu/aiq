@@ -64,10 +64,31 @@ class Evaluator:
             .dropna(subset=["Return"])
         )
 
+        # Load benchmakr features
+        benchmark_features_df = DataLoader.load_instruments_features(
+            self.data_dir, [self.benchmark], self.start_time, self.end_time
+        )
+        benchmark_returns = (
+            benchmark_features_df.groupby("Instrument", group_keys=False)
+            .apply(self._extract_instrument_returns)
+            .dropna(subset=["Return"])
+            .rename(columns={"Return": "BenchmarkReturn"})
+        )[["Date", "BenchmarkReturn"]]
+
         # Merge with instruments and predictions
+        previous_len = len(returns_df)
         merged_df = returns_df.merge(
             instruments_df, on=["Instrument", "Date"], how="inner"
         ).merge(pred_df, on=["Instrument", "Date"], how="inner")
+        assert (
+            len(merged_df) == previous_len
+        ), "Data loss after merging with instruments and predictions"
+
+        previous_len = len(merged_df)
+        merged_df = merged_df.merge(benchmark_returns, on="Date", how="inner")
+        assert len(merged_df) == previous_len, "Data loss after merging with benchmark"
+
+        merged_df["ExcessReturn"] = merged_df["Return"] - merged_df["BenchmarkReturn"]
 
         return merged_df
 
@@ -97,23 +118,23 @@ class Evaluator:
 
     def _compute_win_rate(self, group):
         """Calculate Top-K win rate (proportion of stocks with positive returns)."""
-        self._validate_columns(group, extra_cols=["Instrument", "Return"])
+        self._validate_columns(group, extra_cols=["Instrument", "ExcessReturn"])
         if len(group) < self.min_samples:
             return {f"WR@Top{self.top_k}": np.nan}
 
         top_pred = group.nlargest(self.top_k, self.pred_col)
-        positive_returns = (top_pred["Return"] > 0).sum()
+        positive_returns = (top_pred["ExcessReturn"] > 0).sum()
 
         return {f"WR@Top{self.top_k}": positive_returns / self.top_k}
 
     def _compute_topk_return(self, group):
         """Calculate Top-K portfolio return (average return of top K predicted stocks)."""
-        self._validate_columns(group, extra_cols=["Instrument", "Return"])
+        self._validate_columns(group, extra_cols=["Instrument", "ExcessReturn"])
         if len(group) < self.min_samples:
             return {f"RET@Top{self.top_k}": np.nan}
 
         top_pred = group.nlargest(self.top_k, self.pred_col)
-        avg_return = top_pred["Return"].mean()
+        avg_return = top_pred["ExcessReturn"].mean()
 
         return {f"RET@Top{self.top_k}": avg_return}
 
@@ -122,6 +143,10 @@ class Evaluator:
         df = self._setup_data(pred_df)
 
         self._validate_columns(df, extra_cols=[groupby_col, "Instrument", "Return"])
+
+        # Calculate and print the number of stocks evaluated each day
+        daily_count = df.groupby(groupby_col).size()
+        print("Number of stocks evaluated per day:", daily_count.to_dict())
 
         # Calculate daily IC and ICIR
         daily_ic = df.groupby(groupby_col).apply(self._compute_ic).dropna()
