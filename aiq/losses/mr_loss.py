@@ -91,7 +91,7 @@ class MSERankLoss(nn.Module):
         self,
         alpha: float = 1.0,
         beta: float = 2.0,
-        top_k: Optional[int] = None,
+        top_k: int = 30,
         sigma: float = 1.0,
     ):
         super().__init__()
