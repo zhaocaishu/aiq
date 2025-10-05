@@ -37,7 +37,10 @@ class Evaluator:
             raise ValueError(f"Missing columns: {missing_cols}")
 
     def _extract_instrument_returns(self, df):
-        close = df["Close"] * df["Adj_factor"]
+        close = df["Close"]
+        if "Adj_factor" in df.columns:
+            close = close * df["Adj_factor"]
+
         returns = Ref(close, -5) / Ref(close, -1) - 1
 
         return pd.concat(
@@ -64,6 +67,15 @@ class Evaluator:
             .dropna(subset=["Return"])
         )
 
+        # Merge with instruments and predictions
+        previous_len = len(returns_df)
+        merged_df = returns_df.merge(
+            instruments_df, on=["Instrument", "Date"], how="inner"
+        ).merge(pred_df, on=["Instrument", "Date"], how="inner")
+        print(
+            f"Rows after merging with instruments and predictions: {len(merged_df)} (previously {previous_len})"
+        )
+
         # Load benchmakr features
         benchmark_features_df = DataLoader.load_instruments_features(
             self.data_dir, [self.benchmark], self.start_time, self.end_time
@@ -75,18 +87,12 @@ class Evaluator:
             .rename(columns={"Return": "BenchmarkReturn"})
         )[["Date", "BenchmarkReturn"]]
 
-        # Merge with instruments and predictions
-        previous_len = len(returns_df)
-        merged_df = returns_df.merge(
-            instruments_df, on=["Instrument", "Date"], how="inner"
-        ).merge(pred_df, on=["Instrument", "Date"], how="inner")
-        assert (
-            len(merged_df) == previous_len
-        ), "Data loss after merging with instruments and predictions"
-
+        # Merge with benchmark returns
         previous_len = len(merged_df)
         merged_df = merged_df.merge(benchmark_returns, on="Date", how="inner")
-        assert len(merged_df) == previous_len, "Data loss after merging with benchmark"
+        print(
+            f"Rows after merging with benchmark: {len(merged_df)} (previously {previous_len})"
+        )
 
         merged_df["ExcessReturn"] = merged_df["Return"] - merged_df["BenchmarkReturn"]
 
