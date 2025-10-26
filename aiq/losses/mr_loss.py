@@ -3,135 +3,74 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class LambdaLoss(nn.Module):
-    """
-    Symmetric boundary pairwise loss for optimizing Precision@K.
-    Focuses on pairs across predicted top-k vs rest, penalizing both weak separations
-    and wrong orders. Uses log-sigmoid for stability.
-
-    Loss includes:
-    - For target_i > target_j: -w * log(sigmoid(sigma * (s_i - s_j)))
-    - For target_i < target_j: -w * log(sigmoid(sigma * (s_j - s_i)))
-
-    Args:
-        top_k: Number of top items to emphasize.
-        sigma: Scaling factor for score differences.
-    """
-
-    def __init__(
-        self,
-        top_k: int,
-        sigma: float = 1.0,
-    ):
+class MarginRankingLoss(nn.Module):
+    def __init__(self, margin=1.0):
         super().__init__()
-        self.top_k = top_k
-        self.sigma = sigma
+        self.margin = margin
 
     def forward(self, preds: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         """
-        Compute the symmetric boundary ranking loss.
-
         Args:
-            preds: Predicted scores, shape (N, 1) or (N,)
-            targets: True returns, shape (N, 1) or (N,)
-
+            preds (torch.Tensor): Predicted scores, shape (N,)
+            targets (torch.Tensor): Ground truth values, shape (N,)
         Returns:
-            Scalar loss (mean over selected pairs).
+            Margin ranking loss (scalar)
         """
-        preds = preds.squeeze(-1)
-        targets = targets.squeeze(-1)
-        N = preds.shape[0]
+        N = preds.size(0)
 
-        if self.top_k <= 0 or self.top_k >= N:
-            return torch.tensor(0.0, device=preds.device)
+        # Compute pairwise differences
+        pred_diff = preds.unsqueeze(1) - preds.unsqueeze(0)  # [N, N]
+        target_diff = targets.unsqueeze(1) - targets.unsqueeze(0)  # [N, N]
 
-        # Sort by predicted score descending
-        preds_sorted, idx = torch.sort(preds, descending=True)
-        targets_sorted = targets[idx]
+        # Create mask for valid pairs (upper triangle, excluding diagonal)
+        mask = torch.triu(torch.ones(N, N, device=preds.device), diagonal=1).bool()
+        mask = mask & (target_diff != 0)
 
-        # Slice into top-k and bottom
-        top_preds = preds_sorted[: self.top_k]
-        bottom_preds = preds_sorted[self.top_k :]
-        top_targets = targets_sorted[: self.top_k]
-        bottom_targets = targets_sorted[self.top_k :]
+        # Compute loss: max(0, margin - sign(target_diff) * pred_diff)
+        loss = torch.clamp(self.margin - torch.sign(target_diff) * pred_diff, min=0)
+        loss = loss[mask].mean()
 
-        # Compute differences for boundary pairs only: i in top-k, j in bottom
-        score_diffs = top_preds.unsqueeze(1) - bottom_preds.unsqueeze(
-            0
-        )  # (top_k, N - top_k)
-        return_diffs = top_targets.unsqueeze(1) - bottom_targets.unsqueeze(
-            0
-        )  # (top_k, N - top_k)
-
-        # Weights
-        w = torch.log1p(torch.abs(return_diffs))
-
-        # Positive case: target_i > target_j, penalize if s_i <= s_j (but since sorted, s_i >= s_j)
-        true_pos_mask = return_diffs > 0
-        losses_pos = torch.tensor(0.0, device=preds.device)
-        if true_pos_mask.any():
-            logits_pos = self.sigma * score_diffs[true_pos_mask]
-            losses_pos = -(w[true_pos_mask] * F.logsigmoid(logits_pos)).mean()
-
-        # Negative case: target_i < target_j, penalize if s_i > s_j
-        true_neg_mask = return_diffs < 0
-        losses_neg = torch.tensor(0.0, device=preds.device)
-        if true_neg_mask.any():
-            logits_neg = self.sigma * (
-                -score_diffs[true_neg_mask]
-            )  # sigma * (s_j - s_i)
-            losses_neg = -(w[true_neg_mask] * F.logsigmoid(logits_neg)).mean()
-
-        # Total loss: average of non-zero terms
-        if (losses_pos.item() > 0.0) and (losses_neg.item() > 0.0):
-            total_loss = 0.5 * (losses_pos + losses_neg)
-        else:
-            total_loss = losses_pos + losses_neg
-
-        return total_loss
+        return loss
 
 
 class MSERankLoss(nn.Module):
     """
-    Combined loss function: MSE + LambdaLoss.
+    Combined loss: MSE (for regression accuracy) + MarginRankingLoss (for relative ranking consistency).
+
+    This loss encourages predictions to be numerically close to targets (via MSE)
+    while also maintaining correct ranking order (via MarginRankingLoss).
 
     Args:
-        alpha: Weight for MSE loss component.
-        beta: Weight for LambdaLoss component.
-        top_k: Top-k cutoff for LambdaLoss ranking.
-        sigma: Score difference scaling factor for LambdaLoss.
+        alpha (float): Weight for MSE loss component. Default: 0.7
+        margin (float): Margin parameter for MarginRankingLoss. Default: 0.1
     """
 
-    def __init__(
-        self,
-        alpha: float = 1.0,
-        beta: float = 2.0,
-        top_k: int = 30,
-        sigma: float = 1.0,
-    ):
+    def __init__(self, alpha: float = 0.7, margin: float = 0.1):
         super().__init__()
         self.alpha = alpha
-        self.beta = beta
-        self.lambda_loss = LambdaLoss(top_k=top_k, sigma=sigma)
+        self.ranking_loss = MarginRankingLoss(margin=margin)
 
     def forward(self, preds: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         """
-        Forward pass for combined MSE + LambdaLoss.
+        Forward pass combining MSE and ranking loss.
 
         Args:
-            preds: Predicted scores, shape (N, 1) or (N,)
-            targets: True returns, shape (N, 1) or (N,)
+            preds (torch.Tensor): Predicted scores, shape (N,)
+            targets (torch.Tensor): Ground truth values, shape (N,)
 
         Returns:
-            Combined loss value
+            torch.Tensor: Combined scalar loss value.
         """
+        preds = preds.view(-1)
+        targets = targets.view(-1)
+
         # MSE loss component
         mse_loss = F.mse_loss(preds, targets, reduction="mean")
 
         # Lambda ranking loss component
-        lambda_loss = self.lambda_loss(preds, targets)
+        ranking_loss = self.ranking_loss(preds, targets)
 
         # Combined total loss
-        total_loss = self.alpha * mse_loss + self.beta * lambda_loss
+        total_loss = (1.0 - self.alpha) * mse_loss + self.alpha * ranking_loss
 
         return total_loss

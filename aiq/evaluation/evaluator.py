@@ -7,7 +7,7 @@ from aiq.ops import Ref
 
 
 class Evaluator:
-    """A class for evaluating prediction models with IC, ICIR, and Hit Rate metrics."""
+    """A class for evaluating prediction models with IC, ICIR, Hit Rate and Precision@K metrics."""
 
     def __init__(
         self,
@@ -122,27 +122,23 @@ class Evaluator:
             f"HR@Bottom{self.top_k}": len(bottom_pred & bottom_label) / self.top_k,
         }
 
-    def _compute_win_rate(self, group):
-        """Calculate Top-K win rate (proportion of stocks with positive returns)."""
+    def _compute_precision_at_k(self, group):
+        """Compute Precision@K — proportion of correctly predicted positive samples among top-K predictions."""
+        # Validate required columns
         self._validate_columns(group, extra_cols=["Instrument", "ExcessReturn"])
+
+        # Drop invalid rows
+        group = group.dropna(subset=[self.pred_col, "ExcessReturn"])
         if len(group) < self.min_samples:
-            return {f"WR@Top{self.top_k}": np.nan}
+            return {f"Precision@{self.top_k}": np.nan}
 
-        top_pred = group.nlargest(self.top_k, self.pred_col)
-        positive_returns = (top_pred["ExcessReturn"] > 0).sum()
+        # Select top-K predictions
+        top_pred = group.nlargest(self.top_k, self.pred_col, keep='all')
 
-        return {f"WR@Top{self.top_k}": positive_returns / self.top_k}
+        # Compute Precision@K (fraction of true positives)
+        precision_at_k = np.mean(top_pred["ExcessReturn"].to_numpy() > 0)
 
-    def _compute_topk_return(self, group):
-        """Calculate Top-K portfolio return (average return of top K predicted stocks)."""
-        self._validate_columns(group, extra_cols=["Instrument", "ExcessReturn"])
-        if len(group) < self.min_samples:
-            return {f"RET@Top{self.top_k}": np.nan}
-
-        top_pred = group.nlargest(self.top_k, self.pred_col)
-        avg_return = top_pred["ExcessReturn"].mean()
-
-        return {f"RET@Top{self.top_k}": avg_return}
+        return {f"Precision@{self.top_k}": precision_at_k}
 
     def evaluate(self, pred_df, groupby_col="Date"):
         """Evaluate model performance with IC, ICIR, and Hit Rate metrics."""
@@ -165,18 +161,12 @@ class Evaluator:
         )
         hr_mean = daily_hr.mean().to_dict()
 
-        # Calculate daily win rates
-        daily_wr = pd.DataFrame(
-            df.groupby(groupby_col).apply(self._compute_win_rate).tolist()
+        # Calculate daily precision@k
+        daily_precision_k = pd.DataFrame(
+            df.groupby(groupby_col).apply(self._compute_precision_at_k).tolist()
         )
-        wr_mean = daily_wr.mean().to_dict()
-
-        # Calculate daily top-k returns
-        daily_ret = pd.DataFrame(
-            df.groupby(groupby_col).apply(self._compute_topk_return).tolist()
-        )
-        ret_mean = daily_ret.mean().to_dict()
+        precision_k_mean = daily_precision_k.mean().to_dict()
 
         # Combine results
-        results = {"IC": ic_mean, "ICIR": icir, **hr_mean, **wr_mean, **ret_mean}
+        results = {"IC": ic_mean, "ICIR": icir, **hr_mean, **precision_k_mean}
         return pd.DataFrame([results]).to_markdown(index=False, floatfmt=".4f")
