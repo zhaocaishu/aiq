@@ -146,10 +146,6 @@ class Evaluator:
 
         self._validate_columns(df, extra_cols=[groupby_col, "Instrument", "Return"])
 
-        # Calculate and print the number of stocks evaluated each day
-        daily_count = df.groupby(groupby_col).size()
-        print("Number of stocks evaluated per day:", daily_count.to_dict())
-
         # Calculate daily IC and ICIR
         daily_ic = df.groupby(groupby_col).apply(self._compute_ic).dropna()
         ic_mean = daily_ic.mean()

@@ -85,8 +85,8 @@ def fillna(x: np.ndarray, fill_value=0.0):
     return x_filled
 
 
-def zscore(x):
-    return (x - x.mean()) / (x.std() + 1e-12)
+def zscore(x, clip_min=-3, clip_max=3):
+    return np.clip((x - x.mean()) / (x.std() + 1e-8), clip_min, clip_max)
 
 
 def neutralize(

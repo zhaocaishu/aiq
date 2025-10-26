@@ -4,9 +4,12 @@ import torch.nn.functional as F
 
 
 class MarginRankingLoss(nn.Module):
-    def __init__(self, margin=1.0):
+    def __init__(self, margin=1.0, reduction="mean"):
         super().__init__()
         self.margin = margin
+        self.reduction = reduction
+        if reduction not in ["mean", "sum", "none"]:
+            raise ValueError("reduction must be 'mean', 'sum', or 'none'")
 
     def forward(self, preds: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         """
@@ -14,7 +17,7 @@ class MarginRankingLoss(nn.Module):
             preds (torch.Tensor): Predicted scores, shape (N,)
             targets (torch.Tensor): Ground truth values, shape (N,)
         Returns:
-            Margin ranking loss (scalar)
+            Margin ranking loss (scalar if reduction='mean' or 'sum', tensor if 'none')
         """
         N = preds.size(0)
 
@@ -28,9 +31,15 @@ class MarginRankingLoss(nn.Module):
 
         # Compute loss: max(0, margin - sign(target_diff) * pred_diff)
         loss = torch.clamp(self.margin - torch.sign(target_diff) * pred_diff, min=0)
-        loss = loss[mask].mean()
+        loss = loss[mask]
 
-        return loss
+        # Apply reduction
+        if self.reduction == "mean":
+            return loss.mean()
+        elif self.reduction == "sum":
+            return loss.sum()
+        else:  # 'none'
+            return loss
 
 
 class MSERankLoss(nn.Module):
@@ -46,13 +55,30 @@ class MSERankLoss(nn.Module):
         weight_type (str): Type of weighting for MSE ('linear' or 'exponential'). Default: 'linear'
     """
 
-    def __init__(
-        self, alpha: float = 0.7, margin: float = 0.1, weight_type: str = "linear"
-    ):
+    def __init__(self, alpha: float = 0.7, margin: float = 0.1):
         super().__init__()
         self.alpha = alpha
-        self.ranking_loss = MarginRankingLoss(margin=margin)
-        self.weight_type = weight_type
+        self.ranking_loss = MarginRankingLoss(margin=margin, reduction="mean")
+
+    # Compute normalized weights for targets, assigning higher weights to higher target values.
+    def _compute_weights(self, targets):
+        N = targets.numel()  # Get the size of the targets tensor
+        if N == 0:
+            return torch.tensor(
+                [], device=targets.device, dtype=targets.dtype
+            )  # Handle empty tensor
+        elif N == 1:
+            return torch.tensor(
+                [1.0], device=targets.device, dtype=targets.dtype
+            )  # Single target gets weight 1
+
+        _, indices = targets.sort(
+            descending=False
+        )  # Ascending sort: higher values get higher indices
+        ranks = torch.zeros(N, device=targets.device, dtype=targets.dtype)
+        ranks[indices] = torch.arange(N, device=targets.device, dtype=targets.dtype)
+        weights = ranks / (N - 1)  # Normalize ranks to [0, 1]
+        return weights
 
     def forward(self, preds: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         """
@@ -67,28 +93,11 @@ class MSERankLoss(nn.Module):
         """
         preds = preds.view(-1)
         targets = targets.view(-1)
-        N = preds.size(0)
-
-        # Compute ranks of targets (higher returns get higher ranks)
-        _, indices = targets.sort(descending=True)
-        ranks = torch.zeros(N, device=targets.device)
-        ranks[indices] = torch.arange(N, dtype=torch.float, device=targets.device)
-
-        # Compute weights based on ranks (higher rank -> higher weight)
-        if self.weight_type == "linear":
-            # Linear weights: w = N - rank (highest return gets weight N, lowest gets weight 1)
-            weights = N - ranks
-            weights = weights / weights.sum()  # Normalize weights to sum to 1
-        elif self.weight_type == "exponential":
-            # Exponential weights: w = exp(-rank / N)
-            weights = torch.exp(-ranks / N)
-            weights = weights / weights.sum()  # Normalize weights to sum to 1
-        else:
-            raise ValueError("weight_type must be 'linear' or 'exponential'")
 
         # Weighted MSE loss component
+        weights = self._compute_weights(targets)
         mse_loss = F.mse_loss(preds, targets, reduction="none")  # Shape (N,)
-        weighted_mse_loss = (mse_loss * weights).sum()
+        weighted_mse_loss = (mse_loss * weights).mean()
 
         # Ranking loss component
         ranking_loss = self.ranking_loss(preds, targets)
