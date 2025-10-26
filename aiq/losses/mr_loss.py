@@ -35,42 +35,65 @@ class MarginRankingLoss(nn.Module):
 
 class MSERankLoss(nn.Module):
     """
-    Combined loss: MSE (for regression accuracy) + MarginRankingLoss (for relative ranking consistency).
+    Combined loss: Weighted MSE (for regression accuracy, weighted by target ranks) + MarginRankingLoss (for relative ranking consistency).
 
-    This loss encourages predictions to be numerically close to targets (via MSE)
-    while also maintaining correct ranking order (via MarginRankingLoss).
+    The MSE loss is weighted based on the rank of targets (stock returns), giving higher weights to higher returns.
+    The ranking loss ensures relative ranking consistency.
 
     Args:
-        alpha (float): Weight for MSE loss component. Default: 0.7
+        alpha (float): Weight for MarginRankingLoss component. Default: 0.7
         margin (float): Margin parameter for MarginRankingLoss. Default: 0.1
+        weight_type (str): Type of weighting for MSE ('linear' or 'exponential'). Default: 'linear'
     """
 
-    def __init__(self, alpha: float = 0.7, margin: float = 0.1):
+    def __init__(
+        self, alpha: float = 0.7, margin: float = 0.1, weight_type: str = "linear"
+    ):
         super().__init__()
         self.alpha = alpha
         self.ranking_loss = MarginRankingLoss(margin=margin)
+        self.weight_type = weight_type
 
     def forward(self, preds: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         """
-        Forward pass combining MSE and ranking loss.
+        Forward pass combining weighted MSE and ranking loss.
 
         Args:
             preds (torch.Tensor): Predicted scores, shape (N,)
-            targets (torch.Tensor): Ground truth values, shape (N,)
+            targets (torch.Tensor): Ground truth values (stock returns), shape (N,)
 
         Returns:
             torch.Tensor: Combined scalar loss value.
         """
         preds = preds.view(-1)
         targets = targets.view(-1)
+        N = preds.size(0)
 
-        # MSE loss component
-        mse_loss = F.mse_loss(preds, targets, reduction="mean")
+        # Compute ranks of targets (higher returns get higher ranks)
+        _, indices = targets.sort(descending=True)
+        ranks = torch.zeros(N, device=targets.device)
+        ranks[indices] = torch.arange(N, dtype=torch.float, device=targets.device)
 
-        # Lambda ranking loss component
+        # Compute weights based on ranks (higher rank -> higher weight)
+        if self.weight_type == "linear":
+            # Linear weights: w = N - rank (highest return gets weight N, lowest gets weight 1)
+            weights = N - ranks
+            weights = weights / weights.sum()  # Normalize weights to sum to 1
+        elif self.weight_type == "exponential":
+            # Exponential weights: w = exp(-rank / N)
+            weights = torch.exp(-ranks / N)
+            weights = weights / weights.sum()  # Normalize weights to sum to 1
+        else:
+            raise ValueError("weight_type must be 'linear' or 'exponential'")
+
+        # Weighted MSE loss component
+        mse_loss = F.mse_loss(preds, targets, reduction="none")  # Shape (N,)
+        weighted_mse_loss = (mse_loss * weights).sum()
+
+        # Ranking loss component
         ranking_loss = self.ranking_loss(preds, targets)
 
         # Combined total loss
-        total_loss = (1.0 - self.alpha) * mse_loss + self.alpha * ranking_loss
+        total_loss = (1.0 - self.alpha) * weighted_mse_loss + self.alpha * ranking_loss
 
         return total_loss
