@@ -138,7 +138,13 @@ class Evaluator:
         # Compute Precision@K (fraction of true positives)
         precision_at_k = np.mean(top_pred["ExcessReturn"].to_numpy() > 0)
 
-        return {f"Precision@{self.top_k}": precision_at_k}
+        # Compute baseline precision@k
+        baseline_precision_at_k = np.mean(group["ExcessReturn"].to_numpy() > 0)
+
+        return {
+            f"Precision@{self.top_k}": precision_at_k,
+            f"BaselinePrecision@{self.top_k}": baseline_precision_at_k,
+        }
 
     def evaluate(self, pred_df, groupby_col="Date"):
         """Evaluate model performance with IC, ICIR, and Hit Rate metrics."""
