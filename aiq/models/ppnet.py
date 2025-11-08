@@ -8,7 +8,7 @@ from torch.utils.data import Dataset, DataLoader
 from transformers import get_scheduler
 
 from aiq.layers import PPNet
-from aiq.losses import MSERankLoss, ICLoss
+from aiq.losses import MSERankLoss, ICLoss, TopKLoss
 
 from .base import BaseModel
 
@@ -76,6 +76,8 @@ class PPNetModel(BaseModel):
             self.criterion = MSERankLoss()
         elif self.criterion_name == "IC":
             self.criterion = ICLoss()
+        elif self.criterion_name == "TopK":
+            self.criterion = TopKLoss()
         else:
             raise NotImplementedError
 
