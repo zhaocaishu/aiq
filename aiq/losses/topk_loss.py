@@ -4,12 +4,12 @@ import torch.nn.functional as F
 
 
 class TopKLoss(nn.Module):
-    def __init__(self, top_k=30, tau=1.0):
+    def __init__(self, top_k=30, tau=100.0):
         super(TopKLoss, self).__init__()
         self.top_k = top_k
         self.tau = tau
 
-    def _dftopk(self, x, k, tau=1.0):
+    def _dftopk(self, x, k, tau):
         x_k, _ = torch.kthvalue(x=-x, k=k, dim=1)
         x_k_plus_1, _ = torch.kthvalue(x=-x, k=k + 1, dim=1)
         threshold = ((x_k + x_k_plus_1) / 2.0).unsqueeze(1)
