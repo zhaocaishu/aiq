@@ -1,5 +1,5 @@
 import abc
-from typing import List
+from typing import List, Optional
 
 import pandas as pd
 import numpy as np
@@ -141,7 +141,7 @@ class RobustZScoreNorm(Processor):
 class CSNeutralize(Processor):
     """Factors Neutralization"""
 
-    def __init__(self, industry_col: str, cap_col: str, factor_cols: list):
+    def __init__(self, industry_col: str, cap_col: Optional[str], factor_cols: list):
         self.industry_col = industry_col
         self.cap_col = cap_col
         self.factor_cols = factor_cols
