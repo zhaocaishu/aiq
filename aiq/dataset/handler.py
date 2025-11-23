@@ -137,7 +137,8 @@ class Alpha158(DataHandler):
         turn = df["Turnover_rate_f"]
 
         # moneyflow
-        mfd_volinflowrate = df["Mfd_volinflowrate"]
+        mfd_inflow_vol_ratio = df["Mfd_inflow_vol_ratio"]
+        mfd_large_amount_ratio = df["Mfd_large_amount_ratio"]
 
         # kbar
         features = [
@@ -157,7 +158,8 @@ class Alpha158(DataHandler):
             open / Ref(close, 1),
             high / close,
             low / close,
-            mfd_volinflowrate,
+            mfd_inflow_vol_ratio,
+            mfd_large_amount_ratio
         ]
         feature_names = [
             "IND_CLS",
@@ -176,7 +178,8 @@ class Alpha158(DataHandler):
             "TS_OPEN0",
             "TS_HIGH0",
             "TS_LOW0",
-            "TS_MFD_VOLINFLOWRATE",
+            "TS_MFD_INFLOW_VOL_RATIO",
+            "TS_MFD_LARGE_AMOUNT_RATIO"
         ]
 
         # rolling
