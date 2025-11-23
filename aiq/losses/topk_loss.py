@@ -14,8 +14,7 @@ class TopKLoss(nn.Module):
         x_k_plus_1, _ = torch.kthvalue(x=-x, k=k + 1, dim=1)
         threshold = ((x_k + x_k_plus_1) / 2.0).unsqueeze(1)
         logits = x + threshold
-        if tau != 1:
-            logits = logits / tau
+        logits = logits / tau
         return logits
 
     def _topk_label(self, scores, k):
