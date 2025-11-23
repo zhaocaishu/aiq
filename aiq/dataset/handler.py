@@ -445,7 +445,7 @@ class Alpha158(DataHandler):
         return feature_df
 
     def extract_instrument_labels(self, df):
-        self.label_names = ["RETN_5D"]
+        self.label_names = ["RET_5D"]
         if self.benchmark_df is not None:
             merge_df = pd.merge(
                 df,

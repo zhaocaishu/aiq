@@ -25,7 +25,7 @@ dataset:
       train: ["2017-01-01", "2022-06-20"]
       valid: ["2022-07-01", "2022-12-20"]
       test: ["2023-01-01", "2023-06-30"]
-    label_names: ["RETN_5D"]
+    label_names: ["RET_5D"]
 model:
   class: XGBModel
   module_path: aiq.models.xgboost
@@ -48,6 +48,6 @@ evaluator:
     start_time: "2023-01-01"
     end_time: "2023-06-30"
     benchmark: "000905.SH"
-    pred_col: "PRED_RETN_5D"
-    label_col: "RETN_5D"
+    pred_col: "PRED_RET_5D"
+    label_col: "RET_5D"
     top_k: 30

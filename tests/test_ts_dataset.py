@@ -20,7 +20,7 @@ if __name__ == "__main__":
         universe=cfg.dataset.kwargs.universe,
         seq_len=8,
         feature_names=data_handler.feature_names,
-        label_names=["RETN_5D"],
+        label_names=["RET_5D"],
         mode="train",
     )
 
