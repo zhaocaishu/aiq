@@ -90,7 +90,10 @@ def zscore(x, clip_min=-3, clip_max=3):
 
 
 def neutralize(
-    df: pd.DataFrame, industry_col: str, cap_col: Optional[str], factor_cols: List[str]
+    df: pd.DataFrame,
+    industry_col: str,
+    cap_col: str = None,
+    factor_cols: List[str] = [],
 ) -> pd.DataFrame:
     """
     Neutralize specified factor columns by regressing out industry and market cap effects.
