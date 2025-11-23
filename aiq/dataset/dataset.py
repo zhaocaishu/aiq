@@ -99,7 +99,9 @@ class TSDataset(Dataset):
             i for i, name in enumerate(self.feature_names) if name.startswith("TS_")
         ]
         self.stock_cs_feature_indices = [
-            i for i, name in enumerate(self.feature_names) if name.startswith("CS_")
+            i
+            for i, name in enumerate(self.feature_names)
+            if name.startswith("CS_") or name.startswith("FUND")
         ]
         self.market_feature_indices = [
             i for i, name in enumerate(self.feature_names) if name.startswith("MKT_")
