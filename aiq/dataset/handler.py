@@ -155,9 +155,9 @@ class Alpha158(DataHandler):
             (Less(open, close) - low) / ((high - low) + 1e-12),
             (2 * close - high - low) / open,
             (2 * close - high - low) / ((high - low) + 1e-12),
-            open / Ref(close, 1),
-            high / close,
-            low / close,
+            (open - Ref(close, 1)) / Ref(close, 1),
+            (high - close) / close,
+            (low - close) / close,
             mfd_inflow_vol_ratio,
             mfd_large_amount_ratio
         ]

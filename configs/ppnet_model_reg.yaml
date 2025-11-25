@@ -70,7 +70,7 @@ model:
     epochs: 100
     batch_size: 1
     learning_rate: 0.001
-    criterion_name: "IC"
+    criterion_name: "TopK"
     early_stopping_patience: 10
 evaluator:
   class: Evaluator
