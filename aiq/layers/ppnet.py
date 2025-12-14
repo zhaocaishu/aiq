@@ -169,12 +169,13 @@ class Gate(nn.Module):
     def __init__(self, d_input, d_output, beta=1.0):
         super().__init__()
         self.trans = nn.Linear(d_input, d_output)
+        self.d_output = d_output
         self.t = beta
 
     def forward(self, gate_input):
         output = self.trans(gate_input)
         output = torch.softmax(output / self.t, dim=-1)
-        return output
+        return self.d_output * output
 
 
 class MLP(nn.Module):
