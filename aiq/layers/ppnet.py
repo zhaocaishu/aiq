@@ -47,7 +47,7 @@ class SAttention(nn.Module):
         self.norm_ffn = nn.LayerNorm(d_model, eps=1e-5)
         self.ffn = nn.Sequential(
             nn.Linear(d_model, d_model),
-            nn.ReLU(),
+            nn.SiLU(),
             nn.Dropout(p=dropout),
             nn.Linear(d_model, d_model),
             nn.Dropout(p=dropout),
@@ -112,7 +112,7 @@ class TAttention(nn.Module):
         # FFN
         self.ffn = nn.Sequential(
             Linear(d_model, d_model),
-            nn.ReLU(),
+            nn.SiLU(),
             Dropout(p=dropout),
             Linear(d_model, d_model),
             Dropout(p=dropout),
@@ -169,13 +169,12 @@ class Gate(nn.Module):
     def __init__(self, d_input, d_output, beta=1.0):
         super().__init__()
         self.trans = nn.Linear(d_input, d_output)
-        self.d_output = d_output
         self.t = beta
 
     def forward(self, gate_input):
         output = self.trans(gate_input)
         output = torch.softmax(output / self.t, dim=-1)
-        return self.d_output * output
+        return output
 
 
 class MLP(nn.Module):
@@ -193,7 +192,7 @@ class MLP(nn.Module):
         in_dim = input_dim
         for h_dim in hidden_dims:
             layers.append(nn.Linear(in_dim, h_dim))
-            layers.append(nn.ReLU())  # 可换成 GELU, LeakyReLU 等
+            layers.append(nn.SiLU())
             if dropout > 0:
                 layers.append(nn.Dropout(dropout))
             in_dim = h_dim

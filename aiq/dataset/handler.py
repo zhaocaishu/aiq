@@ -650,29 +650,6 @@ class MarketAlpha158(Alpha158):
             join="inner",
         )
 
-        # Growth / Value relative return feature
-        market_df = DataLoader.load_markets_features(
-            self.data_dir,
-            ["399370.SZ", "399371.SZ"],
-            self.start_time,
-            self.end_time,
-        )
-
-        growth_close = market_df[market_df["Instrument"] == "399370.SZ"].set_index(
-            "Date"
-        )["Close"]
-
-        value_close = market_df[market_df["Instrument"] == "399371.SZ"].set_index(
-            "Date"
-        )["Close"]
-
-        growth_ret_5d = growth_close / Ref(growth_close, 5) - 1
-        value_ret_5d = value_close / Ref(value_close, 5) - 1
-        logret_5d_growth = np.log1p(growth_ret_5d)  # log(1 + r)
-        logret_5d_value  = np.log1p(value_ret_5d)
-        logdiff_5d = logret_5d_growth - logret_5d_value
-        market_feature_df["MKT_GV_LOGRET_DIFF_5D"] = logdiff_5d
-
         market_feature_names = market_feature_df.columns.tolist()
         self.feature_names.extend(market_feature_names)
 
