@@ -115,8 +115,8 @@ class PPNetModel(BaseModel):
         )
 
         # Early stopping variables
-        best_val_loss = float("inf")
         patience_counter = 0
+        best_val_loss = float("inf")
         best_model_path = os.path.join(self.save_dir, "model_best.pth")
 
         for epoch in range(self.epochs):
@@ -213,9 +213,11 @@ class PPNetModel(BaseModel):
                     )
                     break
 
-        # training completed, load best model
+        # load the best checkpoint after training
         if os.path.exists(best_model_path):
-            self.load(best_model_path)
+            self.model.load_state_dict(
+                torch.load(best_model_path, map_location=self.device, weights_only=True)
+            )
 
     def eval(self, val_dataset: Dataset):
         self.model.eval()
