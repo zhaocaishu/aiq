@@ -1,5 +1,6 @@
 import os
 import time
+import copy
 
 import numpy as np
 import torch
@@ -72,6 +73,8 @@ class PPNetModel(BaseModel):
 
         self.model = self.model.to(self.device)
 
+        self.best_model_state = None
+
         # loss function
         if self.criterion_name == "MSE":
             self.criterion = nn.MSELoss()
@@ -117,7 +120,6 @@ class PPNetModel(BaseModel):
         # Early stopping variables
         patience_counter = 0
         best_val_loss = float("inf")
-        best_model_path = os.path.join(self.save_dir, "model_best.pth")
 
         for epoch in range(self.epochs):
             self.logger.info("=" * 20 + " Epoch {} ".format(epoch + 1) + "=" * 20)
@@ -198,10 +200,8 @@ class PPNetModel(BaseModel):
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
                 patience_counter = 0
-                torch.save(self.model.state_dict(), best_model_path)
-                self.logger.info(
-                    f"New best validation loss: {best_val_loss:.8f}, saving model to {best_model_path}"
-                )
+                self.best_model_state = copy.deepcopy(self.model.state_dict())
+                self.logger.info(f"New best validation loss: {best_val_loss:.8f}")
             else:
                 patience_counter += 1
                 self.logger.info(
@@ -213,11 +213,9 @@ class PPNetModel(BaseModel):
                     )
                     break
 
-        # load the best checkpoint after training
-        if os.path.exists(best_model_path):
-            self.model.load_state_dict(
-                torch.load(best_model_path, map_location=self.device, weights_only=True)
-            )
+        # load the best weights back into the model after training
+        if self.best_model_state is not None:
+            self.model.load_state_dict(self.best_model_state)
 
     def eval(self, val_dataset: Dataset):
         self.model.eval()
