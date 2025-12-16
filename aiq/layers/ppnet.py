@@ -62,23 +62,19 @@ class SAttention(nn.Module):
         self.head_dim = d_model // nhead
         self.temperature = math.sqrt(self.head_dim)
 
-        self.norm_x = nn.LayerNorm(d_model, eps=1e-5)
-        self.norm_ind = nn.LayerNorm(d_emb, eps=1e-5)
-
         # Q, K, V projection
         self.q_proj = nn.Linear(d_model + d_emb, d_model, bias=False)
         self.k_proj = nn.Linear(d_model + d_emb, d_model, bias=False)
         self.v_proj = nn.Linear(d_model, d_model, bias=False)
 
-        self.q_norm = nn.LayerNorm(d_model, eps=1e-5)
-        self.k_norm = nn.LayerNorm(d_model, eps=1e-5)
-
         self.attn_dropout = nn.ModuleList([nn.Dropout(p=dropout) for _ in range(nhead)])
 
-        self.out_proj = nn.Linear(d_model, d_model)
+        self.o_proj = nn.Linear(d_model, d_model)
 
-        self.post_attention_layernorm = nn.LayerNorm(d_model, eps=1e-5)
         self.mlp = MLP(d_model, 2 * d_model)
+        self.norm_x = nn.LayerNorm(d_model, eps=1e-5)
+        self.norm_ind = nn.LayerNorm(d_emb, eps=1e-5)
+        self.post_attention_layernorm = nn.LayerNorm(d_model, eps=1e-5)
 
     def forward(self, x, industry_embeds):
         # x: (N, D)  — 股票特征
@@ -87,10 +83,11 @@ class SAttention(nn.Module):
         x_states = self.norm_x(x)
         ind_states = self.norm_ind(industry_embeds)
 
+        # Self Attention
         # Q / K 用行业信息引导，V 只用股票特征
         qk_input = torch.cat([x_states, ind_states], dim=-1)
-        q = self.q_norm(self.q_proj(qk_input))
-        k = self.k_norm(self.k_proj(qk_input))
+        q = self.q_proj(qk_input)
+        k = self.k_proj(qk_input)
         v = self.v_proj(x_states)
 
         # 多头拆分
@@ -113,7 +110,7 @@ class SAttention(nn.Module):
             attn_outputs.append(out)
 
         hidden_states = torch.cat(attn_outputs, dim=-1)  # (N, D)
-        hidden_states = self.out_proj(hidden_states)
+        hidden_states = self.o_proj(hidden_states)
         hidden_states = residual + hidden_states
 
         # Fully Connected
@@ -131,29 +128,25 @@ class TAttention(nn.Module):
         self.nhead = nhead
         self.head_dim = d_model // nhead
 
-        # Input LayerNorm
-        self.input_layernorm = LayerNorm(d_model, eps=1e-5)
-
         self.q_proj = nn.Linear(d_model, d_model, bias=False)
         self.k_proj = nn.Linear(d_model, d_model, bias=False)
         self.v_proj = nn.Linear(d_model, d_model, bias=False)
 
-        self.q_norm = nn.LayerNorm(d_model, eps=1e-5)
-        self.k_norm = nn.LayerNorm(d_model, eps=1e-5)
-
         self.attn_dropout = nn.ModuleList([nn.Dropout(p=dropout) for _ in range(nhead)])
 
-        self.out_proj = nn.Linear(d_model, d_model)
+        self.o_proj = nn.Linear(d_model, d_model)
 
-        self.post_attention_layernorm = LayerNorm(d_model, eps=1e-5)
         self.mlp = MLP(d_model, 2 * d_model)
+        self.input_layernorm = LayerNorm(d_model, eps=1e-5)
+        self.post_attention_layernorm = LayerNorm(d_model, eps=1e-5)
 
     def forward(self, x):
         residual = x
         hidden_states = self.input_layernorm(x)
 
-        q = self.q_norm(self.q_proj(hidden_states))
-        k = self.k_norm(self.k_proj(hidden_states))
+        # Self Attention
+        q = self.q_proj(hidden_states)
+        k = self.k_proj(hidden_states)
         v = self.v_proj(hidden_states)
 
         attn_outputs = []
@@ -172,7 +165,7 @@ class TAttention(nn.Module):
             attn_weights = self.attn_dropout[i](attn_weights)
             attn_outputs.append(torch.matmul(attn_weights, vh))
         hidden_states = torch.concat(attn_outputs, dim=-1)
-        hidden_states = self.out_proj(hidden_states)
+        hidden_states = self.o_proj(hidden_states)
         hidden_states = residual + hidden_states
 
         # Fully Connected
