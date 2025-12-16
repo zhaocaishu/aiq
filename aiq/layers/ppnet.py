@@ -23,6 +23,35 @@ class PositionalEncoding(nn.Module):
         return x + self.pe[: x.shape[1], :]
 
 
+class Gate(nn.Module):
+    def __init__(self, d_input, d_output, beta=1.0):
+        super().__init__()
+        self.trans = nn.Linear(d_input, d_output)
+        self.d_output = d_output
+        self.t = beta
+
+    def forward(self, gate_input):
+        output = self.trans(gate_input)
+        output = torch.softmax(output / self.t, dim=-1)
+        return self.d_output * output
+
+
+class MLP(nn.Module):
+    def __init__(self, hidden_size, intermediate_size):
+        super(MLP, self).__init__()
+
+        self.hidden_size = hidden_size
+        self.intermediate_size = intermediate_size
+        self.gate_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias=False)
+        self.up_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias=False)
+        self.down_proj = nn.Linear(self.intermediate_size, self.hidden_size, bias=False)
+        self.act_fn = nn.SiLU()
+
+    def forward(self, x):
+        down_proj = self.down_proj(self.act_fn(self.gate_proj(x)) * self.up_proj(x))
+        return down_proj
+
+
 class SAttention(nn.Module):
     def __init__(self, d_model, nhead, dropout, d_emb):
         super().__init__()
@@ -33,37 +62,36 @@ class SAttention(nn.Module):
         self.head_dim = d_model // nhead
         self.temperature = math.sqrt(self.head_dim)
 
+        self.norm_x = nn.LayerNorm(d_model, eps=1e-5)
+        self.norm_ind = nn.LayerNorm(d_emb, eps=1e-5)
+
         # Q, K, V projection
-        self.qtrans = nn.Linear(d_model + d_emb, d_model, bias=False)
-        self.ktrans = nn.Linear(d_model + d_emb, d_model, bias=False)
-        self.vtrans = nn.Linear(d_model, d_model, bias=False)
+        self.q_proj = nn.Linear(d_model + d_emb, d_model, bias=False)
+        self.k_proj = nn.Linear(d_model + d_emb, d_model, bias=False)
+        self.v_proj = nn.Linear(d_model, d_model, bias=False)
+
+        self.q_norm = nn.LayerNorm(d_model, eps=1e-5)
+        self.k_norm = nn.LayerNorm(d_model, eps=1e-5)
 
         self.attn_dropout = nn.ModuleList([nn.Dropout(p=dropout) for _ in range(nhead)])
 
         self.out_proj = nn.Linear(d_model, d_model)
 
-        self.norm_x = nn.LayerNorm(d_model, eps=1e-5)
-        self.norm_ind = nn.LayerNorm(d_emb, eps=1e-5)
-        self.norm_ffn = nn.LayerNorm(d_model, eps=1e-5)
-        self.ffn = nn.Sequential(
-            nn.Linear(d_model, d_model),
-            nn.SiLU(),
-            nn.Dropout(p=dropout),
-            nn.Linear(d_model, d_model),
-            nn.Dropout(p=dropout),
-        )
+        self.post_attention_layernorm = nn.LayerNorm(d_model, eps=1e-5)
+        self.mlp = MLP(d_model, 2 * d_model)
 
     def forward(self, x, industry_embeds):
         # x: (N, D)  — 股票特征
-        # industry_embeds: (N, d_emb) — 行业 embedding
+        # industry_embeds: (N, d_emb) — 行业embedding
+        residual = x
         x_states = self.norm_x(x)
         ind_states = self.norm_ind(industry_embeds)
 
         # Q / K 用行业信息引导，V 只用股票特征
         qk_input = torch.cat([x_states, ind_states], dim=-1)
-        q = self.qtrans(qk_input)
-        k = self.ktrans(qk_input)
-        v = self.vtrans(x_states)
+        q = self.q_norm(self.q_proj(qk_input))
+        k = self.k_norm(self.k_proj(qk_input))
+        v = self.v_proj(x_states)
 
         # 多头拆分
         q = q.view(-1, self.nhead, self.head_dim)
@@ -84,12 +112,16 @@ class SAttention(nn.Module):
             out = torch.matmul(attn_weights, vh)
             attn_outputs.append(out)
 
-        attn_output = torch.cat(attn_outputs, dim=-1)  # (N, D)
-        attn_output = self.out_proj(attn_output)
+        hidden_states = torch.cat(attn_outputs, dim=-1)  # (N, D)
+        hidden_states = self.out_proj(hidden_states)
+        hidden_states = residual + hidden_states
 
-        xt = x + attn_output
-        out = xt + self.ffn(self.norm_ffn(xt))
-        return out
+        # Fully Connected
+        residual = hidden_states
+        hidden_states = self.post_attention_layernorm(hidden_states)
+        hidden_states = self.mlp(hidden_states)
+        hidden_states = residual + hidden_states
+        return hidden_states
 
 
 class TAttention(nn.Module):
@@ -97,58 +129,58 @@ class TAttention(nn.Module):
         super().__init__()
         self.d_model = d_model
         self.nhead = nhead
-        self.qtrans = nn.Linear(d_model, d_model, bias=False)
-        self.ktrans = nn.Linear(d_model, d_model, bias=False)
-        self.vtrans = nn.Linear(d_model, d_model, bias=False)
+        self.head_dim = d_model // nhead
+
+        # Input LayerNorm
+        self.input_layernorm = LayerNorm(d_model, eps=1e-5)
+
+        self.q_proj = nn.Linear(d_model, d_model, bias=False)
+        self.k_proj = nn.Linear(d_model, d_model, bias=False)
+        self.v_proj = nn.Linear(d_model, d_model, bias=False)
+
+        self.q_norm = nn.LayerNorm(d_model, eps=1e-5)
+        self.k_norm = nn.LayerNorm(d_model, eps=1e-5)
 
         self.attn_dropout = nn.ModuleList([nn.Dropout(p=dropout) for _ in range(nhead)])
 
         self.out_proj = nn.Linear(d_model, d_model)
 
-        # Input LayerNorm
-        self.norm_x = LayerNorm(d_model, eps=1e-5)
-        # FFN layerNorm
-        self.norm_ffn = LayerNorm(d_model, eps=1e-5)
-        # FFN
-        self.ffn = nn.Sequential(
-            Linear(d_model, d_model),
-            nn.SiLU(),
-            Dropout(p=dropout),
-            Linear(d_model, d_model),
-            Dropout(p=dropout),
-        )
+        self.post_attention_layernorm = LayerNorm(d_model, eps=1e-5)
+        self.mlp = MLP(d_model, 2 * d_model)
 
     def forward(self, x):
-        x_states = self.norm_x(x)
-        q = self.qtrans(x_states)
-        k = self.ktrans(x_states)
-        v = self.vtrans(x_states)
+        residual = x
+        hidden_states = self.input_layernorm(x)
 
-        dim = int(self.d_model / self.nhead)
+        q = self.q_norm(self.q_proj(hidden_states))
+        k = self.k_norm(self.k_proj(hidden_states))
+        v = self.v_proj(hidden_states)
+
         attn_outputs = []
         for i in range(self.nhead):
             if i == self.nhead - 1:
-                qh = q[:, :, i * dim :]
-                kh = k[:, :, i * dim :]
-                vh = v[:, :, i * dim :]
+                qh = q[:, :, i * self.head_dim :]
+                kh = k[:, :, i * self.head_dim :]
+                vh = v[:, :, i * self.head_dim :]
             else:
-                qh = q[:, :, i * dim : (i + 1) * dim]
-                kh = k[:, :, i * dim : (i + 1) * dim]
-                vh = v[:, :, i * dim : (i + 1) * dim]
+                qh = q[:, :, i * self.head_dim : (i + 1) * self.head_dim]
+                kh = k[:, :, i * self.head_dim : (i + 1) * self.head_dim]
+                vh = v[:, :, i * self.head_dim : (i + 1) * self.head_dim]
             attn_weights = torch.softmax(
-                torch.matmul(qh, kh.transpose(1, 2)) / math.sqrt(dim), dim=-1
+                torch.matmul(qh, kh.transpose(1, 2)) / math.sqrt(self.head_dim), dim=-1
             )
             attn_weights = self.attn_dropout[i](attn_weights)
             attn_outputs.append(torch.matmul(attn_weights, vh))
+        hidden_states = torch.concat(attn_outputs, dim=-1)
+        hidden_states = self.out_proj(hidden_states)
+        hidden_states = residual + hidden_states
 
-        attn_output = torch.concat(attn_outputs, dim=-1)
-        attn_output = self.out_proj(attn_output)
-
-        # FFN
-        xt = x + attn_output
-        output = xt + self.ffn(self.norm_ffn(xt))
-
-        return output
+        # Fully Connected
+        residual = hidden_states
+        hidden_states = self.post_attention_layernorm(hidden_states)
+        hidden_states = self.mlp(hidden_states)
+        hidden_states = residual + hidden_states
+        return hidden_states
 
 
 class TemporalAttention(nn.Module):
@@ -163,46 +195,6 @@ class TemporalAttention(nn.Module):
         lam = torch.softmax(lam, dim=1).unsqueeze(1)
         output = torch.matmul(lam, z).squeeze(1)  # [N, 1, T], [N, T, D] --> [N, 1, D]
         return output
-
-
-class Gate(nn.Module):
-    def __init__(self, d_input, d_output, beta=1.0):
-        super().__init__()
-        self.trans = nn.Linear(d_input, d_output)
-        self.d_output = d_output
-        self.t = beta
-
-    def forward(self, gate_input):
-        output = self.trans(gate_input)
-        output = torch.softmax(output / self.t, dim=-1)
-        return self.d_output * output
-
-
-class MLP(nn.Module):
-    def __init__(self, input_dim, hidden_dims, output_dim, dropout=0.0):
-        """
-        参数:
-        - input_dim: 输入特征维度
-        - hidden_dims: list, 每一层的隐藏层维度, e.g. [128, 64]
-        - output_dim: 输出维度 (分类任务一般是类别数)
-        - dropout: dropout比例
-        """
-        super(MLP, self).__init__()
-
-        layers = []
-        in_dim = input_dim
-        for h_dim in hidden_dims:
-            layers.append(nn.Linear(in_dim, h_dim))
-            layers.append(nn.SiLU())
-            if dropout > 0:
-                layers.append(nn.Dropout(dropout))
-            in_dim = h_dim
-
-        layers.append(nn.Linear(in_dim, output_dim))  # 输出层
-        self.net = nn.Sequential(*layers)
-
-    def forward(self, x):
-        return self.net(x)
 
 
 class PPNet(nn.Module):
@@ -220,7 +212,7 @@ class PPNet(nn.Module):
     ):
         super(PPNet, self).__init__()
 
-        # Temporal processing layers
+        # Temporal layers
         self.temporal_hidden_dim = 64
         self.temporal_proj = nn.Linear(d_ts_feat, self.temporal_hidden_dim)
         self.temporal_pos_embed = PositionalEncoding(self.temporal_hidden_dim)
@@ -229,23 +221,21 @@ class PPNet(nn.Module):
         )
         self.temporal_aggregator = TemporalAttention(d_model=self.temporal_hidden_dim)
 
-        # Market processing layers
+        # Market layers
         self.market_gate = Gate(
             d_market, self.temporal_hidden_dim + d_cs_feat, beta=beta
         )
 
         # Fusion layers
-        self.fusion_proj = MLP(
-            input_dim=self.temporal_hidden_dim + d_cs_feat,
-            hidden_dims=[2 * d_model, d_model],
-            output_dim=d_model,
-            dropout=dropout,
+        self.fusion_proj = nn.Sequential(
+            nn.Linear(self.temporal_hidden_dim + d_cs_feat, 2 * d_model),
+            nn.SiLU(),
+            nn.Dropout(p=dropout),
+            nn.Linear(2 * d_model, d_model),
         )
 
-        # Industry embedding
+        # Spatial layers
         self.industry_embed = nn.Embedding(256, d_emb)
-
-        # Spatial attention
         self.spatial_attn = SAttention(
             d_model=d_model,
             d_emb=d_emb,
@@ -254,7 +244,7 @@ class PPNet(nn.Module):
         )
 
         # Prediction head
-        self.prediction_head = nn.Linear(d_model, 1)
+        self.prediction_head = nn.Linear(d_model, 1, bias=False)
 
     def forward(
         self,
@@ -277,9 +267,9 @@ class PPNet(nn.Module):
         temporal_states = self.temporal_proj(
             stock_ts_features
         )  # (N, T, temporal_hidden_dim)
-        temporal_embed = self.temporal_pos_embed(temporal_states)
+        temporal_with_pos = self.temporal_pos_embed(temporal_states)
         temporal_attn_output = self.temporal_self_attn(
-            temporal_embed
+            temporal_with_pos
         )  # Intra-stock temporal attention
         temporal_aggregated = self.temporal_aggregator(
             temporal_attn_output
