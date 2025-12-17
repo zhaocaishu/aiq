@@ -130,8 +130,9 @@ class Alpha158(DataHandler):
         high = df["High"] * adj_factor
         low = df["Low"] * adj_factor
 
-        # volume
+        # volume & amount
         volume = df["Volume"]
+        amount = df["AMount"]
 
         # turnover rate
         turn = df["Turnover_rate_f"]
@@ -146,18 +147,12 @@ class Alpha158(DataHandler):
             cap,
             ep,
             bp,
-            (high - low) / open,
-            (close - open) / open,
-            (close - open) / ((high - low) + 1e-12),
-            (high - Greater(open, close)) / open,
-            (high - Greater(open, close)) / ((high - low) + 1e-12),
-            (Less(open, close) - low) / open,
-            (Less(open, close) - low) / ((high - low) + 1e-12),
-            (2 * close - high - low) / open,
-            (2 * close - high - low) / ((high - low) + 1e-12),
-            (open - Ref(close, 1)) / Ref(close, 1),
-            (high - close) / close,
-            (low - close) / close,
+            open,
+            close,
+            high,
+            low,
+            volume,
+            amount,
             mfd_inflow_vol_ratio,
             mfd_large_amount_ratio,
         ]
@@ -166,20 +161,14 @@ class Alpha158(DataHandler):
             "FUND_CAP",
             "FUND_EP",
             "FUND_BP",
-            "TS_KLEN",
-            "TS_KMID1",
-            "TS_KMID2",
-            "TS_KUP1",
-            "TS_KUP2",
-            "TS_KLOW1",
-            "TS_KLOW2",
-            "TS_KSFT1",
-            "TS_KSFT2",
-            "TS_OPEN0",
-            "TS_HIGH0",
-            "TS_LOW0",
+            "TS_OPEN",
+            "TS_CLOSE",
+            "TS_HIGH",
+            "TS_LOW",
+            "TS_VOL",
+            "TS_AMT",
             "TS_MFD_INFLOW_VOL_RATIO",
-            "TS_MFD_LARGE_AMOUNT_RATIO",
+            "TS_MFD_LARGE_AMT_RATIO",
         ]
 
         # rolling

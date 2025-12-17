@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from aiq.dataset.loader import DataLoader
-from aiq.utils.functional import ts_robust_zscore, fillna
+from aiq.utils.functional import zscore, fillna
 
 
 class Dataset(torch.utils.data.Dataset):
@@ -206,6 +206,82 @@ class TSDataset(Dataset):
 
         return np.array(slices, dtype="object")
 
+    def _normalize_ts_features(self, x: np.ndarray):
+        """
+        对N*T*D维的时序特征进行归一化
+
+        参数:
+            x: np.ndarray, shape (N, T, D)
+                D维度特征顺序: open(0), close(1), high(2), low(3), volume(4), amount(5), mfd_inflow_vol_ratio(6), mfd_large_amt_ratio(7)
+
+        返回:
+            np.ndarray, shape (N, T, D), 归一化后的特征
+        """
+        # 创建输出数组并设置极小值避免数值错误
+        normalized_x = x.astype(np.float32).copy()
+        EPS = 1e-8
+
+        # 特征索引定义
+        IDX_OPEN, IDX_CLOSE, IDX_HIGH, IDX_LOW = 0, 1, 2, 3
+        IDX_VOLUME, IDX_AMOUNT = 4, 5
+        IDX_MFD_INFLOW_VOL_RATIO, IDX_MFD_LARGE_AMT_RATIO = 6, 7
+
+        # 基准：每个样本最后一个时间步的收盘价 (shape: N,)
+        base_close = normalized_x[:, -1, IDX_CLOSE]
+        base_close = np.clip(base_close, EPS, None)  # 确保基准价格不小于EPS
+
+        # 对四个价格特征分别进行归一化
+        price_indices = [IDX_OPEN, IDX_CLOSE, IDX_HIGH, IDX_LOW]
+        for idx in price_indices:
+            # 获取价格特征并裁剪负值和极小值
+            price_feat = np.clip(normalized_x[:, :, idx], EPS, None)
+
+            # 计算对数收益率: log(价格 / 基准收盘价)
+            # 使用广播机制，base_close[:, np.newaxis] 将shape从(N,)变为(N, 1)
+            normalized_x[:, :, idx] = np.log(price_feat / base_close[:, np.newaxis])
+
+        # 成交量标准化: volume / mean(volume_over_time)
+        volume_feat = normalized_x[:, :, IDX_VOLUME]
+        volume_mean = np.mean(
+            volume_feat, axis=1, keepdims=True
+        )  # 在时序维度求均值, shape: (N, 1)
+        volume_mean = np.clip(volume_mean, EPS, None)
+        normalized_x[:, :, IDX_VOLUME] = volume_feat / volume_mean
+
+        # 成交额标准化: amount / mean(amount_over_time)
+        amount_feat = normalized_x[:, :, IDX_AMOUNT]
+        amount_mean = np.mean(
+            amount_feat, axis=1, keepdims=True
+        )  # 在时序维度求均值, shape: (N, 1)
+        amount_mean = np.clip(amount_mean, EPS, None)
+        normalized_x[:, :, IDX_AMOUNT] = amount_feat / amount_mean
+
+        # 资金净流入量占比标准化: mfd_inflow_vol_ratio / mean(mfd_inflow_vol_ratio)
+        mfd_inflow_vol_ratio_feat = normalized_x[:, :, IDX_MFD_INFLOW_VOL_RATIO]
+        mfd_inflow_vol_ratio_feat_mean = np.mean(
+            mfd_inflow_vol_ratio_feat, axis=1, keepdims=True
+        )  # 在时序维度求均值, shape: (N, 1)
+        mfd_inflow_vol_ratio_feat_mean = np.clip(
+            mfd_inflow_vol_ratio_feat_mean, EPS, None
+        )
+        normalized_x[:, :, IDX_MFD_INFLOW_VOL_RATIO] = (
+            mfd_inflow_vol_ratio_feat / mfd_inflow_vol_ratio_feat_mean
+        )
+
+        # 大额资金占比标准化: mfd_large_amt_ratio / mean(mfd_large_amt_ratio)
+        mfd_large_amt_ratio_feat = normalized_x[:, :, IDX_MFD_LARGE_AMT_RATIO]
+        mfd_large_amt_ratio_feat_mean = np.mean(
+            mfd_large_amt_ratio_feat, axis=1, keepdims=True
+        )  # 在时序维度求均值, shape: (N, 1)
+        mfd_large_amt_ratio_feat_mean = np.clip(
+            mfd_large_amt_ratio_feat_mean, EPS, None
+        )
+        normalized_x[:, :, IDX_MFD_LARGE_AMT_RATIO] = (
+            mfd_large_amt_ratio_feat / mfd_large_amt_ratio_feat_mean
+        )
+
+        return normalized_x
+
     def __getitem__(self, index: int) -> Dict[str, np.ndarray]:
         """
         Retrieve a batch of data for the given index (corresponding to a date).
@@ -226,12 +302,10 @@ class TSDataset(Dataset):
         features = np.stack([self._features[sl] for sl in slices])
 
         # Normalize specific feature subsets
-        stock_ts_features = ts_robust_zscore(
-            features[:, :, self.stock_ts_feature_indices], clip_outlier=True
+        stock_ts_features = self._normalize_ts_features(
+            features[:, :, self.stock_ts_feature_indices]
         )
-        stock_cs_features = ts_robust_zscore(
-            features[:, -1:, self.stock_cs_feature_indices], clip_outlier=True
-        ).squeeze(1)
+        stock_cs_features = zscore(features[:, -1, self.stock_cs_feature_indices])
         market_features = features[:, -1, self.market_feature_indices]
 
         # Fill NaNs with 0.0
