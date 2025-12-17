@@ -47,7 +47,7 @@ evaluator:
   kwargs:
     start_time: "2023-01-01"
     end_time: "2023-06-30"
-    benchmark: "000905.SH"
+    benchmark: "000906.SH"
     pred_col: "PRED_RET_5D"
     label_col: "RET_5D"
     top_k: 30
