@@ -155,6 +155,18 @@ class Alpha158(DataHandler):
             amount,
             mfd_inflow_vol_ratio,
             mfd_large_amount_ratio,
+            (high - low) / open,
+            (close - open) / open,
+            (close - open) / ((high - low) + 1e-12),
+            (high - Greater(open, close)) / open,
+            (high - Greater(open, close)) / ((high - low) + 1e-12),
+            (Less(open, close) - low) / open,
+            (Less(open, close) - low) / ((high - low) + 1e-12),
+            (2 * close - high - low) / open,
+            (2 * close - high - low) / ((high - low) + 1e-12),
+            (open - Ref(close, 1)) / Ref(close, 1),
+            (high - close) / close,
+            (low - close) / close,
         ]
         feature_names = [
             "IND_CLS",
@@ -169,12 +181,24 @@ class Alpha158(DataHandler):
             "TS_AMT",
             "TS_MFD_INFLOW_VOL_RATIO",
             "TS_MFD_LARGE_AMT_RATIO",
+            "CS_KLEN",
+            "CS_KMID1",
+            "CS_KMID2",
+            "CS_KUP1",
+            "CS_KUP2",
+            "CS_KLOW1",
+            "CS_KLOW2",
+            "CS_KSFT1",
+            "CS_KSFT2",
+            "CS_OPEN0",
+            "CS_HIGH0",
+            "CS_LOW0",
         ]
 
         # rolling
         windows = [5, 10, 20, 30, 60]
         include = None
-        exclude = ["CS_SUMN", "CS_SUMD", "CS_CNTN", "CS_CNTD", "CS_VSUMN", "CS_VSUMD"]
+        exclude = []
 
         def use(x):
             return x not in exclude and (include is None or x in include)

@@ -212,7 +212,7 @@ class TSDataset(Dataset):
 
         参数:
             x: np.ndarray, shape (N, T, D)
-                D维度特征顺序: open(0), close(1), high(2), low(3), volume(4), amount(5), mfd_inflow_vol_ratio(6), mfd_large_amt_ratio(7)
+                D维度特征顺序: open(0), close(1), high(2), low(3), volume(4), amount(5)
 
         返回:
             np.ndarray, shape (N, T, D), 归一化后的特征
@@ -224,7 +224,6 @@ class TSDataset(Dataset):
         # 特征索引定义
         IDX_OPEN, IDX_CLOSE, IDX_HIGH, IDX_LOW = 0, 1, 2, 3
         IDX_VOLUME, IDX_AMOUNT = 4, 5
-        IDX_MFD_INFLOW_VOL_RATIO, IDX_MFD_LARGE_AMT_RATIO = 6, 7
 
         # 基准：每个样本最后一个时间步的收盘价 (shape: N,)
         base_close = normalized_x[:, -1, IDX_CLOSE]
@@ -255,30 +254,6 @@ class TSDataset(Dataset):
         )  # 在时序维度求均值, shape: (N, 1)
         amount_mean = np.clip(amount_mean, EPS, None)
         normalized_x[:, :, IDX_AMOUNT] = amount_feat / amount_mean
-
-        # 资金净流入量占比标准化: mfd_inflow_vol_ratio / mean(mfd_inflow_vol_ratio)
-        mfd_inflow_vol_ratio_feat = normalized_x[:, :, IDX_MFD_INFLOW_VOL_RATIO]
-        mfd_inflow_vol_ratio_feat_mean = np.mean(
-            mfd_inflow_vol_ratio_feat, axis=1, keepdims=True
-        )  # 在时序维度求均值, shape: (N, 1)
-        mfd_inflow_vol_ratio_feat_mean = np.clip(
-            mfd_inflow_vol_ratio_feat_mean, EPS, None
-        )
-        normalized_x[:, :, IDX_MFD_INFLOW_VOL_RATIO] = (
-            mfd_inflow_vol_ratio_feat / mfd_inflow_vol_ratio_feat_mean
-        )
-
-        # 大额资金占比标准化: mfd_large_amt_ratio / mean(mfd_large_amt_ratio)
-        mfd_large_amt_ratio_feat = normalized_x[:, :, IDX_MFD_LARGE_AMT_RATIO]
-        mfd_large_amt_ratio_feat_mean = np.mean(
-            mfd_large_amt_ratio_feat, axis=1, keepdims=True
-        )  # 在时序维度求均值, shape: (N, 1)
-        mfd_large_amt_ratio_feat_mean = np.clip(
-            mfd_large_amt_ratio_feat_mean, EPS, None
-        )
-        normalized_x[:, :, IDX_MFD_LARGE_AMT_RATIO] = (
-            mfd_large_amt_ratio_feat / mfd_large_amt_ratio_feat_mean
-        )
 
         return normalized_x
 
