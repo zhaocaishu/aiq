@@ -282,10 +282,10 @@ class PPNet(nn.Module):
 
         # Embed industries and apply spatial attention
         industry_embeds = self.industry_embed(industry_indices)  # (N, d_emb)
-        attn_output = self.spatial_attn(
+        spatial_attn_output = self.spatial_attn(
             fused_states, industry_embeds=industry_embeds
         )  # (N, d_model)
 
         # Generate final prediction
-        predictions = self.prediction_head(attn_output)  # (N, 1)
+        predictions = self.prediction_head(spatial_attn_output)  # (N, 1)
         return predictions
