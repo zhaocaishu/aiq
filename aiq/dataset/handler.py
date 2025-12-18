@@ -153,8 +153,6 @@ class Alpha158(DataHandler):
             low,
             volume,
             amount,
-            mfd_inflow_vol_ratio,
-            mfd_large_amount_ratio,
             (high - low) / open,
             (close - open) / open,
             (close - open) / ((high - low) + 1e-12),
@@ -167,6 +165,8 @@ class Alpha158(DataHandler):
             (open - Ref(close, 1)) / Ref(close, 1),
             (high - close) / close,
             (low - close) / close,
+            mfd_inflow_vol_ratio,
+            mfd_large_amount_ratio,
         ]
         feature_names = [
             "IND_CLS",
