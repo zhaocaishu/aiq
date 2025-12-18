@@ -215,7 +215,9 @@ class PPNet(nn.Module):
         self.temporal_aggregator = TemporalAttention(d_model=self.temporal_hidden_dim)
 
         # Market layers
-        self.market_gate = Gate(d_market, d_cs_feat, beta=beta)
+        self.market_gate = Gate(
+            d_market, self.temporal_hidden_dim + d_cs_feat, beta=beta
+        )
 
         # Fusion layers
         self.fusion_proj = nn.Sequential(
@@ -253,11 +255,6 @@ class PPNet(nn.Module):
         Returns:
             predictions: (N, 1) prediction for each stock
         """
-
-        # Apply gating to market features and modulate stock states
-        gated_weights = self.market_gate(market_features)
-        gated_states = stock_cs_features * gated_weights  # (N, d_cs_feat)
-
         # Process temporal stock features
         temporal_states = self.temporal_proj(
             stock_ts_features
@@ -271,10 +268,16 @@ class PPNet(nn.Module):
         )  # (N, temporal_hidden_dim), aggregate over time
 
         # Concat temporal and cross-sectional representations
-        concat_states = torch.cat([temporal_aggregated, gated_states], dim=-1)
+        concat_states = torch.cat([temporal_aggregated, stock_cs_features], dim=-1)
+
+        # Apply gating to market features and modulate stock states
+        gated_weights = self.market_gate(market_features)
+        gated_states = (
+            concat_states * gated_weights
+        )  # (N, temporal_hidden_dim + d_cs_feat)
 
         # Fuse temporal and cross-sectional representations
-        fused_states = self.fusion_proj(concat_states)  # (N, d_model)
+        fused_states = self.fusion_proj(gated_states)  # (N, d_model)
 
         # Embed industries and apply spatial attention
         industry_embeds = self.industry_embed(industry_indices)  # (N, d_emb)

@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from aiq.dataset.loader import DataLoader
-from aiq.utils.functional import zscore, fillna
+from aiq.utils.functional import robust_zscore, ts_robust_zscore, fillna
 
 
 class Dataset(torch.utils.data.Dataset):
@@ -280,7 +280,12 @@ class TSDataset(Dataset):
         stock_ts_features = self._normalize_ts_features(
             features[:, :, self.stock_ts_feature_indices]
         )
-        stock_cs_features = zscore(features[:, -1, self.stock_cs_feature_indices])
+        stock_ts_features[:, :, 6:] = ts_robust_zscore(
+            stock_ts_features[:, :, 6:], clip_outlier=True
+        )
+        stock_cs_features = robust_zscore(
+            features[:, -1, self.stock_cs_feature_indices], clip_outlier=True
+        )
         market_features = features[:, -1, self.market_feature_indices]
 
         # Fill NaNs with 0.0

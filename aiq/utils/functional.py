@@ -1,5 +1,5 @@
 import re
-from typing import List, Optional
+from typing import List, Union
 
 import pandas as pd
 import numpy as np
@@ -7,23 +7,65 @@ import numpy as np
 from sklearn.linear_model import LinearRegression
 
 
-def robust_zscore(x: pd.Series, zscore=False):
-    """Robust ZScore Normalization
-
-    Use robust statistics for Z-Score normalization:
-        mean(x) = median(x)
-        std(x) = MAD(x) * 1.4826
-
-    Reference:
-        https://en.wikipedia.org/wiki/Median_absolute_deviation.
+def robust_zscore(
+    x: Union[pd.Series, np.ndarray], clip_outlier: bool = False
+) -> Union[pd.Series, np.ndarray]:
     """
-    x = x - x.median()
-    mad = x.abs().median()
-    x = np.clip(x / mad / 1.4826, -3, 3)
-    if zscore:
-        x -= x.mean()
-        x /= x.std()
-    return x
+    Robust ZScore Normalization using median and MAD.
+
+    Uses robust statistics for Z-Score normalization:
+        center = median(x)
+        scale = MAD(x) * 1.4826
+
+    The result can be optionally clipped to [-3, 3] range.
+
+    NaN values are ignored in median and MAD calculations but remain in output.
+
+    Parameters
+    ----------
+    x : pd.Series or np.ndarray
+        Input data
+    clip_outlier : bool, optional
+        If True, clip the resulting z-scores to the range [-3, 3] to limit extreme outliers.
+        Default is False.
+
+    Returns
+    -------
+    pd.Series or np.ndarray
+        Normalized data with same type as input. NaN values remain in place.
+
+    References
+    ----------
+    https://en.wikipedia.org/wiki/Median_absolute_deviation
+    """
+    if len(x) == 0:
+        return x
+
+    # 保存输入类型和元数据
+    is_series = isinstance(x, pd.Series)
+    index = x.index if is_series else None
+    name = x.name if is_series else None
+
+    # 转换为ndarray进行计算，避免修改原始数据
+    arr = np.asarray(x, dtype=np.float32).copy()
+
+    # 计算中位数并中心化
+    med = np.nanmedian(arr)
+    arr_centered = arr - med
+
+    # 计算MAD并标准化
+    mad = np.nanmedian(np.abs(arr_centered))
+    std = mad * 1.4826 + 1e-12
+    result = arr_centered / std
+
+    if clip_outlier:
+        result = np.clip(result, -3.0, 3.0)
+
+    # 转换回原始类型
+    if is_series:
+        return pd.Series(result, index=index, name=name)
+
+    return result
 
 
 def ts_robust_zscore(x: np.ndarray, clip_outlier: bool = False) -> np.ndarray:
