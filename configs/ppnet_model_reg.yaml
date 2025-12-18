@@ -51,7 +51,7 @@ dataset:
       train: ["2017-01-01", "2022-06-20"]
       valid: ["2022-07-01", "2022-12-20"]
       test: ["2023-01-01", "2023-06-30"]
-    seq_len: 16
+    seq_len: 20
     label_names: ["RET_5D"]
     use_augmentation: false
 model:
