@@ -1,9 +1,7 @@
 import math
 
-import numpy as np
 import torch
 from torch import nn
-from torch.nn.modules.normalization import LayerNorm
 
 from .embed import DataEmbedding
 
@@ -56,8 +54,8 @@ class TAttention(nn.Module):
         self.o_proj = nn.Linear(d_model, d_model)
 
         self.mlp = MLP(d_model, 2 * d_model)
-        self.input_layernorm = LayerNorm(d_model, eps=1e-5)
-        self.post_attention_layernorm = LayerNorm(d_model, eps=1e-5)
+        self.input_layernorm = nn.LayerNorm(d_model, eps=1e-5)
+        self.post_attention_layernorm = nn.LayerNorm(d_model, eps=1e-5)
 
     def forward(self, x):
         # Embedding
