@@ -116,15 +116,14 @@ class Alpha158(DataHandler):
 
     def extract_instrument_features(self, df):
         # fundamental data
-        ind_class = df["Ind_class_l1"]
+        ind_class_l1 = df["Ind_class_l1"]
+        ind_class_l2 = df["Ind_class_l2"]
         ep = (1.0 / df["Pe_ttm"].replace(0, np.nan)).fillna(0)
         bp = (1.0 / df["Pb"].replace(0, np.nan)).fillna(0)
         cap = np.log(df["Circ_mv"])
 
-        # adjustment factor
-        adj_factor = df["Adj_factor"]
-
         # adjusted prices
+        adj_factor = df["Adj_factor"]
         open = df["Open"] * adj_factor
         close = df["Close"] * adj_factor
         high = df["High"] * adj_factor
@@ -143,7 +142,8 @@ class Alpha158(DataHandler):
 
         # kbar
         features = [
-            ind_class,
+            ind_class_l1,
+            ind_class_l2,
             cap,
             ep,
             bp,
@@ -169,7 +169,8 @@ class Alpha158(DataHandler):
             mfd_large_amount_ratio,
         ]
         feature_names = [
-            "IND_CLS",
+            "IND_CLS_L1",
+            "IND_CLS_L2",
             "FUND_CAP",
             "FUND_EP",
             "FUND_BP",

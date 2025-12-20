@@ -92,8 +92,14 @@ class TSDataset(Dataset):
 
     def _precompute_feature_indices(self):
         """Precompute indices for different feature categories to avoid repeated lookups."""
-        self.industry_index = next(
-            (i for i, name in enumerate(self.feature_names) if name == "IND_CLS"), None
+        self.industry_index_l1 = next(
+            (i for i, name in enumerate(self.feature_names) if name == "IND_CLS_L1"), None
+        )
+        self.industry_index_l2 = next(
+            (i for i, name in enumerate(self.feature_names) if name == "IND_CLS_L2"), None
+        )
+        self.industry_index_l2 = next(
+            (i for i, name in enumerate(self.feature_names) if name == "IND_CLS_L2"), None
         )
         self.stock_ts_feature_indices = [
             i for i, name in enumerate(self.feature_names) if name.startswith("TS_")
@@ -296,7 +302,13 @@ class TSDataset(Dataset):
         # Construct data dictionary
         data_dict = {
             "sample_indices": sample_indices.astype(np.int64),
-            "industry_ids": features[:, -1, self.industry_index].astype(np.int64),
+            "industry_ids": np.stack(
+                [
+                    features[:, -1, self.industry_index_l1].astype(np.int64),
+                    features[:, -1, self.industry_index_l2].astype(np.int64),
+                ],
+                axis=1,
+            ),
             "stock_ts_features": stock_ts_features,
             "stock_cs_features": stock_cs_features,
             "market_features": market_features,

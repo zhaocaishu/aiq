@@ -1,5 +1,6 @@
 import math
 
+import numpy as np
 import torch
 from torch import nn
 from torch.nn.modules.normalization import LayerNorm
@@ -108,8 +109,8 @@ class SAttention(nn.Module):
         self.temperature = math.sqrt(self.head_dim)
 
         # Q, K, V projection
-        self.q_proj = nn.Linear(d_model + d_emb, d_model, bias=False)
-        self.k_proj = nn.Linear(d_model + d_emb, d_model, bias=False)
+        self.q_proj = nn.Linear(d_model, d_model, bias=False)
+        self.k_proj = nn.Linear(d_model, d_model, bias=False)
         self.v_proj = nn.Linear(d_model, d_model, bias=False)
 
         self.attn_dropout = nn.ModuleList([nn.Dropout(p=dropout) for _ in range(nhead)])
@@ -118,21 +119,17 @@ class SAttention(nn.Module):
 
         self.mlp = MLP(d_model, 2 * d_model)
         self.norm_x = nn.LayerNorm(d_model, eps=1e-5)
-        self.norm_ind = nn.LayerNorm(d_emb, eps=1e-5)
         self.post_attention_layernorm = nn.LayerNorm(d_model, eps=1e-5)
 
-    def forward(self, x, industry_embeds):
+    def forward(self, x, industry_decay_matrix):
         # x: (N, D)  — 股票特征
-        # industry_embeds: (N, d_emb) — 行业embedding
+        # industry_decay_matrix: (N, N) — 行业衰减矩阵
         residual = x
         x_states = self.norm_x(x)
-        ind_states = self.norm_ind(industry_embeds)
 
         # Self Attention
-        # Q / K 用行业信息引导，V 只用股票特征
-        qk_input = torch.cat([x_states, ind_states], dim=-1)
-        q = self.q_proj(qk_input)
-        k = self.k_proj(qk_input)
+        q = self.q_proj(x_states)
+        k = self.k_proj(x_states)
         v = self.v_proj(x_states)
 
         # 多头拆分
@@ -149,10 +146,17 @@ class SAttention(nn.Module):
             attn_weights = torch.softmax(
                 torch.matmul(qh, kh.transpose(0, 1)) / self.temperature, dim=-1
             )
+
+            # Apply industry decay matrix to attention weights
+            attn_weights = attn_weights * industry_decay_matrix
+            
+            # Renormalize after applying decay matrix
+            attn_weights = attn_weights / (attn_weights.sum(dim=-1, keepdim=True) + 1e-8)
+
             attn_weights = self.attn_dropout[i](attn_weights)
 
-            out = torch.matmul(attn_weights, vh)
-            attn_outputs.append(out)
+            attn_out = torch.matmul(attn_weights, vh)
+            attn_outputs.append(attn_out)
 
         hidden_states = torch.cat(attn_outputs, dim=-1)  # (N, D)
         hidden_states = self.o_proj(hidden_states)
@@ -230,6 +234,49 @@ class PPNet(nn.Module):
         # Prediction head
         self.prediction_head = nn.Linear(d_model, 1, bias=False)
 
+    def _build_industry_decay_matrix(
+        self, industry_indices: torch.Tensor, delta1: float = 0.6, delta2: float = 0.1
+    ) -> torch.Tensor:
+        """
+        Build Industry Decay Matrix as described in the paper.
+
+        Args:
+            industry_indices: (N, 2) tensor where each row contains [l1_i, l2_i],
+                            l1 = primary industry index, l2 = secondary industry index (integer encoded)
+            delta1: Decay factor for same primary industry but different secondary industry (1 > delta1 > delta2 ≥ 0)
+            delta2: Decay factor for different primary industries
+
+        Returns:
+            D: (N, N) Industry Decay Matrix where D[i,j] represents industry association weight between stock i and j
+        """
+        # Input validation
+        N = industry_indices.shape[0]
+        assert industry_indices.shape[1] == 2, "industry_indices must have shape (N, 2)"
+        assert 1 > delta1 > delta2 >= 0, "Decay factors must satisfy 1 > delta1 > delta2 ≥ 0"
+
+        # Extract industry indices
+        l1 = industry_indices[:, 0]  # (N,) primary industry indices
+        l2 = industry_indices[:, 1]  # (N,) secondary industry indices
+
+        # Create comparison matrices using broadcasting for vectorized operations
+        # This replaces the nested loops for better performance
+        l2_eq = (l2.unsqueeze(1) == l2.unsqueeze(0))  # (N, N) boolean matrix for same secondary industry
+        l1_eq = (l1.unsqueeze(1) == l1.unsqueeze(0))  # (N, N) boolean matrix for same primary industry
+
+        # Initialize matrix with delta2 (different primary industry case)
+        D = torch.full((N, N), delta2, dtype=torch.float32, device=industry_indices.device)
+
+        # Update to delta1 for same primary but different secondary industry
+        D[(l1_eq & ~l2_eq)] = delta1
+
+        # Update to 1.0 for same secondary industry
+        D[l2_eq] = 1.0
+        
+        # Set diagonal to 1.0 (self-connection)
+        D.fill_diagonal_(1.0)
+
+        return D
+
     def forward(
         self,
         industry_indices,
@@ -239,7 +286,7 @@ class PPNet(nn.Module):
     ):
         """
         Args:
-            industry_indices: (N,) industry index for each stock
+            industry_indices: (N, 2) l1 and l2 industry index for each stock
             stock_ts_features: (N, T, d_ts_feat) temporal features of stocks
             stock_cs_features: (N, d_cs_feat) cross-sectional features of stocks
             market_features: (N, d_market) market features
@@ -266,10 +313,10 @@ class PPNet(nn.Module):
         # Fuse temporal and cross-sectional representations
         fused_states = self.fusion_proj(gated_states)  # (N, d_model)
 
-        # Embed industries and apply spatial attention
-        industry_embeds = self.industry_embed(industry_indices)  # (N, d_emb)
+        # Apply spatial attention with industry decay matrix
+        industry_decay_matrix = self._build_industry_decay_matrix(industry_indices)
         spatial_out = self.spatial_attn(
-            fused_states, industry_embeds=industry_embeds
+            fused_states, industry_decay_matrix=industry_decay_matrix
         )  # (N, d_model)
 
         # Generate final prediction
