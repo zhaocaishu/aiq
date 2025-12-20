@@ -116,14 +116,14 @@ class SAttention(nn.Module):
         self.o_proj = nn.Linear(d_model, d_model)
 
         self.mlp = MLP(d_model, 2 * d_model)
-        self.norm_x = nn.LayerNorm(d_model, eps=1e-5)
+        self.input_layernorm = nn.LayerNorm(d_model, eps=1e-5)
         self.post_attention_layernorm = nn.LayerNorm(d_model, eps=1e-5)
 
     def forward(self, x, industry_decay_matrix):
         # x: (N, D)  — 股票特征
         # industry_decay_matrix: (N, N) — 行业衰减矩阵
         residual = x
-        x_states = self.norm_x(x)
+        x_states = self.input_layernorm(x)
 
         # Self Attention
         q = self.q_proj(x_states)
