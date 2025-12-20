@@ -141,15 +141,9 @@ class SAttention(nn.Module):
             kh = k[:, i, :]  # (N, head_dim)
             vh = v[:, i, :]  # (N, head_dim)
 
-            attn_weights = torch.softmax(
-                torch.matmul(qh, kh.transpose(0, 1)) / self.temperature, dim=-1
-            )
-
-            # Apply industry decay matrix to attention weights
-            attn_weights = attn_weights * industry_decay_matrix
-            
-            # Renormalize after applying decay matrix
-            attn_weights = attn_weights / (attn_weights.sum(dim=-1, keepdim=True) + 1e-8)
+            attn_logits = torch.matmul(qh, kh.transpose(0, 1)) / self.temperature
+            attn_logits = attn_logits + torch.log(industry_decay_matrix + 1e-8)  # 用log-space加法
+            attn_weights = torch.softmax(attn_logits, dim=-1)
 
             attn_weights = self.attn_dropout[i](attn_weights)
 
@@ -233,7 +227,7 @@ class PPNet(nn.Module):
         self.prediction_head = nn.Linear(d_model, 1, bias=False)
 
     def _build_industry_decay_matrix(
-        self, industry_indices: torch.Tensor, delta1: float = 0.6, delta2: float = 0.1
+        self, industry_indices: torch.Tensor, delta1: float = 0.65, delta2: float = 0.2
     ) -> torch.Tensor:
         """
         Build Industry Decay Matrix as described in the paper.
