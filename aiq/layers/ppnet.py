@@ -2,25 +2,9 @@ import math
 
 import torch
 from torch import nn
-from torch.nn.modules.linear import Linear
-from torch.nn.modules.dropout import Dropout
 from torch.nn.modules.normalization import LayerNorm
 
-
-class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, max_len=100):
-        super(PositionalEncoding, self).__init__()
-        pe = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(
-            torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)
-        )
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        self.register_buffer("pe", pe)
-
-    def forward(self, x):
-        return x + self.pe[: x.shape[1], :]
+from .embed import DataEmbedding
 
 
 class Gate(nn.Module):
@@ -50,6 +34,67 @@ class MLP(nn.Module):
     def forward(self, x):
         down_proj = self.down_proj(self.act_fn(self.gate_proj(x)) * self.up_proj(x))
         return down_proj
+
+
+class TAttention(nn.Module):
+    def __init__(self, d_in, d_model, nhead, dropout):
+        super().__init__()
+
+        self.enc_embedding = DataEmbedding(d_in, d_model, dropout)
+
+        self.d_model = d_model
+        self.nhead = nhead
+        self.head_dim = d_model // nhead
+
+        self.q_proj = nn.Linear(d_model, d_model, bias=False)
+        self.k_proj = nn.Linear(d_model, d_model, bias=False)
+        self.v_proj = nn.Linear(d_model, d_model, bias=False)
+
+        self.attn_dropout = nn.ModuleList([nn.Dropout(p=dropout) for _ in range(nhead)])
+
+        self.o_proj = nn.Linear(d_model, d_model)
+
+        self.mlp = MLP(d_model, 2 * d_model)
+        self.input_layernorm = LayerNorm(d_model, eps=1e-5)
+        self.post_attention_layernorm = LayerNorm(d_model, eps=1e-5)
+
+    def forward(self, x):
+        # Embedding
+        x_enc = self.enc_embedding(x)
+
+        # Self Attention
+        residual = x_enc
+        hidden_states = self.input_layernorm(x_enc)
+
+        q = self.q_proj(hidden_states)
+        k = self.k_proj(hidden_states)
+        v = self.v_proj(hidden_states)
+
+        attn_outputs = []
+        for i in range(self.nhead):
+            if i == self.nhead - 1:
+                qh = q[:, :, i * self.head_dim :]
+                kh = k[:, :, i * self.head_dim :]
+                vh = v[:, :, i * self.head_dim :]
+            else:
+                qh = q[:, :, i * self.head_dim : (i + 1) * self.head_dim]
+                kh = k[:, :, i * self.head_dim : (i + 1) * self.head_dim]
+                vh = v[:, :, i * self.head_dim : (i + 1) * self.head_dim]
+            attn_weights = torch.softmax(
+                torch.matmul(qh, kh.transpose(1, 2)) / math.sqrt(self.head_dim), dim=-1
+            )
+            attn_weights = self.attn_dropout[i](attn_weights)
+            attn_outputs.append(torch.matmul(attn_weights, vh))
+        hidden_states = torch.concat(attn_outputs, dim=-1)
+        hidden_states = self.o_proj(hidden_states)
+        hidden_states = residual + hidden_states
+
+        # Fully Connected
+        residual = hidden_states
+        hidden_states = self.post_attention_layernorm(hidden_states)
+        hidden_states = self.mlp(hidden_states)
+        hidden_states = residual + hidden_states
+        return hidden_states
 
 
 class SAttention(nn.Module):
@@ -121,61 +166,6 @@ class SAttention(nn.Module):
         return hidden_states
 
 
-class TAttention(nn.Module):
-    def __init__(self, d_model, nhead, dropout):
-        super().__init__()
-        self.d_model = d_model
-        self.nhead = nhead
-        self.head_dim = d_model // nhead
-
-        self.q_proj = nn.Linear(d_model, d_model, bias=False)
-        self.k_proj = nn.Linear(d_model, d_model, bias=False)
-        self.v_proj = nn.Linear(d_model, d_model, bias=False)
-
-        self.attn_dropout = nn.ModuleList([nn.Dropout(p=dropout) for _ in range(nhead)])
-
-        self.o_proj = nn.Linear(d_model, d_model)
-
-        self.mlp = MLP(d_model, 2 * d_model)
-        self.input_layernorm = LayerNorm(d_model, eps=1e-5)
-        self.post_attention_layernorm = LayerNorm(d_model, eps=1e-5)
-
-    def forward(self, x):
-        residual = x
-        hidden_states = self.input_layernorm(x)
-
-        # Self Attention
-        q = self.q_proj(hidden_states)
-        k = self.k_proj(hidden_states)
-        v = self.v_proj(hidden_states)
-
-        attn_outputs = []
-        for i in range(self.nhead):
-            if i == self.nhead - 1:
-                qh = q[:, :, i * self.head_dim :]
-                kh = k[:, :, i * self.head_dim :]
-                vh = v[:, :, i * self.head_dim :]
-            else:
-                qh = q[:, :, i * self.head_dim : (i + 1) * self.head_dim]
-                kh = k[:, :, i * self.head_dim : (i + 1) * self.head_dim]
-                vh = v[:, :, i * self.head_dim : (i + 1) * self.head_dim]
-            attn_weights = torch.softmax(
-                torch.matmul(qh, kh.transpose(1, 2)) / math.sqrt(self.head_dim), dim=-1
-            )
-            attn_weights = self.attn_dropout[i](attn_weights)
-            attn_outputs.append(torch.matmul(attn_weights, vh))
-        hidden_states = torch.concat(attn_outputs, dim=-1)
-        hidden_states = self.o_proj(hidden_states)
-        hidden_states = residual + hidden_states
-
-        # Fully Connected
-        residual = hidden_states
-        hidden_states = self.post_attention_layernorm(hidden_states)
-        hidden_states = self.mlp(hidden_states)
-        hidden_states = residual + hidden_states
-        return hidden_states
-
-
 class TemporalAttention(nn.Module):
     def __init__(self, d_model):
         super().__init__()
@@ -206,11 +196,12 @@ class PPNet(nn.Module):
         super(PPNet, self).__init__()
 
         # Temporal layers
-        self.temporal_hidden_dim = 64
-        self.temporal_proj = nn.Linear(d_ts_feat, self.temporal_hidden_dim)
-        self.temporal_pos_embed = PositionalEncoding(self.temporal_hidden_dim)
-        self.temporal_self_attn = TAttention(
-            d_model=self.temporal_hidden_dim, nhead=t_nhead, dropout=dropout
+        self.temporal_hidden_dim = d_model // 4
+        self.temporal_attn = TAttention(
+            d_in=d_ts_feat,
+            d_model=self.temporal_hidden_dim,
+            nhead=t_nhead,
+            dropout=dropout,
         )
         self.temporal_aggregator = TemporalAttention(d_model=self.temporal_hidden_dim)
 
@@ -256,19 +247,15 @@ class PPNet(nn.Module):
             predictions: (N, 1) prediction for each stock
         """
         # Process temporal stock features
-        temporal_states = self.temporal_proj(
+        temporal_out = self.temporal_attn(
             stock_ts_features
-        )  # (N, T, temporal_hidden_dim)
-        temporal_with_pos = self.temporal_pos_embed(temporal_states)
-        temporal_attn_output = self.temporal_self_attn(
-            temporal_with_pos
         )  # Intra-stock temporal attention
-        temporal_aggregated = self.temporal_aggregator(
-            temporal_attn_output
+        temporal_agg = self.temporal_aggregator(
+            temporal_out
         )  # (N, temporal_hidden_dim), aggregate over time
 
         # Concat temporal and cross-sectional representations
-        concat_states = torch.cat([temporal_aggregated, stock_cs_features], dim=-1)
+        concat_states = torch.cat([temporal_agg, stock_cs_features], dim=-1)
 
         # Apply gating to market features and modulate stock states
         gated_weights = self.market_gate(market_features)
@@ -281,10 +268,10 @@ class PPNet(nn.Module):
 
         # Embed industries and apply spatial attention
         industry_embeds = self.industry_embed(industry_indices)  # (N, d_emb)
-        spatial_attn_output = self.spatial_attn(
+        spatial_out = self.spatial_attn(
             fused_states, industry_embeds=industry_embeds
         )  # (N, d_model)
 
         # Generate final prediction
-        predictions = self.prediction_head(spatial_attn_output)  # (N, 1)
+        predictions = self.prediction_head(spatial_out)  # (N, 1)
         return predictions
