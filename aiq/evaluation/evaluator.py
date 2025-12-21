@@ -37,11 +37,12 @@ class Evaluator:
             raise ValueError(f"Missing columns: {missing_cols}")
 
     def _extract_instrument_returns(self, df):
-        close = df["Close"]
         if "Adj_factor" in df.columns:
-            close = close * df["Adj_factor"]
+            adj_close = df["Close"] * df["Adj_factor"]
+        else:
+            adj_close = df["Close"]
 
-        returns = Ref(close, -5) / Ref(close, -1) - 1
+        returns = Ref(adj_close, -5) / Ref(adj_close, -1) - 1
 
         return pd.concat(
             [df[["Instrument", "Date"]], returns.rename("RET_5D")],
@@ -80,7 +81,9 @@ class Evaluator:
 
         # Merge label, prediction and benchmark returns
         merged_df = returns_df.merge(
-            pred_df, on=["Instrument", "Date"], how="inner"
+            pred_df[["Instrument", "Date", "PRED_RET_5D"]],
+            on=["Instrument", "Date"],
+            how="inner",
         ).merge(benchmark_returns_df, on="Date", how="inner")
 
         return merged_df
@@ -89,7 +92,7 @@ class Evaluator:
         """Calculate Spearman correlation coefficient (IC) for a group."""
         if len(group) < self.min_samples:
             return np.nan
-        
+
         return group[self.pred_col].corr(group[self.label_col], method="spearman")
 
     def _compute_hit_rate(self, group):
@@ -116,7 +119,7 @@ class Evaluator:
         top_pred = group.nlargest(self.top_k, self.pred_col, keep="first")
 
         # Compute Precision@K by checking where predicted return beats the benchmark
-        true_positives = (top_pred["PRED_RET_5D"] > top_pred["BENCH_RET_5D"]).sum()
+        true_positives = (top_pred[self.label_col] > top_pred["BENCH_RET_5D"]).sum()
         precision_at_k = true_positives / self.top_k
 
         return {f"Precision@{self.top_k}": precision_at_k}
@@ -138,9 +141,11 @@ class Evaluator:
 
         # Calculate the daily average excess return of the Top N portfolio
         daily_top_stocks["EXCESS_RET_5D"] = (
-            daily_top_stocks["PRED_RET_5D"] - daily_top_stocks["BENCH_RET_5D"]
+            daily_top_stocks["RET_5D"] - daily_top_stocks["BENCH_RET_5D"]
         )
-        daily_position_ret = daily_top_stocks.groupby(self.date_col)["EXCESS_RET_5D"].mean()
+        daily_position_ret = daily_top_stocks.groupby(self.date_col)[
+            "EXCESS_RET_5D"
+        ].mean()
 
         # Calculate the total cumulative growth factor over the entire dataset
         total_growth = (1 + daily_position_ret).prod()
@@ -166,7 +171,6 @@ class Evaluator:
                 self.label_col,
                 self.pred_col,
                 "Instrument",
-                "PRED_RET_5D",
                 "BENCH_RET_5D",
             ],
         )
@@ -174,7 +178,7 @@ class Evaluator:
         # Calculate daily IC and ICIR
         daily_ic = df.groupby(self.date_col).apply(self._compute_ic).dropna()
         ic = daily_ic.mean()
-        icir = daily_ic.mean() / daily_ic.std() if daily_ic.std() != 0 else np.nan
+        icir = ic / daily_ic.std() if daily_ic.std() != 0 else np.nan
 
         # Calculate daily hit rates
         daily_hr = pd.DataFrame(
