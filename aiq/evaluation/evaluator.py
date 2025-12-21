@@ -161,7 +161,7 @@ class Evaluator:
 
         self._validate_columns(
             df,
-            extra_cols=[
+            required_cols=[
                 self.date_col,
                 self.label_col,
                 self.pred_col,
