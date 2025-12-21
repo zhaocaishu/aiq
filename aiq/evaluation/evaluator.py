@@ -67,23 +67,21 @@ class Evaluator:
             .dropna(subset=["RET_5D"])
         )
 
-        # Merge with instruments and predictions
-        merged_df = returns_df.merge(pred_df, on=["Instrument", "Date"], how="inner")
-
         # Load benchmakr features
         benchmark_features_df = DataLoader.load_instruments_features(
             self.data_dir, [self.benchmark], self.start_time, self.end_time
         )
-        benchmark_returns = (
+        benchmark_returns_df = (
             benchmark_features_df.groupby("Instrument", group_keys=False)
             .apply(self._extract_instrument_returns)
             .dropna(subset=["RET_5D"])
             .rename(columns={"RET_5D": "BENCH_RET_5D"})
         )[["Date", "BENCH_RET_5D"]]
 
-        # Merge with benchmark returns
-        merged_df = merged_df.merge(benchmark_returns, on="Date", how="inner")
-        merged_df["EXCESS_RET_5D"] = merged_df["RET_5D"] - merged_df["BENCH_RET_5D"]
+        # Merge gt, pred and benchmark returns
+        merged_df = returns_df.merge(
+            pred_df, on=["Instrument", "Date"], how="inner"
+        ).merge(benchmark_returns_df, on="Date", how="inner")
 
         return merged_df
 
@@ -111,27 +109,27 @@ class Evaluator:
 
     def _compute_precision_at_k(self, group):
         """Compute Precision@K — proportion of correctly predicted positive samples among top-K predictions."""
-        # Validate required columns
-        self._validate_columns(group, extra_cols=["Instrument", "EXCESS_RET_5D"])
-
-        # Drop invalid rows
-        group = group.dropna(subset=[self.pred_col, "EXCESS_RET_5D"])
         if len(group) < self.min_samples:
             return {f"Precision@{self.top_k}": np.nan}
 
-        # Select top-K predictions
-        top_pred = group.nlargest(self.top_k, self.pred_col, keep="all")
+        # Validate required columns
+        self._validate_columns(group, extra_cols=["PRED_RET_5D", "BENCH_RET_5D"])
 
-        # Compute Precision@K (fraction of true positives)
-        precision_at_k = np.mean(top_pred["EXCESS_RET_5D"].to_numpy() > 0)
+        # Drop rows with missing return data first to ensure top-K are evaluatable
+        valid_group = group.dropna(subset=["PRED_RET_5D", "BENCH_RET_5D"])
 
-        # Compute benchmark precision@k
-        benchmark_precision_at_k = np.mean(group["BENCH_RET_5D"].to_numpy() > 0)
+        # If valid samples are fewer than K, metric might be unreliable depending on business logic
+        if len(valid_group) < self.top_k:
+            return {f"Precision@{self.top_k}": np.nan}
 
-        return {
-            f"Precision@{self.top_k}": precision_at_k,
-            f"BenchmarkPrecision@{self.top_k}": benchmark_precision_at_k,
-        }
+        # Select the top-K records based on prediction scores
+        top_pred = valid_group.nlargest(self.top_k, self.pred_col, keep="first")
+
+        # Compute Precision@K by checking where predicted return beats the benchmark
+        true_positives = (top_pred["PRED_RET_5D"] > top_pred["BENCH_RET_5D"]).sum()
+        precision_at_k = true_positives / self.top_k
+
+        return {f"Precision@{self.top_k}": precision_at_k}
 
     def _compute_portfolio_arr(
         self, pred_df, trading_days_per_year=252, holding_period=5
@@ -142,27 +140,24 @@ class Evaluator:
         """
 
         # Select the Top N stocks for each date based on PRED_RET_5D
-        top_stocks = (
+        daily_top_stocks = (
             pred_df.sort_values(["Date", self.pred_col], ascending=[True, False])
             .groupby("Date")
             .head(self.top_k)
         )
 
         # Calculate the daily average excess return of the Top N portfolio
-        daily_avg_ret = top_stocks.groupby("Date")["EXCESS_RET_5D"].mean()
-
-        # Drop any NaN values to avoid calculation errors
-        daily_avg_ret = daily_avg_ret.dropna()
-        n = len(daily_avg_ret)
-
-        if n == 0:
-            return 0.0
+        daily_top_stocks["EXCESS_RET_5D"] = (
+            daily_top_stocks["PRED_RET_5D"] - daily_top_stocks["BENCH_RET_5D"]
+        )
+        daily_position_ret = daily_top_stocks.groupby("Date")["EXCESS_RET_5D"].mean()
 
         # Calculate the total cumulative growth factor over the entire dataset
-        total_growth = (1 + daily_avg_ret).prod()
+        total_growth = (1 + daily_position_ret).prod()
 
         # Convert total growth to an average periodic growth rate
-        geo_mean_periodic_ret = total_growth ** (1 / n) - 1
+        n_periods = len(daily_position_ret)
+        geo_mean_periodic_ret = total_growth ** (1 / n_periods) - 1
 
         # Apply the compounding formula for annualization
         ann_factor = trading_days_per_year / holding_period
