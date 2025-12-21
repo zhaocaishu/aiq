@@ -50,41 +50,45 @@ class Evaluator:
         )
 
     def _setup_data(self, pred_df):
-        # Load instruments
-        instruments_df = DataLoader.load_instruments(
-            self.data_dir, self.benchmark, self.start_time, self.end_time
-        )[["Instrument", "Date"]]
-
-        # Load features
-        instruments = instruments_df["Instrument"].unique().tolist()
-        features_df = DataLoader.load_instruments_features(
-            self.data_dir, instruments, self.start_time, self.end_time
+        # Retrieve the list of instruments and their features
+        unique_instruments = (
+            DataLoader.load_instruments(
+                self.data_dir, self.benchmark, self.start_time, self.end_time
+            )["Instrument"]
+            .unique()
+            .tolist()
         )
 
-        # Calculate returns per instrument and drop NaNs
+        all_assets = list(set(unique_instruments + [self.benchmark]))
+
+        # Batch load all required features in one call
+        features_df = DataLoader.load_instruments_features(
+            self.data_dir, all_assets, self.start_time, self.end_time
+        )
+
+        # Calculate returns using vectorized operations
         returns_df = (
             features_df.groupby("Instrument", group_keys=False)
             .apply(self._extract_instrument_returns)
             .dropna(subset=["RET_5D"])
         )
 
-        # Load benchmakr features
-        benchmark_features_df = DataLoader.load_instruments_features(
-            self.data_dir, [self.benchmark], self.start_time, self.end_time
-        )
-        benchmark_returns_df = (
-            benchmark_features_df.groupby("Instrument", group_keys=False)
-            .apply(self._extract_instrument_returns)
-            .dropna(subset=["RET_5D"])
-            .rename(columns={"RET_5D": "BENCH_RET_5D"})
-        )[["Date", "BENCH_RET_5D"]]
+        # Isolate benchmark returns and rename for merging
+        benchmark_returns = returns_df[
+            returns_df["Instrument"] == self.benchmark
+        ].rename(columns={"RET_5D": "BENCH_RET_5D"})[["Date", "BENCH_RET_5D"]]
 
-        # Merge label, prediction and benchmark returns
-        merged_df = returns_df.merge(
+        # Filter target instruments (excluding benchmark if it's not part of the investment pool)
+        instrument_returns = returns_df[
+            returns_df["Instrument"].isin(unique_instruments)
+        ]
+
+        # Multi-stage merge to align actual, predicted, and benchmark data
+        merged_df = instrument_returns.merge(
             pred_df[["Instrument", "Date", "PRED_RET_5D"]],
             on=["Instrument", "Date"],
             how="inner",
-        ).merge(benchmark_returns_df, on="Date", how="inner")
+        ).merge(benchmark_returns, on="Date", how="inner")
 
         return merged_df
 
@@ -141,7 +145,7 @@ class Evaluator:
 
         # Calculate the daily average excess return of the Top N portfolio
         daily_top_stocks["EXCESS_RET_5D"] = (
-            daily_top_stocks["RET_5D"] - daily_top_stocks["BENCH_RET_5D"]
+            daily_top_stocks[self.label_col] - daily_top_stocks["BENCH_RET_5D"]
         )
         daily_position_ret = daily_top_stocks.groupby(self.date_col)[
             "EXCESS_RET_5D"
