@@ -14,6 +14,7 @@ class Evaluator:
         start_time,
         end_time,
         benchmark="000905.SH",
+        date_col="Date",
         pred_col="PRED_RET_5D",
         label_col="RET_5D",
         top_k=30,
@@ -23,6 +24,7 @@ class Evaluator:
         self.start_time = start_time
         self.end_time = end_time
         self.benchmark = benchmark
+        self.date_col = date_col
         self.pred_col = pred_col
         self.label_col = label_col
         self.top_k = top_k
@@ -129,8 +131,8 @@ class Evaluator:
 
         # Select the Top N stocks for each date based on PRED_RET_5D
         daily_top_stocks = (
-            pred_df.sort_values(["Date", self.pred_col], ascending=[True, False])
-            .groupby("Date")
+            pred_df.sort_values([self.date_col, self.pred_col], ascending=[True, False])
+            .groupby(self.date_col)
             .head(self.top_k)
         )
 
@@ -138,7 +140,7 @@ class Evaluator:
         daily_top_stocks["EXCESS_RET_5D"] = (
             daily_top_stocks["PRED_RET_5D"] - daily_top_stocks["BENCH_RET_5D"]
         )
-        daily_position_ret = daily_top_stocks.groupby("Date")["EXCESS_RET_5D"].mean()
+        daily_position_ret = daily_top_stocks.groupby(self.date_col)["EXCESS_RET_5D"].mean()
 
         # Calculate the total cumulative growth factor over the entire dataset
         total_growth = (1 + daily_position_ret).prod()
@@ -153,36 +155,36 @@ class Evaluator:
 
         return arr
 
-    def evaluate(self, pred_df, groupby_col="Date"):
+    def evaluate(self, pred_df):
         """Evaluate model performance with IC, ICIR, and Hit Rate metrics."""
         df = self._setup_data(pred_df)
 
         self._validate_columns(
             df,
             extra_cols=[
-                groupby_col,
-                "Date",
+                self.date_col,
+                self.label_col,
+                self.pred_col,
                 "Instrument",
-                "RET_5D",
                 "PRED_RET_5D",
                 "BENCH_RET_5D",
             ],
         )
 
         # Calculate daily IC and ICIR
-        daily_ic = df.groupby(groupby_col).apply(self._compute_ic).dropna()
+        daily_ic = df.groupby(self.date_col).apply(self._compute_ic).dropna()
         ic = daily_ic.mean()
         icir = daily_ic.mean() / daily_ic.std() if daily_ic.std() != 0 else np.nan
 
         # Calculate daily hit rates
         daily_hr = pd.DataFrame(
-            df.groupby(groupby_col).apply(self._compute_hit_rate).tolist()
+            df.groupby(self.date_col).apply(self._compute_hit_rate).tolist()
         )
         hr = daily_hr.mean().to_dict()
 
         # Calculate daily precision@k
         daily_precision_k = pd.DataFrame(
-            df.groupby(groupby_col).apply(self._compute_precision_at_k).tolist()
+            df.groupby(self.date_col).apply(self._compute_precision_at_k).tolist()
         )
         precision_k = daily_precision_k.mean().to_dict()
 
