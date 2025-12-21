@@ -15,8 +15,8 @@ class Evaluator:
         start_time="",
         end_time="",
         benchmark="000905.SH",
-        pred_col="PRED",
-        label_col="LABEL",
+        pred_col="PRED_RET_5D",
+        label_col="RET_5D",
         top_k=30,
         min_samples=50,
     ):
@@ -44,17 +44,17 @@ class Evaluator:
         returns = Ref(close, -5) / Ref(close, -1) - 1
 
         return pd.concat(
-            [df[["Instrument", "Date"]], returns.rename("Return")],
+            [df[["Instrument", "Date"]], returns.rename("RET_5D")],
             axis=1,
         )
 
     def _setup_data(self, pred_df):
-        # Load available instruments within the date range
+        # Load instruments
         instruments_df = DataLoader.load_instruments(
             self.data_dir, self.benchmark, self.start_time, self.end_time
         )[["Instrument", "Date"]]
 
-        # Load instrument features
+        # Load features
         instruments = instruments_df["Instrument"].unique().tolist()
         features_df = DataLoader.load_instruments_features(
             self.data_dir, instruments, self.start_time, self.end_time
@@ -64,17 +64,13 @@ class Evaluator:
         returns_df = (
             features_df.groupby("Instrument", group_keys=False)
             .apply(self._extract_instrument_returns)
-            .dropna(subset=["Return"])
+            .dropna(subset=["RET_5D"])
         )
 
         # Merge with instruments and predictions
-        previous_len = len(returns_df)
         merged_df = returns_df.merge(
             instruments_df, on=["Instrument", "Date"], how="inner"
         ).merge(pred_df, on=["Instrument", "Date"], how="inner")
-        print(
-            f"Rows after merging with instruments and predictions: {len(merged_df)} (previously {previous_len})"
-        )
 
         # Load benchmakr features
         benchmark_features_df = DataLoader.load_instruments_features(
@@ -83,28 +79,21 @@ class Evaluator:
         benchmark_returns = (
             benchmark_features_df.groupby("Instrument", group_keys=False)
             .apply(self._extract_instrument_returns)
-            .dropna(subset=["Return"])
-            .rename(columns={"Return": "BenchmarkReturn"})
-        )[["Date", "BenchmarkReturn"]]
+            .dropna(subset=["RET_5D"])
+            .rename(columns={"RET_5D": "BENCH_RET_5D"})
+        )[["Date", "BENCH_RET_5D"]]
 
         # Merge with benchmark returns
-        previous_len = len(merged_df)
         merged_df = merged_df.merge(benchmark_returns, on="Date", how="inner")
-        print(
-            f"Rows after merging with benchmark: {len(merged_df)} (previously {previous_len})"
-        )
-
-        merged_df["ExcessReturn"] = merged_df["Return"] - merged_df["BenchmarkReturn"]
+        merged_df["EXCESS_RET_5D"] = merged_df["RET_5D"] - merged_df["BENCH_RET_5D"]
 
         return merged_df
 
     def _compute_ic(self, group):
         """Calculate Spearman correlation coefficient (IC) for a group."""
-        return (
-            spearmanr(group[self.pred_col], group[self.label_col])[0]
-            if len(group) >= self.min_samples
-            else np.nan
-        )
+        if len(group) < self.min_samples:
+            return np.nan
+        return group[self.pred_col].corr(group[self.label_col], method="spearman")
 
     def _compute_hit_rate(self, group):
         """Calculate Top-K and Bottom-K hit rates for a group."""
@@ -125,10 +114,10 @@ class Evaluator:
     def _compute_precision_at_k(self, group):
         """Compute Precision@K — proportion of correctly predicted positive samples among top-K predictions."""
         # Validate required columns
-        self._validate_columns(group, extra_cols=["Instrument", "ExcessReturn"])
+        self._validate_columns(group, extra_cols=["Instrument", "EXCESS_RET_5D"])
 
         # Drop invalid rows
-        group = group.dropna(subset=[self.pred_col, "ExcessReturn"])
+        group = group.dropna(subset=[self.pred_col, "EXCESS_RET_5D"])
         if len(group) < self.min_samples:
             return {f"Precision@{self.top_k}": np.nan}
 
@@ -136,17 +125,19 @@ class Evaluator:
         top_pred = group.nlargest(self.top_k, self.pred_col, keep="all")
 
         # Compute Precision@K (fraction of true positives)
-        precision_at_k = np.mean(top_pred["ExcessReturn"].to_numpy() > 0)
+        precision_at_k = np.mean(top_pred["EXCESS_RET_5D"].to_numpy() > 0)
 
-        # Compute baseline precision@k
-        baseline_precision_at_k = np.mean(group["ExcessReturn"].to_numpy() > 0)
+        # Compute benchmark precision@k
+        benchmark_precision_at_k = np.mean(group["BENCH_RET_5D"].to_numpy() > 0)
 
         return {
             f"Precision@{self.top_k}": precision_at_k,
-            f"BaselinePrecision@{self.top_k}": baseline_precision_at_k,
+            f"BenchmarkPrecision@{self.top_k}": benchmark_precision_at_k,
         }
 
-    def _compute_portfolio_arr(self, pred_df, trading_days_per_year=252, window_days=5):
+    def _compute_portfolio_arr(
+        self, pred_df, trading_days_per_year=252, holding_period=5
+    ):
         """
         Calculates and returns only the Annualized Rate of Return (ARR)
         based on the Top N predicted returns daily.
@@ -154,20 +145,30 @@ class Evaluator:
 
         # Select the Top N stocks for each date based on PRED_RET_5D
         top_stocks = (
-            pred_df.sort_values(["Date", "PRED_RET_5D"], ascending=[True, False])
+            pred_df.sort_values(["Date", self.pred_col], ascending=[True, False])
             .groupby("Date")
             .head(self.top_k)
         )
 
-        # Calculate the daily average return of the Top N portfolio
-        daily_avg_ret = top_stocks.groupby("Date")["PRED_RET_5D"].mean()
+        # Calculate the daily average excess return of the Top N portfolio
+        daily_avg_ret = top_stocks.groupby("Date")["EXCESS_RET_5D"].mean()
 
-        # Calculate the mean periodic return across all dates
-        mean_periodic_ret = daily_avg_ret.mean()
+        # Drop any NaN values to avoid calculation errors
+        daily_avg_ret = daily_avg_ret.dropna()
+        n = len(daily_avg_ret)
 
-        # Apply the compounding ARR formula
-        ann_factor = trading_days_per_year / window_days
-        arr = (1 + mean_periodic_ret) ** ann_factor - 1
+        if n == 0:
+            return 0.0
+
+        # Calculate the total cumulative growth factor over the entire dataset
+        total_growth = (1 + daily_avg_ret).prod()
+
+        # Convert total growth to an average periodic growth rate
+        geo_mean_periodic_ret = total_growth ** (1 / n) - 1
+
+        # Apply the compounding formula for annualization
+        ann_factor = trading_days_per_year / holding_period
+        arr = (1 + geo_mean_periodic_ret) ** ann_factor - 1
 
         return arr
 
@@ -175,7 +176,7 @@ class Evaluator:
         """Evaluate model performance with IC, ICIR, and Hit Rate metrics."""
         df = self._setup_data(pred_df)
 
-        self._validate_columns(df, extra_cols=[groupby_col, "Instrument", "Return"])
+        self._validate_columns(df, extra_cols=[groupby_col, "Instrument", "RET_5D"])
 
         # Calculate daily IC and ICIR
         daily_ic = df.groupby(groupby_col).apply(self._compute_ic).dropna()
