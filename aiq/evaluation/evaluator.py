@@ -78,7 +78,7 @@ class Evaluator:
             .rename(columns={"RET_5D": "BENCH_RET_5D"})
         )[["Date", "BENCH_RET_5D"]]
 
-        # Merge gt, pred and benchmark returns
+        # Merge label, prediction and benchmark returns
         merged_df = returns_df.merge(
             pred_df, on=["Instrument", "Date"], how="inner"
         ).merge(benchmark_returns_df, on="Date", how="inner")
