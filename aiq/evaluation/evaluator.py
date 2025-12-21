@@ -45,7 +45,7 @@ class Evaluator:
         returns = Ref(adj_close, -5) / Ref(adj_close, -1) - 1
 
         return pd.concat(
-            [df[["Instrument", "Date"]], returns.rename("RET_5D")],
+            [df[["Date", "Instrument"]], returns.rename("RET_5D")],
             axis=1,
         )
 
@@ -59,11 +59,11 @@ class Evaluator:
             .tolist()
         )
 
-        all_assets = list(set(unique_instruments + [self.benchmark]))
+        all_instruments = list(set(unique_instruments + [self.benchmark]))
 
         # Batch load all required features in one call
         features_df = DataLoader.load_instruments_features(
-            self.data_dir, all_assets, self.start_time, self.end_time
+            self.data_dir, all_instruments, self.start_time, self.end_time
         )
 
         # Calculate returns using vectorized operations
@@ -85,8 +85,8 @@ class Evaluator:
 
         # Multi-stage merge to align actual, predicted, and benchmark data
         merged_df = instrument_returns.merge(
-            pred_df[["Instrument", "Date", "PRED_RET_5D"]],
-            on=["Instrument", "Date"],
+            pred_df[["Date", "Instrument", "PRED_RET_5D"]],
+            on=["Date", "Instrument"],
             how="inner",
         ).merge(benchmark_returns, on="Date", how="inner")
 
