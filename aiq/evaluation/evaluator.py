@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-from scipy.stats import spearmanr
 
 from aiq.dataset.loader import DataLoader
 from aiq.ops import Ref
@@ -11,9 +10,9 @@ class Evaluator:
 
     def __init__(
         self,
-        data_dir=None,
-        start_time="",
-        end_time="",
+        data_dir,
+        start_time,
+        end_time,
         benchmark="000905.SH",
         pred_col="PRED_RET_5D",
         label_col="RET_5D",
@@ -29,10 +28,9 @@ class Evaluator:
         self.top_k = top_k
         self.min_samples = min_samples
 
-    def _validate_columns(self, df, extra_cols=None):
+    def _validate_columns(self, df, required_cols=None):
         """Check if DataFrame contains required columns."""
-        required_cols = {self.pred_col, self.label_col} | set(extra_cols or [])
-        missing_cols = required_cols - set(df.columns)
+        missing_cols = set(required_cols) - set(df.columns)
         if missing_cols:
             raise ValueError(f"Missing columns: {missing_cols}")
 
@@ -89,11 +87,11 @@ class Evaluator:
         """Calculate Spearman correlation coefficient (IC) for a group."""
         if len(group) < self.min_samples:
             return np.nan
+        
         return group[self.pred_col].corr(group[self.label_col], method="spearman")
 
     def _compute_hit_rate(self, group):
         """Calculate Top-K and Bottom-K hit rates for a group."""
-        self._validate_columns(group, extra_cols=["Instrument"])
         if len(group) < self.min_samples:
             return {f"HR@Top{self.top_k}": np.nan, f"HR@Bottom{self.top_k}": np.nan}
 
@@ -112,18 +110,8 @@ class Evaluator:
         if len(group) < self.min_samples:
             return {f"Precision@{self.top_k}": np.nan}
 
-        # Validate required columns
-        self._validate_columns(group, extra_cols=["PRED_RET_5D", "BENCH_RET_5D"])
-
-        # Drop rows with missing return data first to ensure top-K are evaluatable
-        valid_group = group.dropna(subset=["PRED_RET_5D", "BENCH_RET_5D"])
-
-        # If valid samples are fewer than K, metric might be unreliable depending on business logic
-        if len(valid_group) < self.top_k:
-            return {f"Precision@{self.top_k}": np.nan}
-
         # Select the top-K records based on prediction scores
-        top_pred = valid_group.nlargest(self.top_k, self.pred_col, keep="first")
+        top_pred = group.nlargest(self.top_k, self.pred_col, keep="first")
 
         # Compute Precision@K by checking where predicted return beats the benchmark
         true_positives = (top_pred["PRED_RET_5D"] > top_pred["BENCH_RET_5D"]).sum()
@@ -169,34 +157,44 @@ class Evaluator:
         """Evaluate model performance with IC, ICIR, and Hit Rate metrics."""
         df = self._setup_data(pred_df)
 
-        self._validate_columns(df, extra_cols=[groupby_col, "Instrument", "RET_5D"])
+        self._validate_columns(
+            df,
+            extra_cols=[
+                groupby_col,
+                "Date",
+                "Instrument",
+                "RET_5D",
+                "PRED_RET_5D",
+                "BENCH_RET_5D",
+            ],
+        )
 
         # Calculate daily IC and ICIR
         daily_ic = df.groupby(groupby_col).apply(self._compute_ic).dropna()
-        ic_mean = daily_ic.mean()
-        icir = ic_mean / daily_ic.std() if daily_ic.std() != 0 else np.nan
+        ic = daily_ic.mean()
+        icir = daily_ic.mean() / daily_ic.std() if daily_ic.std() != 0 else np.nan
 
         # Calculate daily hit rates
         daily_hr = pd.DataFrame(
             df.groupby(groupby_col).apply(self._compute_hit_rate).tolist()
         )
-        hr_mean = daily_hr.mean().to_dict()
+        hr = daily_hr.mean().to_dict()
 
         # Calculate daily precision@k
         daily_precision_k = pd.DataFrame(
             df.groupby(groupby_col).apply(self._compute_precision_at_k).tolist()
         )
-        precision_k_mean = daily_precision_k.mean().to_dict()
+        precision_k = daily_precision_k.mean().to_dict()
 
         # Calculate portfolio ARR
         portfolio_arr = self._compute_portfolio_arr(df)
 
         # Combine results
         results = {
-            "IC": ic_mean,
+            "IC": ic,
             "ICIR": icir,
-            **hr_mean,
-            **precision_k_mean,
+            **hr,
+            **precision_k,
             "ARR": portfolio_arr,
         }
         return pd.DataFrame([results]).to_markdown(index=False, floatfmt=".4f")
