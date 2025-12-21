@@ -68,9 +68,7 @@ class Evaluator:
         )
 
         # Merge with instruments and predictions
-        merged_df = returns_df.merge(
-            instruments_df, on=["Instrument", "Date"], how="inner"
-        ).merge(pred_df, on=["Instrument", "Date"], how="inner")
+        merged_df = returns_df.merge(pred_df, on=["Instrument", "Date"], how="inner")
 
         # Load benchmakr features
         benchmark_features_df = DataLoader.load_instruments_features(
