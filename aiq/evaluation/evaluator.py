@@ -58,12 +58,8 @@ class Evaluator:
             .unique()
             .tolist()
         )
-
-        all_assets = list(set(unique_instruments + [self.benchmark]))
-
-        # Batch load all required features in one call
-        features_df = DataLoader.load_instruments_features(
-            self.data_dir, all_assets, self.start_time, self.end_time
+        instrument_features = DataLoader.load_instruments_features(
+            self.data_dir, instruments, self.start_time, self.end_time
         )
         instrument_returns = (
             instrument_features.groupby("Instrument", group_keys=False)
