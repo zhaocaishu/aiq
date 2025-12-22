@@ -45,7 +45,7 @@ class Evaluator:
         returns = Ref(adj_close, -5) / Ref(adj_close, -1) - 1
 
         return pd.concat(
-            [df[["Instrument", "Date"]], returns.rename("RET_5D")],
+            [df[["Date", "Instrument"]], returns.rename("RET_5D")],
             axis=1,
         )
 
@@ -58,8 +58,12 @@ class Evaluator:
             .unique()
             .tolist()
         )
-        instrument_features = DataLoader.load_instruments_features(
-            self.data_dir, instruments, self.start_time, self.end_time
+
+        all_assets = list(set(unique_instruments + [self.benchmark]))
+
+        # Batch load all required features in one call
+        features_df = DataLoader.load_instruments_features(
+            self.data_dir, all_assets, self.start_time, self.end_time
         )
         instrument_returns = (
             instrument_features.groupby("Instrument", group_keys=False)
@@ -79,8 +83,8 @@ class Evaluator:
 
         # Multi-stage merge to align actual, predicted, and benchmark data
         merged_df = instrument_returns.merge(
-            pred_df[["Instrument", "Date", "PRED_RET_5D"]],
-            on=["Instrument", "Date"],
+            pred_df[["Date", "Instrument", "PRED_RET_5D"]],
+            on=["Date", "Instrument"],
             how="inner",
         ).merge(benchmark_returns, on="Date", how="inner")
 
