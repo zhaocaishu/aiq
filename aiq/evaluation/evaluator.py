@@ -50,38 +50,32 @@ class Evaluator:
         )
 
     def _setup_data(self, pred_df):
-        # Retrieve the list of instruments and their features
-        unique_instruments = (
+        # Load and process instrument returns
+        instruments = (
             DataLoader.load_instruments(
                 self.data_dir, self.benchmark, self.start_time, self.end_time
             )["Instrument"]
             .unique()
             .tolist()
         )
-
-        all_assets = list(set(unique_instruments + [self.benchmark]))
-
-        # Batch load all required features in one call
-        features_df = DataLoader.load_instruments_features(
-            self.data_dir, all_assets, self.start_time, self.end_time
+        instrument_features = DataLoader.load_instruments_features(
+            self.data_dir, instruments, self.start_time, self.end_time
         )
-
-        # Calculate returns using vectorized operations
-        returns_df = (
-            features_df.groupby("Instrument", group_keys=False)
+        instrument_returns = (
+            instrument_features.groupby("Instrument", group_keys=False)
             .apply(self._extract_instrument_returns)
             .dropna(subset=["RET_5D"])
         )
 
-        # Isolate benchmark returns and rename for merging
-        benchmark_returns = returns_df[
-            returns_df["Instrument"] == self.benchmark
-        ].rename(columns={"RET_5D": "BENCH_RET_5D"})[["Date", "BENCH_RET_5D"]]
-
-        # Filter target instruments (excluding benchmark if it's not part of the investment pool)
-        instrument_returns = returns_df[
-            returns_df["Instrument"].isin(unique_instruments)
-        ]
+        # Load and process benchmark returns
+        benchmark_features = DataLoader.load_markets_features(
+            self.data_dir, [self.benchmark], self.start_time, self.end_time
+        )
+        benchmark_returns = (
+            self._extract_instrument_returns(benchmark_features)
+            .dropna(subset=["RET_5D"])
+            .rename(columns={"RET_5D": "BENCH_RET_5D"})[["Date", "BENCH_RET_5D"]]
+        )
 
         # Multi-stage merge to align actual, predicted, and benchmark data
         merged_df = instrument_returns.merge(
