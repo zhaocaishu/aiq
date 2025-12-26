@@ -9,14 +9,28 @@ from .embed import DataEmbedding
 class Gate(nn.Module):
     def __init__(self, d_input, d_output, beta=1.0):
         super().__init__()
-        self.trans = nn.Linear(d_input, d_output)
+
         self.d_output = d_output
         self.t = beta
 
-    def forward(self, gate_input):
-        output = self.trans(gate_input)
-        output = torch.softmax(output / self.t, dim=-1)
-        return self.d_output * output
+        self.encoder = nn.Sequential(
+            nn.Linear(d_input, d_output), nn.SiLU(), nn.Linear(d_output, d_output)
+        )
+
+        # 控制行业矩阵的衰减程度：市场波动大时，行业间联动可能增强或减弱
+        self.cohesion_head = nn.Linear(d_output, 1)
+
+    def forward(self, x):
+        x_enc = self.encoder(x)
+
+        # 特征缩放因子
+        x_scale = torch.softmax(x_enc / self.t, dim=-1)
+        x_scale = self.d_output * x_scale
+
+        # 限制在 [0.5, 1.5] 之间，作为 delta 的缩放因子
+        cohesion_scale = torch.sigmoid(self.cohesion_head(x_enc)) + 0.5
+
+        return x_scale, cohesion_scale
 
 
 class MLP(nn.Module):
@@ -142,7 +156,9 @@ class SAttention(nn.Module):
             vh = v[:, i, :]  # (N, head_dim)
 
             attn_logits = torch.matmul(qh, kh.transpose(0, 1)) / self.temperature
-            attn_logits = attn_logits + torch.log(industry_decay_matrix + 1e-8)  # 用log-space加法
+            attn_logits = attn_logits + torch.log(
+                industry_decay_matrix + 1e-8
+            )  # 用log-space加法
             attn_weights = torch.softmax(attn_logits, dim=-1)
 
             attn_weights = self.attn_dropout[i](attn_weights)
@@ -244,7 +260,9 @@ class PPNet(nn.Module):
         # Input validation
         N = industry_indices.shape[0]
         assert industry_indices.shape[1] == 2, "industry_indices must have shape (N, 2)"
-        assert 1 > delta1 > delta2 >= 0, "Decay factors must satisfy 1 > delta1 > delta2 ≥ 0"
+        assert (
+            1 > delta1 > delta2 >= 0
+        ), "Decay factors must satisfy 1 > delta1 > delta2 ≥ 0"
 
         # Extract industry indices
         l1 = industry_indices[:, 0]  # (N,) primary industry indices
@@ -252,18 +270,24 @@ class PPNet(nn.Module):
 
         # Create comparison matrices using broadcasting for vectorized operations
         # This replaces the nested loops for better performance
-        l2_eq = (l2.unsqueeze(1) == l2.unsqueeze(0))  # (N, N) boolean matrix for same secondary industry
-        l1_eq = (l1.unsqueeze(1) == l1.unsqueeze(0))  # (N, N) boolean matrix for same primary industry
+        l2_eq = l2.unsqueeze(1) == l2.unsqueeze(
+            0
+        )  # (N, N) boolean matrix for same secondary industry
+        l1_eq = l1.unsqueeze(1) == l1.unsqueeze(
+            0
+        )  # (N, N) boolean matrix for same primary industry
 
         # Initialize matrix with delta2 (different primary industry case)
-        D = torch.full((N, N), delta2, dtype=torch.float32, device=industry_indices.device)
+        D = torch.full(
+            (N, N), delta2, dtype=torch.float32, device=industry_indices.device
+        )
 
         # Update to delta1 for same primary but different secondary industry
         D[(l1_eq & ~l2_eq)] = delta1
 
         # Update to 1.0 for same secondary industry
         D[l2_eq] = 1.0
-        
+
         # Set diagonal to 1.0 (self-connection)
         D.fill_diagonal_(1.0)
 
@@ -297,9 +321,9 @@ class PPNet(nn.Module):
         concat_states = torch.cat([temporal_agg, stock_cs_features], dim=-1)
 
         # Apply gating to market features and modulate stock states
-        gated_weights = self.market_gate(market_features)
+        feature_gated_weights, industry_cohesion_weights = self.market_gate(market_features)
         gated_states = (
-            concat_states * gated_weights
+            concat_states * feature_gated_weights
         )  # (N, temporal_hidden_dim + d_cs_feat)
 
         # Fuse temporal and cross-sectional representations
@@ -307,6 +331,7 @@ class PPNet(nn.Module):
 
         # Apply spatial attention with industry decay matrix
         industry_decay_matrix = self._build_industry_decay_matrix(industry_indices)
+        industry_decay_matrix = industry_decay_matrix * industry_cohesion_weights
         spatial_out = self.spatial_attn(
             fused_states, industry_decay_matrix=industry_decay_matrix
         )  # (N, d_model)
