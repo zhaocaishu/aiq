@@ -58,8 +58,8 @@ model:
   class: PPNetModel
   module_path: aiq.models.ppnet
   kwargs:
-    d_ts_feat: 20
-    d_cs_feat: 125
+    d_ts_feat: 10
+    d_cs_feat: 135
     d_market: 63
     d_emb: 16
     d_model: 256

@@ -23,7 +23,6 @@ from aiq.ops import (
     Log,
     Sum,
     Abs,
-    EMA,
 )
 from aiq.utils.module import init_instance_by_config
 
@@ -154,6 +153,9 @@ class Alpha158(DataHandler):
             volume,
             amount,
             (high - low) / open,
+            (open - Ref(close, 1)) / Ref(close, 1),
+            mfd_inflow_vol_ratio,
+            mfd_large_amount_ratio,
             (close - open) / open,
             (close - open) / ((high - low) + 1e-12),
             (high - Greater(open, close)) / open,
@@ -162,11 +164,8 @@ class Alpha158(DataHandler):
             (Less(open, close) - low) / ((high - low) + 1e-12),
             (2 * close - high - low) / open,
             (2 * close - high - low) / ((high - low) + 1e-12),
-            (open - Ref(close, 1)) / Ref(close, 1),
             (high - close) / close,
             (low - close) / close,
-            mfd_inflow_vol_ratio,
-            mfd_large_amount_ratio,
         ]
         feature_names = [
             "IND_CLS_L1",
@@ -181,19 +180,19 @@ class Alpha158(DataHandler):
             "TS_VOL",
             "TS_AMT",
             "TS_KLEN",
-            "TS_KMID1",
-            "TS_KMID2",
-            "TS_KUP1",
-            "TS_KUP2",
-            "TS_KLOW1",
-            "TS_KLOW2",
-            "TS_KSFT1",
-            "TS_KSFT2",
-            "TS_OPEN0",
-            "TS_HIGH0",
-            "TS_LOW0",
+            "TS_KOGR",
             "TS_MFD_INFLOW_VOL_RATIO",
             "TS_MFD_LARGE_AMT_RATIO",
+            "CS_KMID1",
+            "CS_KMID2",
+            "CS_KUP1",
+            "CS_KUP2",
+            "CS_KLOW1",
+            "CS_KLOW2",
+            "CS_KSFT1",
+            "CS_KSFT2",
+            "CS_HIGH0",
+            "CS_LOW0",
         ]
 
         # rolling
@@ -428,12 +427,15 @@ class Alpha158(DataHandler):
                 )
                 feature_names.append("CS_VSUMD%d" % d)
 
-        if use("CS_TURN"):
+        if use("CS_TURN_MA"):
             for d in windows:
-                features.append(EMA(turn, d))
-                features.append(Std(turn, d))
-                feature_names.append("CS_TURN_MEAN_%dD" % d)
-                feature_names.append("CS_TURN_STD_%dD" % d)
+                features.append(Mean(turn, d) / turn)
+                feature_names.append("CS_TURN_MA%d" % d)
+
+        if use("CS_TURN_STD"):
+            for d in windows:
+                features.append(Std(turn, d) / turn)
+                feature_names.append("CS_TURN_STD%d" % d)
 
         # feature names
         self.feature_names = feature_names
