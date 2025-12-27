@@ -182,13 +182,16 @@ class TemporalAttention(nn.Module):
     def __init__(self, d_model):
         super().__init__()
         self.trans = nn.Linear(d_model, d_model, bias=False)
+        self.context_vector = nn.Parameter(torch.randn(d_model, 1))  # Learnable query
 
     def forward(self, z):
-        h = self.trans(z)  # [N, T, D]
-        query = h[:, -1, :].unsqueeze(-1)
-        lam = torch.matmul(h, query).squeeze(-1)  # [N, T, D] --> [N, T]
-        lam = torch.softmax(lam, dim=1).unsqueeze(1)
-        output = torch.matmul(lam, z).squeeze(1)  # [N, 1, T], [N, T, D] --> [N, 1, D]
+        # z: [N, T, D]
+        h = torch.tanh(self.trans(z))
+        # 使用可学习的 context vector 替代原来的 "最后一帧作为 query"
+        # 这样能捕捉全局重要的时间步，而不仅仅是基于最后时刻
+        scores = torch.matmul(h, self.context_vector).squeeze(-1)  # [N, T]
+        attn_weights = torch.softmax(scores, dim=1).unsqueeze(1)  # [N, 1, T]
+        output = torch.matmul(attn_weights, z).squeeze(1)  # [N, D]
         return output
 
 
@@ -321,7 +324,9 @@ class PPNet(nn.Module):
         concat_states = torch.cat([temporal_agg, stock_cs_features], dim=-1)
 
         # Apply gating to market features and modulate stock states
-        feature_gated_weights, industry_cohesion_weights = self.market_gate(market_features)
+        feature_gated_weights, industry_cohesion_weights = self.market_gate(
+            market_features
+        )
         gated_states = (
             concat_states * feature_gated_weights
         )  # (N, temporal_hidden_dim + d_cs_feat)
