@@ -221,7 +221,7 @@ class Alpha158(DataHandler):
         if use("CS_STD"):
             # The standard diviation of close price for the past d days, divided by latest close price to remove unit
             for d in windows:
-                features.append(Std(close, d) / Mean(close, d))
+                features.append(Std(close / Ref(close, 1) - 1, d))
                 feature_names.append("CS_STD%d" % d)
 
         if use("CS_SLOPE"):
