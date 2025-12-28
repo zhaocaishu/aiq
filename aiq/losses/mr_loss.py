@@ -1,15 +1,18 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 
 class MarginRankingLoss(nn.Module):
-    def __init__(self, margin=1.0, reduction="mean"):
+    """
+    Pairwise Ranking Loss for Stock Selection.
+    This loss ensures that stocks with higher ground-truth returns
+    get higher predicted scores than stocks with lower returns.
+    """
+
+    def __init__(self, margin=0.1):
         super().__init__()
         self.margin = margin
-        self.reduction = reduction
-        if reduction not in ["mean", "sum", "none"]:
-            raise ValueError("reduction must be 'mean', 'sum', or 'none'")
+        self.loss_fn = nn.MarginRankingLoss(margin=margin, reduction="mean")
 
     def forward(self, preds: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         """
@@ -19,24 +22,30 @@ class MarginRankingLoss(nn.Module):
         Returns:
             Margin ranking loss (scalar if reduction='mean' or 'sum', tensor if 'none')
         """
-        N = preds.size(0)
+        # Expand (N,) to (N, N) to create all possible pairs (i, j)
+        # s_i: every row contains the score of stock i
+        # s_j: every row contains the score of all other stocks
+        s_i = preds.unsqueeze(1)  # shape (N, 1)
+        s_j = preds.unsqueeze(0)  # shape (1, N)
 
-        # Compute pairwise differences
-        pred_diff = preds.unsqueeze(1) - preds.unsqueeze(0)  # [N, N]
-        target_diff = targets.unsqueeze(1) - targets.unsqueeze(0)  # [N, N]
+        r_i = targets.unsqueeze(1)  # shape (N, 1)
+        r_j = targets.unsqueeze(0)  # shape (1, N)
 
-        # Create mask for valid pairs (upper triangle, excluding diagonal)
-        mask = torch.triu(torch.ones(N, N, device=preds.device), diagonal=1).bool()
-        mask = mask & (target_diff != 0)
+        # Calculate the ranking label y
+        # y = 1 if r_i > r_j; y = -1 if r_i < r_j; y = 0 if equal
+        target_diff = r_i - r_j
+        y = torch.sign(target_diff)
 
-        # Compute loss: max(0, margin - sign(target_diff) * pred_diff)
-        loss = torch.clamp(self.margin - torch.sign(target_diff) * pred_diff, min=0)
-        loss = loss[mask]
+        # Filter valid pairs
+        # We ignore diagonal elements (i == j) and cases where returns are identical
+        mask = y != 0
 
-        # Apply reduction
-        if self.reduction == "mean":
-            return loss.mean()
-        elif self.reduction == "sum":
-            return loss.sum()
-        else:  # 'none'
-            return loss
+        # Apply mask and flatten to 1D for MarginRankingLoss compatibility
+        valid_s_i = s_i.expand(len(preds), len(preds))[mask]
+        valid_s_j = s_j.expand(len(preds), len(preds))[mask]
+        valid_y = y[mask]
+
+        # Compute the mean loss across all valid pairs
+        loss = self.loss_fn(valid_s_i, valid_s_j, valid_y)
+
+        return loss
