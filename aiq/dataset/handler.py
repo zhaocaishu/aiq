@@ -23,6 +23,7 @@ from aiq.ops import (
     Log,
     Sum,
     Abs,
+    EMA
 )
 from aiq.utils.module import init_instance_by_config
 
@@ -207,27 +208,27 @@ class Alpha158(DataHandler):
             # https://www.investopedia.com/terms/r/rateofchange.asp
             # Rate of change, the price change in the past d days, divided by latest close price to remove unit
             for d in windows:
-                features.append(Ref(close, d) / close)
+                features.append(close / Ref(close, d))
                 feature_names.append("CS_ROC%d" % d)
 
         if use("CS_MA"):
             # https://www.investopedia.com/ask/answers/071414/whats-difference-between-moving-average-and-weighted-moving-average.asp
             # Simple Moving Average, the simple moving average in the past d days, divided by latest close price to remove unit
             for d in windows:
-                features.append(Mean(close, d) / close)
+                features.append(close / Mean(close, d))
                 feature_names.append("CS_MA%d" % d)
 
         if use("CS_STD"):
             # The standard diviation of close price for the past d days, divided by latest close price to remove unit
             for d in windows:
-                features.append(Std(close, d) / close)
+                features.append(Std(close, d) / Mean(close, d))
                 feature_names.append("CS_STD%d" % d)
 
         if use("CS_SLOPE"):
             # The rate of close price change in the past d days, divided by latest close price to remove unit
             # For example, price increase 10 dollar per day in the past d days, then Slope will be 10.
             for d in windows:
-                features.append(Slope(close, d) / close)
+                features.append(Slope(Log(close), d))
                 feature_names.append("CS_SLOPE%d" % d)
 
         if use("CS_RESI"):
@@ -429,12 +430,12 @@ class Alpha158(DataHandler):
 
         if use("CS_TURN_MA"):
             for d in windows:
-                features.append(Mean(turn, d) / turn)
+                features.append(EMA(turn, d))
                 feature_names.append("CS_TURN_MA%d" % d)
 
         if use("CS_TURN_STD"):
             for d in windows:
-                features.append(Std(turn, d) / turn)
+                features.append(Std(turn, d))
                 feature_names.append("CS_TURN_STD%d" % d)
 
         # feature names
