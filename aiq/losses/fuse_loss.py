@@ -12,7 +12,7 @@ class FuseLoss(nn.Module):
         alpha (float): Scaling factor for the Ranking Loss component.
     """
 
-    def __init__(self, alpha: float = 0.6):
+    def __init__(self, alpha: float = 3.0):
         super().__init__()
         self.alpha = alpha
         self.mse_loss = nn.MSELoss()
@@ -23,18 +23,14 @@ class FuseLoss(nn.Module):
         Forward pass for the hybrid loss.
 
         Args:
-            preds (torch.Tensor): Predicted scores, shape (N,)
-            targets (torch.Tensor): Ground truth values (stock returns), shape (N,)
+            preds (torch.Tensor): Predicted scores, shape (N, 1)
+            targets (torch.Tensor): Ground truth values (stock returns), shape (N, 1)
 
         Returns:
-            torch.Tensor: A scalar tensor representing the weighted sum of losses.
+            torch.Tensor: A scalar tensor representing the weighted sum of losses
         """
-        # Flatten tensors to ensure they are 1D
-        preds = preds.view(-1)
-        targets = targets.view(-1)
-
         # MSE loss component
-        mse_loss = self.mse_loss(preds, targets)  # Shape (N,)
+        mse_loss = self.mse_loss(preds, targets)
 
         # Ranking loss component
         ranking_loss = self.ranking_loss(preds, targets)

@@ -17,19 +17,19 @@ class MarginRankingLoss(nn.Module):
     def forward(self, preds: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         """
         Args:
-            preds (torch.Tensor): Predicted scores, shape (N,)
-            targets (torch.Tensor): Ground truth values, shape (N,)
+            preds (torch.Tensor): Predicted scores, shape (N, 1)
+            targets (torch.Tensor): Ground truth values, shape (N, 1)
         Returns:
-            Margin ranking loss (scalar if reduction='mean' or 'sum', tensor if 'none')
+            torch.Tensor: A scalar tensor representing the margin ranking loss
         """
-        # Expand (N,) to (N, N) to create all possible pairs (i, j)
+        # Expand (N, 1) to (N, N) to create all possible pairs (i, j)
         # s_i: every row contains the score of stock i
         # s_j: every row contains the score of all other stocks
-        s_i = preds.unsqueeze(1)  # shape (N, 1)
-        s_j = preds.unsqueeze(0)  # shape (1, N)
+        s_i = preds  # shape (N, 1)
+        s_j = preds.T  # shape (1, N)
 
-        r_i = targets.unsqueeze(1)  # shape (N, 1)
-        r_j = targets.unsqueeze(0)  # shape (1, N)
+        r_i = targets  # shape (N, 1)
+        r_j = targets.T  # shape (1, N)
 
         # Calculate the ranking label y
         # y = 1 if r_i > r_j; y = -1 if r_i < r_j; y = 0 if equal

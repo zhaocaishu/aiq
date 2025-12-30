@@ -207,3 +207,43 @@ def drop_extreme_label(x: np.ndarray, percentile: float = 2.5):
     # Extract filtered values; result has shape (M, 1)
     filtered_x = x[mask]
     return mask, filtered_x
+
+
+def ts_ohlcv_normalize(x: np.ndarray):
+    """
+    对N*T*D维的时序特征进行归一化
+
+    参数:
+        x: np.ndarray, shape (N, T, D)
+            D维度特征顺序: open(0), high(1), low(2), close(3), volume(4), amount(5)
+
+    返回:
+        np.ndarray, shape (N, T, D), 归一化后的特征
+    """
+    # 特征索引定义
+    IDX_OPEN, IDX_HIGH, IDX_LOW, IDX_CLOSE = 0, 1, 2, 3
+    IDX_VOLUME, IDX_AMOUNT = 4, 5
+
+    # 创建输出数组
+    normalized_x = x.astype(np.float32).copy()
+
+    # 基准：每个样本最后一个时间步的收盘价 (shape: N,)
+    base_close = normalized_x[:, -1, IDX_CLOSE]
+
+    # 四个价格特征分别进行归一化
+    price_indices = [IDX_OPEN, IDX_HIGH, IDX_LOW, IDX_CLOSE]
+    for idx in price_indices:
+        price_feat = normalized_x[:, :, idx]
+        normalized_x[:, :, idx] = np.log(price_feat / base_close[:, np.newaxis])
+
+    # 成交量标准化: volume / mean(volume_over_time)
+    volume_feat = normalized_x[:, :, IDX_VOLUME]
+    volume_mean = np.mean(volume_feat, axis=1, keepdims=True)
+    normalized_x[:, :, IDX_VOLUME] = volume_feat / volume_mean
+
+    # 成交额标准化: amount / mean(amount_over_time)
+    amount_feat = normalized_x[:, :, IDX_AMOUNT]
+    amount_mean = np.mean(amount_feat, axis=1, keepdims=True)
+    normalized_x[:, :, IDX_AMOUNT] = amount_feat / amount_mean
+
+    return normalized_x

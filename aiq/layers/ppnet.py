@@ -195,8 +195,7 @@ class TemporalAttention(nn.Module):
     def forward(self, z):
         # z: [N, T, D]
         h = torch.tanh(self.trans(z))
-        # 使用可学习的 context vector 替代原来的 "最后一帧作为 query"
-        # 这样能捕捉全局重要的时间步，而不仅仅是基于最后时刻
+        # 采用可学习的 context vector捕捉全局重要的时间步
         scores = torch.matmul(h, self.context_vector).squeeze(-1)  # [N, T]
         attn_weights = torch.softmax(scores, dim=1).unsqueeze(1)  # [N, 1, T]
         output = torch.matmul(attn_weights, z).squeeze(1)  # [N, D]

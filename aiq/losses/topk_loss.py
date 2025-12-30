@@ -30,8 +30,11 @@ class TopKLoss(nn.Module):
 
     def forward(self, preds, targets):
         """
-        preds: Tensor of shape (N, 1) - predicted values
-        targets: Tensor of shape (N, 1) - true values
+        Args:
+            preds (torch.Tensor): Predicted scores, shape (N, 1)
+            targets (torch.Tensor): Ground truth values, shape (N, 1)
+        Returns:
+            torch.Tensor: A scalar tensor representing the margin ranking loss
         """
         preds = preds.transpose(0, 1)
         targets = targets.transpose(0, 1)

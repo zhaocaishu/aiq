@@ -154,7 +154,6 @@ class Alpha158(DataHandler):
             volume,
             amount,
             (high - low) / open,
-            (open - Ref(close, 1)) / Ref(close, 1),
             (close - open) / open,
             (close - open) / ((high - low) + 1e-12),
             (high - Greater(open, close)) / open,
@@ -175,13 +174,12 @@ class Alpha158(DataHandler):
             "FUND_EP",
             "FUND_BP",
             "TS_OPEN",
-            "TS_CLOSE",
             "TS_HIGH",
             "TS_LOW",
-            "TS_VOL",
-            "TS_AMT",
+            "TS_CLOSE",
+            "TS_VOLUME",
+            "TS_AMOUNT",
             "TS_KLEN",
-            "TS_KOGR",
             "TS_KMID1",
             "TS_KMID2",
             "TS_KUP1",
@@ -228,7 +226,7 @@ class Alpha158(DataHandler):
             # The rate of close price change in the past d days, divided by latest close price to remove unit
             # For example, price increase 10 dollar per day in the past d days, then Slope will be 10.
             for d in windows:
-                features.append(Slope(Log(close), d))
+                features.append(Slope(close, d) / close)
                 feature_names.append("CS_SLOPE%d" % d)
 
         if use("CS_RESI"):
