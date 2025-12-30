@@ -457,8 +457,8 @@ class Alpha158(DataHandler):
         # 根据List_date过滤上市前3个月的数据
         if "List_date" in df.columns:
             list_date = pd.to_datetime(df["List_date"].iloc[0])
-            min_date = (list_date + pd.DateOffset(months=3)).strftime("%Y-%m-%d")
-            feature_df = feature_df[feature_df["Date"] >= min_date]
+            min_date = list_date + pd.DateOffset(months=3)
+            feature_df = feature_df[pd.to_datetime(feature_df["Date"]) >= min_date]
 
         return feature_df
 
