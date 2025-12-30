@@ -105,10 +105,6 @@ class TSDataset(Dataset):
             (i for i, name in enumerate(self.feature_names) if name == "IND_CLS_L2"),
             None,
         )
-        self.industry_index_l2 = next(
-            (i for i, name in enumerate(self.feature_names) if name == "IND_CLS_L2"),
-            None,
-        )
         self.stock_ts_feature_indices = [
             i for i, name in enumerate(self.feature_names) if name.startswith("TS_")
         ]
