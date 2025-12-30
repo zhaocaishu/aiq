@@ -239,7 +239,7 @@ class TSDataset(Dataset):
         market_features = features[:, -1, self.market_feature_indices]
 
         # Normalize specific feature subsets
-        stock_ts_features = ts_ohlcv_normalize(stock_ts_features)
+        stock_ts_features[:, :, :6] = ts_ohlcv_normalize(stock_ts_features[:, :, :6])
         stock_ts_features[:, :, 6:] = ts_robust_zscore(
             stock_ts_features[:, :, 6:], clip_outlier=True
         )
