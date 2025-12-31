@@ -23,7 +23,7 @@ from aiq.ops import (
     Log,
     Sum,
     Abs,
-    EMA
+    EMA,
 )
 from aiq.utils.module import init_instance_by_config
 
@@ -89,7 +89,6 @@ class Alpha158(DataHandler):
         fit_start_time: str = "",
         fit_end_time: str = "",
         processors: List[Processor] = [],
-        benchmark: str = "",
     ):
         super().__init__(
             data_dir,
@@ -101,18 +100,7 @@ class Alpha158(DataHandler):
             processors,
         )
         self.feature_names = []
-        self.label_names = []
-
-        # Load benchmark data
-        if benchmark:
-            self.benchmark_df = DataLoader.load_market_features(
-                self.data_dir,
-                market_name=benchmark,
-                start_time=self.start_time,
-                end_time=self.end_time,
-            ).rename(columns={"Close": "Bench_Close"})
-        else:
-            self.benchmark_df = None
+        self.label_names = ["RET_5D"]
 
     def extract_instrument_features(self, df):
         # fundamental data
@@ -123,7 +111,7 @@ class Alpha158(DataHandler):
         cap = np.log(df["Circ_mv"])
 
         # adjusted prices
-        adj_factor = df["Adj_factor"]
+        adj_factor = df["Adj_factor"] / df.iloc[-1]['Adj_factor']
         open = df["Open"] * adj_factor
         close = df["Close"] * adj_factor
         high = df["High"] * adj_factor
@@ -463,48 +451,17 @@ class Alpha158(DataHandler):
         return feature_df
 
     def extract_instrument_labels(self, df):
-        self.label_names = ["RET_5D"]
-        if self.benchmark_df is not None:
-            merge_df = pd.merge(
-                df,
-                self.benchmark_df[["Date", "Bench_Close"]],
-                on="Date",
-                how="inner",
-            )
+        # 计算复权价格及目标收益率
+        adj_factor = df["Adj_factor"] / df.iloc[-1]['Adj_factor']
+        adjusted_close = df["Close"] * adj_factor
+        labels = [Ref(adjusted_close, -5) / Ref(adjusted_close, -1) - 1]
 
-            assert merge_df.shape[0] == df.shape[0]
-
-            adjusted_factor = merge_df["Adj_factor"]
-            close = merge_df["Close"] * adjusted_factor
-            benchmark_close = merge_df["Bench_Close"]
-
-            labels = [
-                (Ref(close, -5) / Ref(close, -1))
-                / (Ref(benchmark_close, -5) / Ref(benchmark_close, -1))
-                - 1
-            ]
-        else:
-            merge_df = df
-            adjusted_factor = merge_df["Adj_factor"]
-            close = merge_df["Close"] * adjusted_factor
-
-            labels = [Ref(close, -5) / Ref(close, -1) - 1]
-
-        label_df = pd.concat(
-            [
-                merge_df[["Instrument", "Date"]],
-                pd.concat(
-                    [
-                        labels[i].rename(self.label_names[i])
-                        for i in range(len(self.label_names))
-                    ],
-                    axis=1,
-                ).astype("float32"),
-            ],
-            axis=1,
+        return df[["Instrument", "Date"]].assign(
+            **{
+                name: label.astype("float32")
+                for name, label in zip(self.label_names, labels)
+            }
         )
-
-        return label_df
 
     def process(
         self,
@@ -574,7 +531,6 @@ class MarketAlpha158(Alpha158):
         processors: List[Processor] = [],
         market_names: List[str] = [],
         market_processors: List[Processor] = [],
-        benchmark: str = "",
     ):
         super().__init__(
             data_dir,
@@ -584,7 +540,6 @@ class MarketAlpha158(Alpha158):
             fit_start_time,
             fit_end_time,
             processors,
-            benchmark,
         )
 
         self.market_names = market_names
