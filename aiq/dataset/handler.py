@@ -453,8 +453,8 @@ class Alpha158(DataHandler):
     def extract_instrument_labels(self, df):
         # 计算复权价格及目标收益率
         adj_factor = df["Adj_factor"] / df.iloc[-1]['Adj_factor']
-        adjusted_close = df["Close"] * adj_factor
-        labels = [Ref(adjusted_close, -5) / Ref(adjusted_close, -1) - 1]
+        adj_close = df["Close"] * adj_factor
+        labels = [Ref(adj_close, -5) / Ref(adj_close, -1) - 1]
 
         return df[["Instrument", "Date"]].assign(
             **{
