@@ -194,20 +194,20 @@ class Alpha158(DataHandler):
             # https://www.investopedia.com/terms/r/rateofchange.asp
             # Rate of change, the price change in the past d days, divided by latest close price to remove unit
             for d in windows:
-                features.append(close / Ref(close, d))
+                features.append(Ref(close, d) / close)
                 feature_names.append("CS_ROC%d" % d)
 
         if use("CS_MA"):
             # https://www.investopedia.com/ask/answers/071414/whats-difference-between-moving-average-and-weighted-moving-average.asp
             # Simple Moving Average, the simple moving average in the past d days, divided by latest close price to remove unit
             for d in windows:
-                features.append(close / Mean(close, d))
+                features.append(Mean(close, d) / close)
                 feature_names.append("CS_MA%d" % d)
 
         if use("CS_STD"):
             # The standard diviation of close price for the past d days, divided by latest close price to remove unit
             for d in windows:
-                features.append(Std(close / Ref(close, 1) - 1, d))
+                features.append(Std(close, d) / close)
                 feature_names.append("CS_STD%d" % d)
 
         if use("CS_SLOPE"):
@@ -365,13 +365,13 @@ class Alpha158(DataHandler):
         if use("CS_VMA"):
             # Simple Volume Moving average: https://www.barchart.com/education/technical-indicators/volume_moving_average
             for d in windows:
-                features.append(volume / (Mean(volume, d) + 1e-12))
+                features.append(Mean(volume, d) / (volume + 1e-12))
                 feature_names.append("CS_VMA%d" % d)
 
         if use("CS_VSTD"):
             # The standard deviation for volume in past d days.
             for d in windows:
-                features.append(Std(volume, d) / (Mean(volume, d) + 1e-12))
+                features.append(Std(volume, d) / (volume + 1e-12))
                 feature_names.append("CS_VSTD%d" % d)
 
         if use("CS_WVMA"):
