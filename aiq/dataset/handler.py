@@ -111,7 +111,7 @@ class Alpha158(DataHandler):
         cap = np.log(df["Circ_mv"])
 
         # adjusted prices
-        adj_factor = df["Adj_factor"] / df.iloc[-1]['Adj_factor']
+        adj_factor = df["Adj_factor"]
         open = df["Open"] * adj_factor
         close = df["Close"] * adj_factor
         high = df["High"] * adj_factor
@@ -452,8 +452,7 @@ class Alpha158(DataHandler):
 
     def extract_instrument_labels(self, df):
         # 计算复权价格及目标收益率
-        adj_factor = df["Adj_factor"] / df.iloc[-1]['Adj_factor']
-        adj_close = df["Close"] * adj_factor
+        adj_close = df["Close"] * df["Adj_factor"]
         labels = [Ref(adj_close, -5) / Ref(adj_close, -1) - 1]
 
         return df[["Instrument", "Date"]].assign(
@@ -594,7 +593,11 @@ class MarketAlpha158(Alpha158):
         return feature_df
 
     def setup_data(self, mode="train") -> pd.DataFrame:
-        # Load market data
+        # Load instrument-level features and labels
+        feature_label_df = super().setup_data(mode=mode)
+        feature_label_df = feature_label_df.reset_index()
+
+        # Load raw market data
         market_df = DataLoader.load_markets_features(
             self.data_dir,
             self.market_names,
@@ -602,11 +605,7 @@ class MarketAlpha158(Alpha158):
             self.end_time,
         )
 
-        # Instrument-level feature and label extraction
-        feature_label_df = super().setup_data(mode=mode)
-        feature_label_df = feature_label_df.reset_index()
-
-        # Market-level feature extraction
+        # Extract market-level features
         market_feature_df = pd.concat(
             [
                 self.extract_market_features(
@@ -623,7 +622,7 @@ class MarketAlpha158(Alpha158):
         market_feature_names = market_feature_df.columns.tolist()
         self.feature_names.extend(market_feature_names)
 
-        # Market-level feature processing
+        # Process market features (Normalization, etc.)
         market_feature_df = self.process(
             df=market_feature_df,
             feature_names=market_feature_names,
@@ -632,7 +631,7 @@ class MarketAlpha158(Alpha158):
         ).astype("float32")
         market_feature_df = market_feature_df.reset_index()
 
-        # Merge with instrument features
+        # Merge instrument features with market features
         market_feature_label_df = (
             pd.merge(
                 feature_label_df,
@@ -644,6 +643,7 @@ class MarketAlpha158(Alpha158):
             .sort_index()
         )
 
+        # Validation
         assert (
             feature_label_df.shape[0] == market_feature_label_df.shape[0]
         ), "Mismatch in row counts after merging."

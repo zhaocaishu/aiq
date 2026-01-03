@@ -7,8 +7,8 @@ import pandas as pd
 
 from aiq.dataset.loader import DataLoader
 from aiq.utils.functional import (
-    ts_ohlcv_normalize,
-    ts_robust_zscore,
+    ts_ohlcv_normalizer,
+    ts_cross_robust_zscore,
     robust_zscore,
     fillna,
 )
@@ -226,32 +226,33 @@ class TSDataset(Dataset):
         Returns:
             Dict[str, np.ndarray]: Dictionary containing sample indices, features, and optionally labels.
         """
-        # Get slices for the current date
+        # Retrieve data slices corresponding to the current query date
         slices = self._daily_slices[index]
 
-        # Get the ending indices for each slice (last time step)
+        # Extract the terminal index for each slice (last time step)
         sample_indices = np.array([sl.stop - 1 for sl in slices])
 
-        # Extract feature sequences [num_samples, seq_len, num_features]
+        # Aggregate feature sequences into a 3D tensor: [Batch, Seq_Len, Features]
         features = np.stack([self._features[sl] for sl in slices])
+
+        # Split features into functional subsets
         stock_ts_features = features[:, :, self.stock_ts_feature_indices]
         stock_cs_features = features[:, -1, self.stock_cs_feature_indices]
         market_features = features[:, -1, self.market_feature_indices]
 
-        # Normalize specific feature subsets
-        stock_ts_features[:, :, :6] = ts_ohlcv_normalize(stock_ts_features[:, :, :6])
-        stock_ts_features[:, :, 6:] = ts_robust_zscore(
+        # Data Normalization Pipeline
+        stock_ts_features[:, :, :6] = ts_ohlcv_normalizer(stock_ts_features[:, :, :6])
+        stock_ts_features[:, :, 6:] = ts_cross_robust_zscore(
             stock_ts_features[:, :, 6:], clip_outlier=True
         )
 
         stock_cs_features = robust_zscore(stock_cs_features, clip_outlier=True)
 
-        # Fill NaNs with 0.0
+        # Impute missing values (NaNs) with zero
         stock_ts_features = fillna(stock_ts_features, fill_value=0.0)
         stock_cs_features = fillna(stock_cs_features, fill_value=0.0)
-        market_features = fillna(market_features, fill_value=0.0)
 
-        # Construct data dictionary
+        # Construct the finalized data payload for model input
         data_dict = {
             "sample_indices": sample_indices.astype(np.int64),
             "industry_ids": np.stack(
@@ -266,7 +267,7 @@ class TSDataset(Dataset):
             "market_features": market_features,
         }
 
-        # Add labels if available
+        # Append ground truth labels if in training/validation mode
         if self._labels is not None:
             labels = np.array([self._labels[sl.stop - 1] for sl in slices])
             data_dict["labels"] = labels

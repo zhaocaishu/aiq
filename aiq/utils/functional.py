@@ -7,6 +7,158 @@ import numpy as np
 from sklearn.linear_model import LinearRegression
 
 
+def ts_ohlcv_normalizer(x: np.ndarray):
+    """
+    对N*T*D维的时序特征进行归一化
+
+    参数:
+        x: np.ndarray, shape (N, T, D)
+            D维度特征顺序: open(0), high(1), low(2), close(3), volume(4), amount(5)
+
+    返回:
+        np.ndarray, shape (N, T, D), 归一化后的特征
+    """
+    # 特征索引定义
+    IDX_OPEN, IDX_HIGH, IDX_LOW, IDX_CLOSE = 0, 1, 2, 3
+    IDX_VOLUME, IDX_AMOUNT = 4, 5
+
+    # 创建输出数组
+    normalized_x = x.astype(np.float32).copy()
+
+    # 基准：每个样本最后一个时间步的收盘价 (shape: N,)
+    base_close = normalized_x[:, -1, IDX_CLOSE]
+
+    # 四个价格特征分别进行归一化
+    price_indices = [IDX_OPEN, IDX_HIGH, IDX_LOW, IDX_CLOSE]
+    for idx in price_indices:
+        price_feat = normalized_x[:, :, idx]
+        normalized_x[:, :, idx] = np.log(price_feat / base_close[:, np.newaxis])
+
+    # 成交量标准化: volume / mean(volume_over_time)
+    volume_feat = normalized_x[:, :, IDX_VOLUME]
+    volume_mean = np.mean(volume_feat, axis=1, keepdims=True)
+    normalized_x[:, :, IDX_VOLUME] = volume_feat / volume_mean
+
+    # 成交额标准化: amount / mean(amount_over_time)
+    amount_feat = normalized_x[:, :, IDX_AMOUNT]
+    amount_mean = np.mean(amount_feat, axis=1, keepdims=True)
+    normalized_x[:, :, IDX_AMOUNT] = amount_feat / amount_mean
+
+    return normalized_x
+
+
+def ts_robust_zscore(x: np.ndarray, clip_outlier: bool = False) -> np.ndarray:
+    """
+    Time-series Robust Z-Score Normalization
+
+    This function applies robust statistics for Z-Score normalization across all samples
+    and time steps (axes 0 and 1) of a 3D array x of shape (N, T, D):
+        - Location estimate (mean) is replaced by the median over (N, T).
+        - Scale estimate (std) is replaced by MAD * 1.4826 (to make it consistent with std).
+
+    Parameters
+    ----------
+    x : np.ndarray
+        Input data of shape (N, T, D), where N is the batch size, T is the time length,
+        and D is the feature dimension.
+    clip_outlier : bool, optional
+        If True, clip the resulting z-scores to the range [-3, 3] to limit extreme outliers.
+        Default is False.
+
+    Returns
+    -------
+    np.ndarray
+        The normalized data of the same shape as input.
+
+    Reference
+    ---------
+    https://en.wikipedia.org/wiki/Median_absolute_deviation
+    """
+    if x.ndim != 3:
+        raise ValueError(f"Input array must be 3D (N, T, D), but got shape {x.shape}")
+
+    # Compute global median over samples and time: shape (1, 1, D)
+    med = np.nanmedian(x, axis=(0, 1), keepdims=True)
+
+    # Center the data
+    x_centered = x - med
+
+    # Compute MAD over samples and time: shape (1, 1, D)
+    mad = np.nanmedian(np.abs(x_centered), axis=(0, 1), keepdims=True)
+
+    # Scale factor for consistency
+    std = mad * 1.4826 + 1e-12
+
+    # Compute robust z-score
+    z = x_centered / std
+
+    if clip_outlier:
+        z = np.clip(z, -3.0, 3.0)
+
+    return z
+
+
+def ts_cross_robust_zscore(x: np.ndarray, clip_outlier: bool = False) -> np.ndarray:
+    """
+    Two-step Robust Z-Score Normalization (Time-series then Cross-sectional).
+
+    This function performs normalization in two stages:
+    1. Temporal: Normalizes each sample (N) across its time steps (T).
+    2. Cross-sectional: Normalizes across all samples (N) at each time step (T).
+
+    This dual-stage approach is common in quantitative finance to remove both
+    individual asset bias and market-wide systematic noise.
+
+    Parameters
+    ----------
+    x : np.ndarray
+        Input data of shape (N, T, D).
+        N: Number of samples (e.g., assets/stocks).
+        T: Time steps (history length).
+        D: Feature dimension.
+    clip_outlier : bool, optional
+        If True, clips result to [-3, 3]. Default is False.
+
+    Returns
+    -------
+    np.ndarray
+        Normalized data of shape (N, T, D).
+    """
+    if x.ndim != 3:
+        raise ValueError(f"Input array must be 3D (N, T, D), but got shape {x.shape}")
+
+    # Time-series Normalization
+    # Normalizes each feature of each sample over its own history.
+    t_med = np.nanmedian(x, axis=1, keepdims=True)
+    t_centered = x - t_med
+    t_mad = np.nanmedian(np.abs(t_centered), axis=1, keepdims=True)
+    t_std = t_mad * 1.4826 + 1e-12
+
+    x_t_norm = t_centered / t_std
+
+    # Cross-sectional Normalization
+    # Normalizes across all samples for every specific time step.
+    c_med = np.nanmedian(x_t_norm, axis=0, keepdims=True)
+    c_centered = x_t_norm - c_med
+    c_mad = np.nanmedian(np.abs(c_centered), axis=0, keepdims=True)
+    c_std = c_mad * 1.4826 + 1e-12
+
+    z = c_centered / c_std
+
+    if clip_outlier:
+        z = np.clip(z, -3.0, 3.0)
+
+    return z
+
+
+def fillna(x: np.ndarray, fill_value=0.0):
+    if not isinstance(x, np.ndarray):
+        raise TypeError("输入必须是 numpy.ndarray 类型")
+
+    x_filled = np.where(np.isnan(x), fill_value, x)
+    return x_filled
+
+
 def robust_zscore(
     x: Union[pd.Series, np.ndarray], clip_outlier: bool = False
 ) -> Union[pd.Series, np.ndarray]:
@@ -68,65 +220,6 @@ def robust_zscore(
     return result
 
 
-def ts_robust_zscore(x: np.ndarray, clip_outlier: bool = False) -> np.ndarray:
-    """
-    Time-series Robust Z-Score Normalization
-
-    This function applies robust statistics for Z-Score normalization across all samples
-    and time steps (axes 0 and 1) of a 3D array x of shape (N, T, D):
-        - Location estimate (mean) is replaced by the median over (N, T).
-        - Scale estimate (std) is replaced by MAD * 1.4826 (to make it consistent with std).
-
-    Parameters
-    ----------
-    x : np.ndarray
-        Input data of shape (N, T, D), where N is the batch size, T is the time length,
-        and D is the feature dimension.
-    clip_outlier : bool, optional
-        If True, clip the resulting z-scores to the range [-3, 3] to limit extreme outliers.
-        Default is False.
-
-    Returns
-    -------
-    np.ndarray
-        The normalized data of the same shape as input.
-
-    Reference
-    ---------
-    https://en.wikipedia.org/wiki/Median_absolute_deviation
-    """
-    if x.ndim != 3:
-        raise ValueError(f"Input array must be 3D (N, T, D), but got shape {x.shape}")
-
-    # Compute global median over samples and time: shape (1, 1, D)
-    med = np.nanmedian(x, axis=(0, 1), keepdims=True)
-
-    # Center the data
-    x_centered = x - med
-
-    # Compute MAD over samples and time: shape (1, 1, D)
-    mad = np.nanmedian(np.abs(x_centered), axis=(0, 1), keepdims=True)
-
-    # Scale factor for consistency
-    std = mad * 1.4826 + 1e-12
-
-    # Compute robust z-score
-    z = x_centered / std
-
-    if clip_outlier:
-        z = np.clip(z, -3.0, 3.0)
-
-    return z
-
-
-def fillna(x: np.ndarray, fill_value=0.0):
-    if not isinstance(x, np.ndarray):
-        raise TypeError("输入必须是 numpy.ndarray 类型")
-
-    x_filled = np.where(np.isnan(x), fill_value, x)
-    return x_filled
-
-
 def zscore(x, clip_min=-3, clip_max=3):
     return np.clip((x - x.mean()) / (x.std() + 1e-8), clip_min, clip_max)
 
@@ -151,7 +244,8 @@ def neutralize(
     - The same DataFrame, but with each matched factor column replaced by its regression residuals.
     """
     # Extract the “feature” sub‑DataFrame
-    feats = df["feature"]
+    res_df = df.copy()
+    feats = res_df["feature"]
 
     # Build a combined regex to match all requested factor columns
     combined_pattern = "|".join(f"({pat})" for pat in factor_cols)
@@ -169,7 +263,6 @@ def neutralize(
     else:
         X = industry_dummies
     X["CONST"] = 1.0
-    X_values = X.values
 
     # Initialize linear regression (no intercept, since CONST is included)
     model = LinearRegression(fit_intercept=False)
@@ -177,20 +270,23 @@ def neutralize(
     # Loop through each factor, fit on non‑missing rows, and store residuals
     for factor in actual_factors:
         y = feats[factor].astype(float)
-        mask = y.notna()
-        if not mask.any():
+
+        valid_mask = y.notna()
+        if not valid_mask.any():
             # skip if all values are missing
             continue
 
         # Fit on rows where y is present
-        model.fit(X_values[mask], y[mask])
-        y_pred = model.predict(X_values[mask])
-        residuals = y[mask] - y_pred
+        X_sub = X.loc[valid_mask].values
+        y_sub = y.loc[valid_mask].values
+
+        model.fit(X_sub, y_sub)
+        residuals = y_sub - model.predict(X_sub)
 
         # Write residuals back into the original DataFrame
-        df.loc[mask, ("feature", factor)] = residuals.astype("float32")
+        res_df.loc[valid_mask, ("feature", factor)] = residuals.astype("float32")
 
-    return df
+    return res_df
 
 
 def drop_extreme_label(x: np.ndarray, percentile: float = 2.5):
@@ -207,43 +303,3 @@ def drop_extreme_label(x: np.ndarray, percentile: float = 2.5):
     # Extract filtered values; result has shape (M, 1)
     filtered_x = x[mask]
     return mask, filtered_x
-
-
-def ts_ohlcv_normalize(x: np.ndarray):
-    """
-    对N*T*D维的时序特征进行归一化
-
-    参数:
-        x: np.ndarray, shape (N, T, D)
-            D维度特征顺序: open(0), high(1), low(2), close(3), volume(4), amount(5)
-
-    返回:
-        np.ndarray, shape (N, T, D), 归一化后的特征
-    """
-    # 特征索引定义
-    IDX_OPEN, IDX_HIGH, IDX_LOW, IDX_CLOSE = 0, 1, 2, 3
-    IDX_VOLUME, IDX_AMOUNT = 4, 5
-
-    # 创建输出数组
-    normalized_x = x.astype(np.float32).copy()
-
-    # 基准：每个样本最后一个时间步的收盘价 (shape: N,)
-    base_close = normalized_x[:, -1, IDX_CLOSE]
-
-    # 四个价格特征分别进行归一化
-    price_indices = [IDX_OPEN, IDX_HIGH, IDX_LOW, IDX_CLOSE]
-    for idx in price_indices:
-        price_feat = normalized_x[:, :, idx]
-        normalized_x[:, :, idx] = np.log(price_feat / base_close[:, np.newaxis])
-
-    # 成交量标准化: volume / mean(volume_over_time)
-    volume_feat = normalized_x[:, :, IDX_VOLUME]
-    volume_mean = np.mean(volume_feat, axis=1, keepdims=True)
-    normalized_x[:, :, IDX_VOLUME] = volume_feat / volume_mean
-
-    # 成交额标准化: amount / mean(amount_over_time)
-    amount_feat = normalized_x[:, :, IDX_AMOUNT]
-    amount_mean = np.mean(amount_feat, axis=1, keepdims=True)
-    normalized_x[:, :, IDX_AMOUNT] = amount_feat / amount_mean
-
-    return normalized_x
