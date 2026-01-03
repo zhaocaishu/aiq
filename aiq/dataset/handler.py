@@ -1,6 +1,7 @@
 from typing import List, Union
 import pickle
 
+from aiq.ops.ops import Kurt
 import pandas as pd
 import numpy as np
 
@@ -23,7 +24,8 @@ from aiq.ops import (
     Log,
     Sum,
     Abs,
-    EMA,
+    Skew,
+    Kurt,
 )
 from aiq.utils.module import init_instance_by_config
 
@@ -117,6 +119,8 @@ class Alpha158(DataHandler):
         high = df["High"] * adj_factor
         low = df["Low"] * adj_factor
 
+        returns = close / Ref(close, 1) - 1
+
         # volume & amount
         volume = df["Volume"]
         amount = df["AMount"]
@@ -142,6 +146,7 @@ class Alpha158(DataHandler):
             volume,
             amount,
             (high - low) / open,
+            (open - Ref(close, 1)) / Ref(close, 1),
             (close - open) / open,
             (close - open) / ((high - low) + 1e-12),
             (high - Greater(open, close)) / open,
@@ -168,6 +173,7 @@ class Alpha158(DataHandler):
             "TS_VOLUME",
             "TS_AMOUNT",
             "TS_KLEN",
+            "TS_KGAP",
             "TS_KMID1",
             "TS_KMID2",
             "TS_KUP1",
@@ -209,6 +215,18 @@ class Alpha158(DataHandler):
             for d in windows:
                 features.append(Std(close, d) / close)
                 feature_names.append("CS_STD%d" % d)
+
+        if use("CS_SKEW"):
+            # 偏度 (Skewness): 衡量收益率分布的不对称性, 负偏度意味着极端负收益出现的概率高于极端正收益，可能存在超跌反弹机会
+            for d in windows:
+                features.append(Skew(returns, d))
+                feature_names.append("CS_SKEW%d" % d)
+
+        if use("CS_KURT"):
+            # 峰度 (Kurtosis): 衡量分布的厚尾程度, 高峰度意味着股价经常出现跳空或极端走势（胖尾效应）
+            for d in windows:
+                features.append(Kurt(returns, d))
+                feature_names.append("CS_KURT%d" % d)
 
         if use("CS_SLOPE"):
             # The rate of close price change in the past d days, divided by latest close price to remove unit
@@ -416,7 +434,7 @@ class Alpha158(DataHandler):
 
         if use("CS_TURN_MA"):
             for d in windows:
-                features.append(EMA(turn, d))
+                features.append(turn / Mean(turn, d))
                 feature_names.append("CS_TURN_MA%d" % d)
 
         if use("CS_TURN_STD"):
