@@ -122,12 +122,11 @@ class Evaluator:
 
         return {f"Precision@{self.top_k}": precision_at_k}
 
-    def _compute_portfolio_arr(
+    def _compute_portfolio_metrics(
         self, pred_df, trading_days_per_year=252, holding_period=5
     ):
         """
-        Calculates and returns only the Annualized Rate of Return (ARR)
-        based on the Top N predicted returns daily.
+        Compute portfolio evaluation metrics based on Top-K predicted returns.
         """
 
         # Select the Top N stocks for each date based on PRED_RET_5D
@@ -141,22 +140,43 @@ class Evaluator:
         daily_top_stocks["EXCESS_RET_5D"] = (
             daily_top_stocks[self.label_col] - daily_top_stocks["BENCH_RET_5D"]
         )
-        daily_position_ret = daily_top_stocks.groupby(self.date_col)[
-            "EXCESS_RET_5D"
-        ].mean()
+        daily_position_ret = (
+            daily_top_stocks.groupby(self.date_col)["EXCESS_RET_5D"].mean().sort_index()
+        )
 
         # Calculate the total cumulative growth factor over the entire dataset
-        total_growth = (1 + daily_position_ret).prod()
+        nav = (1 + daily_position_ret).cumprod()
+        total_growth = nav.iloc[-1]
 
         # Convert total growth to an average periodic growth rate
         n_periods = len(daily_position_ret)
         geo_mean_periodic_ret = total_growth ** (1 / n_periods) - 1
 
-        # Apply the compounding formula for annualization
+        # Annualized return (ARR)
         ann_factor = trading_days_per_year / holding_period
         arr = (1 + geo_mean_periodic_ret) ** ann_factor - 1
 
-        return arr
+        # Volatility and Sharpe ratio
+        period_vol = daily_position_ret.std()
+        ann_vol = period_vol * (ann_factor**0.5)
+
+        sharpe = (
+            (geo_mean_periodic_ret / period_vol) * (ann_factor**0.5)
+            if period_vol > 0
+            else 0.0
+        )
+
+        # Maximum drawdown
+        rolling_max = nav.cummax()
+        drawdown = nav / rolling_max - 1
+        max_drawdown = drawdown.min()
+
+        return {
+            "ARR": arr,
+            "Sharpe": sharpe,
+            "MaxDrawdown": max_drawdown,
+            "AnnVol": ann_vol,
+        }
 
     def evaluate(self, pred_df):
         """Evaluate model performance with IC, ICIR, and Hit Rate metrics."""
@@ -191,14 +211,8 @@ class Evaluator:
         precision_k = daily_precision_k.mean().to_dict()
 
         # Calculate portfolio ARR
-        portfolio_arr = self._compute_portfolio_arr(df)
+        portfolio_metrics = self._compute_portfolio_metrics(df)
 
         # Combine results
-        results = {
-            "IC": ic,
-            "ICIR": icir,
-            **hr,
-            **precision_k,
-            "ARR": portfolio_arr,
-        }
+        results = {"IC": ic, "ICIR": icir, **hr, **precision_k, **portfolio_metrics}
         return pd.DataFrame([results]).to_markdown(index=False, floatfmt=".4f")
