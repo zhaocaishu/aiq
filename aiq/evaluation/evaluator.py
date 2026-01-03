@@ -140,16 +140,16 @@ class Evaluator:
         daily_top_stocks["EXCESS_RET_5D"] = (
             daily_top_stocks[self.label_col] - daily_top_stocks["BENCH_RET_5D"]
         )
-        daily_position_ret = (
+        period_ret = (
             daily_top_stocks.groupby(self.date_col)["EXCESS_RET_5D"].mean().sort_index()
         )
 
         # Calculate the total cumulative growth factor over the entire dataset
-        nav = (1 + daily_position_ret).cumprod()
+        nav = (1 + period_ret).cumprod()
         total_growth = nav.iloc[-1]
 
         # Convert total growth to an average periodic growth rate
-        n_periods = len(daily_position_ret)
+        n_periods = len(period_ret)
         geo_mean_periodic_ret = total_growth ** (1 / n_periods) - 1
 
         # Annualized return (ARR)
@@ -157,7 +157,7 @@ class Evaluator:
         arr = (1 + geo_mean_periodic_ret) ** ann_factor - 1
 
         # Volatility and Sharpe ratio
-        period_vol = daily_position_ret.std()
+        period_vol = period_ret.std()
         ann_vol = period_vol * (ann_factor**0.5)
 
         sharpe = (
