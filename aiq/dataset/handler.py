@@ -1,7 +1,6 @@
 from typing import List, Union
 import pickle
 
-from aiq.ops.ops import Kurt
 import pandas as pd
 import numpy as np
 
@@ -24,6 +23,7 @@ from aiq.ops import (
     Log,
     Sum,
     Abs,
+    EMA,
     Skew,
     Kurt,
 )
@@ -434,13 +434,17 @@ class Alpha158(DataHandler):
 
         if use("CS_TURN_MA"):
             for d in windows:
-                features.append(turn / Mean(turn, d))
+                features.append(EMA(turn, d))
                 feature_names.append("CS_TURN_MA%d" % d)
 
         if use("CS_TURN_STD"):
             for d in windows:
                 features.append(Std(turn, d))
                 feature_names.append("CS_TURN_STD%d" % d)
+
+        if use("CS_ABN_TURN"):
+            features.append(Mean(turn, 5) / Mean(turn, 20))
+            feature_names.append("CS_ABN_TURN%d" % d)
 
         # feature names
         self.feature_names = feature_names
