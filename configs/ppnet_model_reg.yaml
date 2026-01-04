@@ -4,7 +4,7 @@ data_handler:
   module_path: aiq.dataset.handler
   kwargs:
     instruments: *market
-    start_time: "2016-01-01"
+    start_time: "2017-01-01"
     end_time: "2023-12-31"
     fit_start_time: "2017-01-01"
     fit_end_time: "2022-06-20"
@@ -62,7 +62,7 @@ model:
   module_path: aiq.models.ppnet
   kwargs:
     d_ts_feat: 20
-    d_cs_feat: 135
+    d_cs_feat: 136
     d_market: 63
     d_emb: 16
     d_model: 256
