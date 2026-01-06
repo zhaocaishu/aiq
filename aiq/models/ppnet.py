@@ -9,7 +9,7 @@ from torch.utils.data import Dataset, DataLoader
 from transformers import get_scheduler
 
 from aiq.layers import PPNet
-from aiq.losses import TopKLoss, FuseLoss
+from aiq.losses import TopKLoss, HybridLoss
 
 from .base import BaseModel
 
@@ -78,8 +78,8 @@ class PPNetModel(BaseModel):
         # loss function
         if self.criterion_name == "MSE":
             self.criterion = nn.MSELoss()
-        elif self.criterion_name == "FUSE":
-            self.criterion = FuseLoss()
+        elif self.criterion_name == "Hybrid":
+            self.criterion = HybridLoss()
         elif self.criterion_name == "TopK":
             self.criterion = TopKLoss()
         else:

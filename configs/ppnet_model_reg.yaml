@@ -73,7 +73,7 @@ model:
     epochs: 100
     batch_size: 1
     learning_rate: 0.001
-    criterion_name: "TopK"
+    criterion_name: "Hybrid"
     early_stopping_patience: 10
 evaluator:
   class: Evaluator
