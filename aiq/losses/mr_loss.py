@@ -9,9 +9,10 @@ class MarginRankingLoss(nn.Module):
     get higher predicted scores than stocks with lower returns.
     """
 
-    def __init__(self, margin=0.1):
+    def __init__(self, margin: float = 0.1, target_thresh: float = 0.01):
         super().__init__()
         self.margin = margin
+        self.target_thresh = target_thresh
         self.loss_fn = nn.MarginRankingLoss(margin=margin, reduction="mean")
 
     def forward(self, preds: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
@@ -36,9 +37,10 @@ class MarginRankingLoss(nn.Module):
         target_diff = r_i - r_j
         y = torch.sign(target_diff)
 
-        # Filter valid pairs
-        # We ignore diagonal elements (i == j) and cases where returns are identical
-        mask = y != 0
+        # Create mask to filter invalid/noisy pairs
+        # Exclude diagonal (i == j) where r_diff is 0
+        # Exclude pairs where the return difference is below target_thresh
+        mask = torch.abs(target_diff) > self.target_thresh
 
         # Apply mask and flatten to 1D for MarginRankingLoss compatibility
         valid_s_i = s_i.expand(len(preds), len(preds))[mask]
