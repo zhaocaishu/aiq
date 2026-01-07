@@ -7,7 +7,6 @@ import pandas as pd
 
 from aiq.dataset.loader import DataLoader
 from aiq.utils.functional import (
-    ts_ohlcv_normalizer,
     ts_cross_robust_zscore,
     robust_zscore,
     fillna,
@@ -241,10 +240,7 @@ class TSDataset(Dataset):
         market_features = features[:, -1, self.market_feature_indices]
 
         # Data Normalization Pipeline
-        stock_ts_features[:, :, :6] = ts_ohlcv_normalizer(stock_ts_features[:, :, :6])
-        stock_ts_features[:, :, 6:] = ts_cross_robust_zscore(
-            stock_ts_features[:, :, 6:], clip_outlier=True
-        )
+        stock_ts_features = ts_cross_robust_zscore(stock_ts_features, clip_outlier=True)
 
         stock_cs_features = robust_zscore(stock_cs_features, clip_outlier=True)
 

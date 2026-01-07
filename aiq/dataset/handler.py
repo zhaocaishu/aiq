@@ -119,11 +119,8 @@ class Alpha158(DataHandler):
         high = df["High"] * adj_factor
         low = df["Low"] * adj_factor
 
-        returns = close / Ref(close, 1) - 1
-
-        # volume & amount
+        # volume
         volume = df["Volume"]
-        amount = df["AMount"]
 
         # turnover rate
         turn = df["Turnover_rate_f"]
@@ -139,12 +136,6 @@ class Alpha158(DataHandler):
             cap,
             ep,
             bp,
-            open,
-            close,
-            high,
-            low,
-            volume,
-            amount,
             (high - low) / open,
             (open - Ref(close, 1)) / Ref(close, 1),
             (close - open) / open,
@@ -166,12 +157,6 @@ class Alpha158(DataHandler):
             "FUND_CAP",
             "FUND_EP",
             "FUND_BP",
-            "TS_OPEN",
-            "TS_HIGH",
-            "TS_LOW",
-            "TS_CLOSE",
-            "TS_VOLUME",
-            "TS_AMOUNT",
             "TS_KLEN",
             "TS_KGAP",
             "TS_KMID1",
@@ -215,18 +200,6 @@ class Alpha158(DataHandler):
             for d in windows:
                 features.append(Std(close, d) / close)
                 feature_names.append("CS_STD%d" % d)
-
-        if use("CS_SKEW"):
-            # 偏度 (Skewness): 衡量收益率分布的不对称性, 负偏度意味着极端负收益出现的概率高于极端正收益，可能存在超跌反弹机会
-            for d in windows:
-                features.append(Skew(returns, d))
-                feature_names.append("CS_SKEW%d" % d)
-
-        if use("CS_KURT"):
-            # 峰度 (Kurtosis): 衡量分布的厚尾程度, 高峰度意味着股价经常出现跳空或极端走势（胖尾效应）
-            for d in windows:
-                features.append(Kurt(returns, d))
-                feature_names.append("CS_KURT%d" % d)
 
         if use("CS_SLOPE"):
             # The rate of close price change in the past d days, divided by latest close price to remove unit
@@ -441,10 +414,6 @@ class Alpha158(DataHandler):
             for d in windows:
                 features.append(Std(turn, d))
                 feature_names.append("CS_TURN_STD%d" % d)
-
-        if use("CS_ABN_TURN"):
-            features.append(Mean(turn, 5) / Mean(turn, 20))
-            feature_names.append("CS_ABN_TURN%d" % d)
 
         # feature names
         self.feature_names = feature_names
