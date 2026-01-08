@@ -23,15 +23,8 @@ data_handler:
           factor_cols:
             - "FUND_BP"
             - "FUND_EP"
-            - "^CS_STD(?:5|10|20|30|60)$"
-            - "^CS_VSTD(?:5|10|20|30|60)$"
-            - "^CS_WVMA(?:5|10|20|30|60)$"
             - "^CS_TURN_(?:MA|STD)(?:5|10|20|30|60)$"
       - class: Dropna
-        module_path: aiq.dataset.processor
-        kwargs:
-          fields_group: "label"
-      - class: CSZScoreNorm
         module_path: aiq.dataset.processor
         kwargs:
           fields_group: "label"

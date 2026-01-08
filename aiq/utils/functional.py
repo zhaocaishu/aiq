@@ -220,7 +220,7 @@ def robust_zscore(
     return result
 
 
-def zscore(x, clip_min=-3, clip_max=3):
+def zscore(x, clip_min=-3.0, clip_max=3.0):
     return np.clip((x - x.mean()) / (x.std() + 1e-8), clip_min, clip_max)
 
 
@@ -292,14 +292,11 @@ def neutralize(
 def drop_extreme_label(x: np.ndarray, percentile: float = 2.5):
     x = np.asarray(x)
     if x.ndim != 2 or x.shape[1] != 1:
-        raise ValueError(f"Expected input shape (N, 1), got {x.shape}")
+        if x.ndim == 1:
+            x = x.reshape(-1, 1)
+        else:
+            raise ValueError(f"Expected input shape (N, 1) or (N,), got {x.shape}")
 
-    # Compute thresholds across the flattened data
     lower, upper = np.percentile(x, [percentile, 100 - percentile])
-
-    # Build mask of shape (N,)
     mask = (x[:, 0] >= lower) & (x[:, 0] <= upper)
-
-    # Extract filtered values; result has shape (M, 1)
-    filtered_x = x[mask]
-    return mask, filtered_x
+    return mask, x[mask]
