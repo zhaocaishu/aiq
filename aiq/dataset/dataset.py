@@ -7,9 +7,11 @@ import pandas as pd
 
 from aiq.dataset.loader import DataLoader
 from aiq.utils.functional import (
-    ts_cross_robust_zscore,
+    zscore,
     robust_zscore,
+    ts_cross_robust_zscore,
     fillna,
+    drop_extreme_label,
 )
 
 
@@ -234,6 +236,19 @@ class TSDataset(Dataset):
         # Aggregate feature sequences into a 3D tensor: [Batch, Seq_Len, Features]
         features = np.stack([self._features[sl] for sl in slices])
 
+        # Append ground truth labels if in training/validation mode
+        if self._labels is not None:
+            labels = np.array([self._labels[sl.stop - 1] for sl in slices])
+
+            if self.mode == "train":
+                mask, filtered_labels = drop_extreme_label(labels)
+
+                labels = filtered_labels
+                features = features[mask]
+                sample_indices = sample_indices[mask]
+        else:
+            labels = None
+
         # Split features into functional subsets
         stock_ts_features = features[:, :, self.stock_ts_feature_indices]
         stock_cs_features = features[:, -1, self.stock_cs_feature_indices]
@@ -241,7 +256,6 @@ class TSDataset(Dataset):
 
         # Data Normalization Pipeline
         stock_ts_features = ts_cross_robust_zscore(stock_ts_features, clip_outlier=True)
-
         stock_cs_features = robust_zscore(stock_cs_features, clip_outlier=True)
 
         # Impute missing values (NaNs) with zero
@@ -263,10 +277,8 @@ class TSDataset(Dataset):
             "market_features": market_features,
         }
 
-        # Append ground truth labels if in training/validation mode
-        if self._labels is not None:
-            labels = np.array([self._labels[sl.stop - 1] for sl in slices])
-            data_dict["labels"] = labels
+        if labels is not None:
+            data_dict["labels"] = zscore(labels)
 
         return data_dict
 
