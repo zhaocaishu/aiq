@@ -6,31 +6,51 @@ from torch import nn
 from .embed import DataEmbedding
 
 
-class Gate(nn.Module):
-    def __init__(self, d_input, d_output, beta=1.0):
+class MarketGate(nn.Module):
+    """
+    Market-level global gating module.
+    - Feature gate: controls factor/style importance under market regime
+    - Cohesion gate: controls industry co-movement strength
+    """
+
+    def __init__(self, d_market, d_feature, beta=1.0):
         super().__init__()
-
-        self.d_output = d_output
         self.t = beta
+        self.d_feature = d_feature
 
-        self.encoder = nn.Sequential(
-            nn.Linear(d_input, d_output), nn.SiLU(), nn.Linear(d_output, d_output)
+        # Feature-style gate (global)
+        self.feature_gate = nn.Sequential(
+            nn.Linear(d_market, d_feature),
+            nn.SiLU(),
+            nn.Linear(d_feature, d_feature),
         )
 
-        # 控制行业矩阵的衰减程度：市场波动大时，行业间联动可能增强或减弱
-        self.cohesion_head = nn.Linear(d_output, 1)
+        # Industry cohesion gate (scalar, global)
+        self.cohesion_gate = nn.Sequential(
+            nn.Linear(d_market, 1),
+            nn.Sigmoid(),  # output in (0,1)
+        )
 
-    def forward(self, x):
-        x_enc = self.encoder(x)
+    def forward(self, market_feat: torch.Tensor):
+        """
+        Args:
+            market_feat: (B, d_market) or (d_market,)
+        Returns:
+            feature_scale: (B, d_feature) or (1, d_feature)
+            cohesion: (B, 1) or (1, 1)
+        """
+        if market_feat.dim() == 1:
+            market_feat = market_feat.unsqueeze(0)
 
-        # 特征缩放因子
-        x_scale = torch.softmax(x_enc / self.t, dim=-1)
-        x_scale = self.d_output * x_scale
+        # Feature scaling (soft style switch)
+        feat_scale = self.feature_gate(market_feat)
+        feat_scale = torch.softmax(feat_scale / self.t, dim=-1)
+        feat_scale = self.d_feature * feat_scale  # keep expectation ~1
 
-        # 限制在 [0.5, 1.5] 之间，作为 delta 的缩放因子
-        cohesion_scale = torch.sigmoid(self.cohesion_head(x_enc)) + 0.5
+        # Industry cohesion (scalar)
+        cohesion = self.cohesion_gate(market_feat)
 
-        return x_scale, cohesion_scale
+        return feat_scale, cohesion
 
 
 class MLP(nn.Module):
@@ -133,9 +153,9 @@ class SAttention(nn.Module):
         self.input_layernorm = nn.LayerNorm(d_model, eps=1e-5)
         self.post_attention_layernorm = nn.LayerNorm(d_model, eps=1e-5)
 
-    def forward(self, x, industry_decay_matrix):
+    def forward(self, x, industry_decay):
         # x: (N, D)  — 股票特征
-        # industry_decay_matrix: (N, N) — 行业衰减矩阵
+        # industry_decay: (N, N) — 行业衰减矩阵
         residual = x
         x_states = self.input_layernorm(x)
 
@@ -157,7 +177,7 @@ class SAttention(nn.Module):
 
             attn_logits = torch.matmul(qh, kh.transpose(0, 1)) / self.temperature
             attn_logits = attn_logits + torch.log(
-                industry_decay_matrix + 1e-8
+                industry_decay + 1e-8
             )  # 用log-space加法
             attn_weights = torch.softmax(attn_logits, dim=-1)
 
@@ -228,7 +248,7 @@ class PPNet(nn.Module):
         self.temporal_aggregator = TemporalAttention(d_model=self.temporal_hidden_dim)
 
         # Market layers
-        self.market_gate = Gate(
+        self.market_gate = MarketGate(
             d_market, self.temporal_hidden_dim + d_cs_feat, beta=beta
         )
 
@@ -252,7 +272,7 @@ class PPNet(nn.Module):
         # Prediction head
         self.prediction_head = nn.Linear(d_model, 1, bias=False)
 
-    def _build_industry_decay_matrix(
+    def _build_industry_decay(
         self, industry_indices: torch.Tensor, delta1: float = 0.65, delta2: float = 0.2
     ) -> torch.Tensor:
         """
@@ -341,11 +361,17 @@ class PPNet(nn.Module):
         # Fuse temporal and cross-sectional representations
         fused_states = self.fusion_proj(gated_states)  # (N, d_model)
 
-        # Apply spatial attention with industry decay matrix
-        industry_decay_matrix = self._build_industry_decay_matrix(industry_indices)
-        industry_decay_matrix = industry_decay_matrix * industry_cohesion_weights
+        # Cohesion controls industry vs idiosyncratic balance
+        base_decay = self._build_industry_decay(industry_indices)
+        identity = torch.eye(base_decay.size(0), device=base_decay.device)
+        industry_decay = (
+            industry_cohesion_weights * base_decay
+            + (1.0 - industry_cohesion_weights) * identity
+        )
+
+        # Industry-aware spatial attention
         spatial_out = self.spatial_attn(
-            fused_states, industry_decay_matrix=industry_decay_matrix
+            fused_states, industry_decay=industry_decay
         )  # (N, d_model)
 
         # Generate final prediction
