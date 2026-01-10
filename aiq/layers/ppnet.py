@@ -48,7 +48,7 @@ class MarketGate(nn.Module):
         feat_scale = self.d_feature * feat_scale  # keep expectation ~1
 
         # Industry cohesion (scalar)
-        cohesion = self.cohesion_gate(market_feat)
+        cohesion = self.cohesion_gate(market_feat[0:1])
 
         return feat_scale, cohesion
 
@@ -176,9 +176,7 @@ class SAttention(nn.Module):
             vh = v[:, i, :]  # (N, head_dim)
 
             attn_logits = torch.matmul(qh, kh.transpose(0, 1)) / self.temperature
-            attn_logits = attn_logits + torch.log(
-                industry_decay + 1e-8
-            )  # 用log-space加法
+            attn_logits += torch.log(industry_decay + 1e-8).clamp(min=-100.0)
             attn_weights = torch.softmax(attn_logits, dim=-1)
 
             attn_weights = self.attn_dropout[i](attn_weights)
@@ -363,11 +361,7 @@ class PPNet(nn.Module):
 
         # Cohesion controls industry vs idiosyncratic balance
         base_decay = self._build_industry_decay(industry_indices)
-        identity = torch.eye(base_decay.size(0), device=base_decay.device)
-        industry_decay = (
-            industry_cohesion_weights * base_decay
-            + (1.0 - industry_cohesion_weights) * identity
-        )
+        industry_decay = industry_cohesion_weights * base_decay
 
         # Industry-aware spatial attention
         spatial_out = self.spatial_attn(
