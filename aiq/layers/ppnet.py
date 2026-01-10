@@ -6,27 +6,6 @@ from torch import nn
 from .embed import DataEmbedding
 
 
-class Gate(nn.Module):
-    def __init__(self, d_input, d_output, beta=1.0):
-        super().__init__()
-
-        self.d_output = d_output
-        self.t = beta
-
-        self.encoder = nn.Sequential(
-            nn.Linear(d_input, d_output), nn.SiLU(), nn.Linear(d_output, d_output)
-        )
-
-    def forward(self, x):
-        x_enc = self.encoder(x)
-
-        # 特征缩放因子
-        x_scale = torch.softmax(x_enc / self.t, dim=-1)
-        x_scale = self.d_output * x_scale
-
-        return x_scale
-
-
 class MLP(nn.Module):
     def __init__(self, hidden_size, intermediate_size):
         super(MLP, self).__init__()
@@ -192,6 +171,29 @@ class TemporalAttention(nn.Module):
         attn_weights = torch.softmax(scores, dim=1).unsqueeze(1)  # [N, 1, T]
         output = torch.matmul(attn_weights, z).squeeze(1)  # [N, D]
         return output
+
+
+class Gate(nn.Module):
+    def __init__(self, d_input, d_output, beta=1.0):
+        super().__init__()
+
+        self.d_output = d_output
+        self.t = beta
+
+        self.encoder = nn.Sequential(
+            nn.Linear(d_input, 2 * d_output),
+            nn.SiLU(),
+            nn.Linear(2 * d_output, d_output),
+        )
+
+    def forward(self, x):
+        x_enc = self.encoder(x)
+
+        # 特征缩放因子
+        x_scale = torch.softmax(x_enc / self.t, dim=-1)
+        x_scale = self.d_output * x_scale
+
+        return x_scale
 
 
 class PPNet(nn.Module):

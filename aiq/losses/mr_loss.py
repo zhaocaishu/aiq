@@ -11,9 +11,10 @@ class MarginRankingLoss(nn.Module):
     than those with lower returns, maintaining at least a specified margin.
     """
 
-    def __init__(self, margin: float = 0.1):
+    def __init__(self, margin: float = 0.1, epsilon: float = 1e-4):
         super().__init__()
         self.margin = margin
+        self.epsilon = epsilon
         # Use 'mean' reduction to average the loss across all valid stock pairs
         self.loss_fn = nn.MarginRankingLoss(margin=margin, reduction="mean")
 
@@ -37,17 +38,16 @@ class MarginRankingLoss(nn.Module):
         r_i = targets  # shape (N, 1)
         r_j = targets.T  # shape (1, N)
 
-        # Determine ranking labels (y) for all pairs
-        # y_ij = 1  if return_i > return_j
-        # y_ij = -1 if return_i < return_j
-        # y_ij = 0  if return_i == return_j
+        # Construct a mask to select valid comparison pairs
+        # only pairs with sufficiently different ground-truth returns are kept
         target_diff = r_i - r_j
-        y = torch.sign(target_diff)
+        mask = target_diff.abs() > self.epsilon
 
-        # Filter pairs
-        # We ignore the diagonal (i == j) and pairs where returns are identical,
-        # as MarginRankingLoss requires labels to be 1 or -1.
-        mask = y != 0
+        # Determine pairwise ranking labels:
+        # y_ij = +1 if return_i > return_j
+        # y_ij = -1 if return_i < return_j
+        # (pairs with nearly equal returns are masked out)
+        y = torch.sign(target_diff)
 
         # Extract valid pairs and flatten to 1D
         # Expanding (N, 1) to (N, N) matches the shape of the mask
