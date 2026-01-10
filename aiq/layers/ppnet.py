@@ -6,51 +6,25 @@ from torch import nn
 from .embed import DataEmbedding
 
 
-class MarketGate(nn.Module):
-    """
-    Market-level global gating module.
-    - Feature gate: controls factor/style importance under market regime
-    - Cohesion gate: controls industry co-movement strength
-    """
-
-    def __init__(self, d_market, d_feature, beta=1.0):
+class Gate(nn.Module):
+    def __init__(self, d_input, d_output, beta=1.0):
         super().__init__()
+
+        self.d_output = d_output
         self.t = beta
-        self.d_feature = d_feature
 
-        # Feature-style gate (global)
-        self.feature_gate = nn.Sequential(
-            nn.Linear(d_market, d_feature),
-            nn.SiLU(),
-            nn.Linear(d_feature, d_feature),
+        self.encoder = nn.Sequential(
+            nn.Linear(d_input, d_output), nn.SiLU(), nn.Linear(d_output, d_output)
         )
 
-        # Industry cohesion gate (scalar, global)
-        self.cohesion_gate = nn.Sequential(
-            nn.Linear(d_market, 1),
-            nn.Sigmoid(),  # output in (0,1)
-        )
+    def forward(self, x):
+        x_enc = self.encoder(x)
 
-    def forward(self, market_feat: torch.Tensor):
-        """
-        Args:
-            market_feat: (B, d_market) or (d_market,)
-        Returns:
-            feature_scale: (B, d_feature) or (1, d_feature)
-            cohesion: (B, 1) or (1, 1)
-        """
-        if market_feat.dim() == 1:
-            market_feat = market_feat.unsqueeze(0)
+        # 特征缩放因子
+        x_scale = torch.softmax(x_enc / self.t, dim=-1)
+        x_scale = self.d_output * x_scale
 
-        # Feature scaling (soft style switch)
-        feat_scale = self.feature_gate(market_feat)
-        feat_scale = torch.softmax(feat_scale / self.t, dim=-1)
-        feat_scale = self.d_feature * feat_scale  # keep expectation ~1
-
-        # Industry cohesion (scalar)
-        cohesion = self.cohesion_gate(market_feat[0:1])
-
-        return feat_scale, cohesion
+        return x_scale
 
 
 class MLP(nn.Module):
@@ -246,7 +220,7 @@ class PPNet(nn.Module):
         self.temporal_aggregator = TemporalAttention(d_model=self.temporal_hidden_dim)
 
         # Market layers
-        self.market_gate = MarketGate(
+        self.market_gate = Gate(
             d_market, self.temporal_hidden_dim + d_cs_feat, beta=beta
         )
 
@@ -349,9 +323,7 @@ class PPNet(nn.Module):
         concat_states = torch.cat([temporal_agg, stock_cs_features], dim=-1)
 
         # Apply gating to market features and modulate stock states
-        feature_gated_weights, industry_cohesion_weights = self.market_gate(
-            market_features
-        )
+        feature_gated_weights = self.market_gate(market_features)
         gated_states = (
             concat_states * feature_gated_weights
         )  # (N, temporal_hidden_dim + d_cs_feat)
@@ -359,11 +331,8 @@ class PPNet(nn.Module):
         # Fuse temporal and cross-sectional representations
         fused_states = self.fusion_proj(gated_states)  # (N, d_model)
 
-        # Cohesion controls industry vs idiosyncratic balance
-        base_decay = self._build_industry_decay(industry_indices)
-        industry_decay = industry_cohesion_weights * base_decay
-
         # Industry-aware spatial attention
+        industry_decay = self._build_industry_decay(industry_indices)
         spatial_out = self.spatial_attn(
             fused_states, industry_decay=industry_decay
         )  # (N, d_model)
