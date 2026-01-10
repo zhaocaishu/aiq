@@ -152,7 +152,7 @@ class SAttention(nn.Module):
 class TemporalAttention(nn.Module):
     def __init__(self, d_model, dropout):
         super().__init__()
-        self.trans = nn.Linear(d_model, d_model, bias=True)
+        self.trans = nn.Linear(d_model, d_model, bias=False)
         self.context_vector = nn.Parameter(torch.Tensor(d_model, 1))
         self.attn_dropout = nn.Dropout(dropout)
 
@@ -178,9 +178,9 @@ class Gate(nn.Module):
         self.t = beta
 
         self.encoder = nn.Sequential(
-            nn.Linear(d_input, 2 * d_output),
+            nn.Linear(d_input, d_output),
             nn.SiLU(),
-            nn.Linear(2 * d_output, d_output),
+            nn.Linear(d_output, d_output),
         )
 
     def forward(self, x):
