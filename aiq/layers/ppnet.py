@@ -150,25 +150,22 @@ class SAttention(nn.Module):
 
 
 class TemporalAttention(nn.Module):
-    def __init__(self, d_model):
+    def __init__(self, d_model, dropout):
         super().__init__()
-        self.trans = nn.Linear(d_model, d_model, bias=False)
-        self.context_vector = nn.Parameter(torch.Tensor(d_model, 1))  # Learnable query
+        self.trans = nn.Linear(d_model, d_model, bias=True)
+        self.context_vector = nn.Parameter(torch.Tensor(d_model, 1))
+        self.attn_dropout = nn.Dropout(dropout)
 
-        # 显式初始化权重，避免数值不稳定
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        # 使用 Xavier Uniform 初始化 context_vector
-        # 这种初始化方式能保持每一层输出的方差一致，利于梯度传播
         nn.init.xavier_uniform_(self.context_vector)
 
     def forward(self, z):
         # z: [N, T, D]
         h = torch.tanh(self.trans(z))
-        # 采用可学习的 context vector捕捉全局重要的时间步
         scores = torch.matmul(h, self.context_vector).squeeze(-1)  # [N, T]
+
         attn_weights = torch.softmax(scores, dim=1).unsqueeze(1)  # [N, 1, T]
+        attn_weights = self.attn_dropout(attn_weights)
+
         output = torch.matmul(attn_weights, z).squeeze(1)  # [N, D]
         return output
 
@@ -219,7 +216,9 @@ class PPNet(nn.Module):
             nhead=t_nhead,
             dropout=dropout,
         )
-        self.temporal_aggregator = TemporalAttention(d_model=self.temporal_hidden_dim)
+        self.temporal_aggregator = TemporalAttention(
+            d_model=self.temporal_hidden_dim, dropout=dropout
+        )
 
         # Market layers
         self.market_gate = Gate(
