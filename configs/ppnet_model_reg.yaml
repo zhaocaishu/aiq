@@ -4,7 +4,7 @@ data_handler:
   module_path: aiq.dataset.handler
   kwargs:
     instruments: *market
-    start_time: "2017-01-01"
+    start_time: "2016-01-01"
     end_time: "2023-12-31"
     fit_start_time: "2017-01-01"
     fit_end_time: "2022-06-20"
@@ -64,11 +64,11 @@ model:
     d_model: 256
     t_nhead: 4
     s_nhead: 2
-    dropout: 0.1
+    dropout: 0.3
     beta: 3.0
     epochs: 50
     batch_size: 1
-    learning_rate: 0.0003
+    learning_rate: 0.0001
     criterion_name: "Hybrid"
     early_stopping_patience: 10
 evaluator:
