@@ -28,11 +28,11 @@ class PPNetModel(BaseModel):
         s_nhead=2,
         dropout=0.5,
         beta=5.0,
-        epochs=5,
+        epochs=20,
         batch_size=1,
-        warmup_ratio=0.1,
+        warmup_ratio=0.05,
         lr_scheduler_type="cosine",
-        learning_rate=0.01,
+        learning_rate=3e-4,
         criterion_name="MSE",
         early_stopping_patience=5,
         pretrained=None,
@@ -160,7 +160,7 @@ class PPNetModel(BaseModel):
                 )
                 loss = self.criterion(outputs, batch_labels)
                 loss.backward()
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 3.0)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
                 optimizer.step()
                 lr_scheduler.step()
 
