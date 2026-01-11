@@ -260,7 +260,7 @@ class PPNetModel(BaseModel):
             loss = self.criterion(outputs, batch_labels)
 
             total_loss.append(loss.item())
-        total_loss = np.average(total_loss)
+        total_loss = np.mean(total_loss)
         return total_loss
 
     def predict(self, test_dataset: Dataset) -> object:
