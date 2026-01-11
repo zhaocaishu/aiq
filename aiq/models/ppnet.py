@@ -115,21 +115,24 @@ class PPNetModel(BaseModel):
             num_training_steps=num_training_steps,
         )
 
-        # Early stopping variables
-        patience_counter = 0
+        # Step-based early stopping
+        patience_steps = self.early_stopping_patience * train_steps_epoch
         best_val_loss = float("inf")
+        best_step = 0
+        global_step = 0
+        val_check_interval = 500
+        stop_training = False
 
         for epoch in range(self.epochs):
-            self.logger.info("=" * 20 + " Epoch {} ".format(epoch + 1) + "=" * 20)
+            self.model.train()
+            train_losses = []
 
             iter_count = 0
             time_now = time.time()
-            epoch_time = time.time()
 
-            train_loss = []
-            self.model.train()
             for i, batch_dict in enumerate(train_loader):
                 iter_count += 1
+                global_step += 1
 
                 batch_industry_ids = self.to_device(batch_dict["industry_ids"])
                 batch_ts_features = self.to_device(batch_dict["stock_ts_features"])
@@ -160,60 +163,78 @@ class PPNetModel(BaseModel):
                 )
                 loss = self.criterion(outputs, batch_labels)
                 loss.backward()
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 3.0)
                 optimizer.step()
                 lr_scheduler.step()
 
                 if (i + 1) % 100 == 0:
                     speed = (time.time() - time_now) / iter_count
-                    left_time = speed * ((self.epochs - epoch) * train_steps_epoch - i)
+                    left_time = speed * (
+                        (self.epochs - epoch - 1) * train_steps_epoch
+                        + (train_steps_epoch - i - 1)
+                    )
                     cur_lr = optimizer.param_groups[0]["lr"]
                     self.logger.info(
-                        "Epoch: {0}, step: {1}, lr: {2:.8f} train loss: {3:.8f}, speed: {4:.4f}s/iter, left time: {5:.4f}s".format(
-                            epoch + 1,
-                            i + 1,
-                            cur_lr,
-                            loss.item(),
-                            speed,
-                            left_time,
-                        )
+                        f"[Epoch {epoch+1}/{self.epochs}][Step {global_step}] "
+                        f"LR: {cur_lr:.6e}, Train Loss: {loss.item():.6f}, "
+                        f"Speed: {speed:.2f}s/iter, ETA: {int(left_time)}s"
                     )
                     iter_count = 0
                     time_now = time.time()
 
-                train_loss.append(loss.item())
+                train_losses.append(loss.item())
 
-            train_loss = np.average(train_loss)
-            val_loss = self.eval(val_dataset)
-            self.logger.info(
-                "Epoch: {0}, cost time: {1:.4f}s, train loss: {2:.8f}, val loss: {3:.8f}".format(
-                    epoch + 1, time.time() - epoch_time, train_loss, val_loss
-                )
-            )
-
-            # save checkpoints
-            self.save(f"model_epoch_{epoch + 1}.pth")
-
-            # early stopping
-            if val_loss < best_val_loss:
-                best_val_loss = val_loss
-                patience_counter = 0
-                self.best_model_state = copy.deepcopy(self.model.state_dict())
-                self.logger.info(f"New best validation loss: {best_val_loss:.8f}")
-            else:
-                patience_counter += 1
+            if (
+                val_dataset is not None
+                and global_step % val_check_interval == 0
+                and global_step > num_warmup_steps
+            ):
+                val_loss = self.eval(val_dataset)
                 self.logger.info(
-                    f"No improvement in validation loss, patience counter: {patience_counter}/{self.early_stopping_patience}"
+                    f"[Step {global_step}] Validation loss: {val_loss:.8f}"
                 )
-                if patience_counter >= self.early_stopping_patience:
+
+                if val_loss < best_val_loss:
+                    best_val_loss = val_loss
+                    best_step = global_step
+                    self.best_model_state = copy.deepcopy(self.model.state_dict())
                     self.logger.info(
-                        f"Early stopping triggered after {patience_counter} epochs without improvement"
+                        f"New best validation loss: {best_val_loss:.8f} at step {best_step}"
                     )
-                    break
+                else:
+                    steps_since_best = global_step - best_step
+                    self.logger.info(
+                        f"(No improvement, {steps_since_best}/{patience_steps} steps)"
+                    )
+                    if steps_since_best >= patience_steps:
+                        self.logger.info(
+                            f"Early stopping triggered at step {global_step}"
+                        )
+                        stop_training = True
+                        break
+
+            train_loss = np.mean(train_losses)
+            if val_dataset is not None:
+                val_loss = self.eval(val_dataset)
+                self.logger.info(
+                    f"[Epoch {epoch+1}/{self.epochs}] "
+                    f"Train Loss: {train_loss:.6f}, Val Loss: {val_loss:.6f}, "
+                    f"Best Val Loss: {best_val_loss:.6f} (Step {best_step})"
+                )
+            else:
+                self.logger.info(
+                    f"[Epoch {epoch+1}/{self.epochs}] Train Loss: {train_loss:.6f}"
+                )
+
+            if stop_training:
+                break
 
         # load the best weights back into the model after training
         if self.best_model_state is not None:
             self.model.load_state_dict(self.best_model_state)
+            self.logger.info(
+                f"Best model restored from step {best_step}, val_loss {best_val_loss:.8f}"
+            )
 
     def eval(self, val_dataset: Dataset):
         self.model.eval()
