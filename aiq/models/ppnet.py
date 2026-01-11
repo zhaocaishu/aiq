@@ -32,7 +32,7 @@ class PPNetModel(BaseModel):
         batch_size=1,
         warmup_ratio=0.05,
         lr_scheduler_type="cosine",
-        learning_rate=3e-4,
+        learning_rate=0.0001,
         criterion_name="MSE",
         early_stopping_patience=5,
         pretrained=None,

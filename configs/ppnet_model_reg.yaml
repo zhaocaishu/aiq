@@ -68,7 +68,7 @@ model:
     beta: 3.0
     epochs: 50
     batch_size: 1
-    learning_rate: 3e-4
+    learning_rate: 0.0003
     criterion_name: "Hybrid"
     early_stopping_patience: 10
 evaluator:
