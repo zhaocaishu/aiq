@@ -47,6 +47,7 @@ class TAttention(nn.Module):
     def forward(self, x):
         # Embedding
         x_enc = self.enc_embedding(x)
+        N, T, D = x_enc.shape
 
         # Self Attention
         residual = x_enc
@@ -55,6 +56,10 @@ class TAttention(nn.Module):
         q = self.q_proj(hidden_states)
         k = self.k_proj(hidden_states)
         v = self.v_proj(hidden_states)
+
+        causal_mask = torch.tril(torch.ones(T, T, device=x.device)).unsqueeze(
+            0
+        )  # (1, T, T)
 
         attn_outputs = []
         for i in range(self.nhead):
@@ -66,11 +71,19 @@ class TAttention(nn.Module):
                 qh = q[:, :, i * self.head_dim : (i + 1) * self.head_dim]
                 kh = k[:, :, i * self.head_dim : (i + 1) * self.head_dim]
                 vh = v[:, :, i * self.head_dim : (i + 1) * self.head_dim]
-            attn_weights = torch.softmax(
-                torch.matmul(qh, kh.transpose(1, 2)) / math.sqrt(self.head_dim), dim=-1
+
+            # (N, T, head_dim) @ (N, head_dim, T) -> (N, T, T)
+            attn_logits = torch.matmul(qh, kh.transpose(1, 2)) / math.sqrt(
+                self.head_dim
             )
+
+            # Apply causal mask
+            attn_logits = attn_logits.masked_fill(causal_mask == 0, float("-inf"))
+
+            attn_weights = torch.softmax(attn_logits, dim=-1)
             attn_weights = self.attn_dropout[i](attn_weights)
-            attn_outputs.append(torch.matmul(attn_weights, vh))
+            attn_outputs.append(torch.matmul(attn_weights, vh))  # (N, T, head_dim)
+
         hidden_states = torch.concat(attn_outputs, dim=-1)
         hidden_states = self.o_proj(hidden_states)
         hidden_states = residual + hidden_states

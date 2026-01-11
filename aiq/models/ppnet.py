@@ -32,7 +32,7 @@ class PPNetModel(BaseModel):
         batch_size=1,
         warmup_ratio=0.02,
         lr_scheduler_type="cosine",
-        learning_rate=0.00002,
+        learning_rate=2e-5,
         criterion_name="MSE",
         early_stopping_patience=5,
         pretrained=None,
@@ -46,7 +46,7 @@ class PPNetModel(BaseModel):
         self.batch_size = batch_size
         self.warmup_ratio = warmup_ratio
         self.lr_scheduler_type = lr_scheduler_type
-        self.learning_rate = learning_rate
+        self.learning_rate = float(learning_rate)
         self.criterion_name = criterion_name
         self.early_stopping_patience = early_stopping_patience
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -207,7 +207,7 @@ class PPNetModel(BaseModel):
                     val_loss = self.eval(val_dataset)
                     steps_since_best = global_step - best_step
                     msg = f"[Step {global_step}] Validation Loss: {val_loss:.8f}"
-                    
+
                     if val_loss < best_val_loss:
                         best_val_loss = val_loss
                         best_step = global_step
