@@ -205,28 +205,21 @@ class PPNetModel(BaseModel):
                     and global_step > num_warmup_steps
                 ):
                     val_loss = self.eval(val_dataset)
-                    self.logger.info(
-                        f"[Step {global_step}] Validation loss: {val_loss:.8f}"
-                    )
-
+                    steps_since_best = global_step - best_step
+                    msg = f"[Step {global_step}] Validation Loss: {val_loss:.8f}"
+                    
                     if val_loss < best_val_loss:
                         best_val_loss = val_loss
                         best_step = global_step
                         self.best_model_state = copy.deepcopy(self.model.state_dict())
-                        self.logger.info(
-                            f"New best validation loss: {best_val_loss:.8f} at step {best_step}"
-                        )
+                        msg += f" | 🔥 New Best at Step {best_step}"
                     else:
-                        steps_since_best = global_step - best_step
-                        self.logger.info(
-                            f"(No improvement, {steps_since_best}/{patience_steps} steps)"
-                        )
+                        msg += f" | (No improvement, {steps_since_best}/{patience_steps} steps)"
                         if steps_since_best >= patience_steps:
-                            self.logger.info(
-                                f"Early stopping triggered at step {global_step}"
-                            )
+                            msg += " | ⏹ Early stopping triggered"
                             stop_training = True
-                            break
+
+                    self.logger.info(msg)
 
             train_loss = np.mean(train_losses)
             if val_dataset is not None:
