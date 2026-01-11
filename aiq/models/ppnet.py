@@ -102,12 +102,25 @@ class PPNetModel(BaseModel):
         num_training_steps = self.epochs * train_steps_epoch
         num_warmup_steps = int(self.warmup_ratio * num_training_steps)
 
+        # AdamW optimizer with weight decay
+        decay_params = []
+        no_decay_params = []
+        for name, param in self.model.named_parameters():
+            if any(nd in name for nd in ["bias", "LayerNorm.weight", "LayerNorm.bias"]):
+                no_decay_params.append(param)
+            else:
+                decay_params.append(param)
+
         optimizer = optim.AdamW(
-            self.model.parameters(),
+            [
+                {"params": decay_params, "weight_decay": 0.05},
+                {"params": no_decay_params, "weight_decay": 0.0},
+            ],
             lr=self.learning_rate,
             betas=(0.9, 0.999),
-            weight_decay=0.05,
         )
+
+        # Cosine scheduler
         lr_scheduler = get_scheduler(
             name=self.lr_scheduler_type,
             optimizer=optimizer,
@@ -243,7 +256,8 @@ class PPNetModel(BaseModel):
 
         val_loader = DataLoader(val_dataset, batch_size=self.batch_size, shuffle=False)
 
-        total_loss = []
+        total_losses = []
+
         for i, batch_dict in enumerate(val_loader):
             batch_industry_ids = self.to_device(batch_dict["industry_ids"])
             batch_ts_features = self.to_device(batch_dict["stock_ts_features"])
@@ -259,10 +273,13 @@ class PPNetModel(BaseModel):
                     batch_market_features,
                 )
 
-            loss = self.criterion(outputs, batch_labels)
+                loss = self.criterion(outputs, batch_labels)
 
-            total_loss.append(loss.item())
-        total_loss = np.mean(total_loss)
+            total_losses.append(loss.item())
+
+        total_loss = np.mean(total_losses)
+
+        self.model.train()
         return total_loss
 
     def predict(self, test_dataset: Dataset) -> object:
