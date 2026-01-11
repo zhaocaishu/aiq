@@ -15,8 +15,6 @@ class MarginRankingLoss(nn.Module):
         super().__init__()
         self.margin = margin
         self.epsilon = epsilon
-        # Use 'mean' reduction to average the loss across all valid stock pairs
-        self.loss_fn = nn.MarginRankingLoss(margin=margin, reduction="mean")
 
     def forward(self, preds: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         """
@@ -29,35 +27,21 @@ class MarginRankingLoss(nn.Module):
         Returns:
             torch.Tensor: Scalar mean loss across all valid pairs.
         """
-        # Generate all pairs (i, j) using broadcasting
-        # s_i: Replicated across rows; element (i, j) represents score of stock i
-        # s_j: Replicated across columns; element (i, j) represents score of stock j
-        s_i = preds  # shape (N, 1)
-        s_j = preds.T  # shape (1, N)
+        preds = preds.view(-1, 1)
+        targets = targets.view(-1, 1)
 
-        r_i = targets  # shape (N, 1)
-        r_j = targets.T  # shape (1, N)
-
-        # Construct a mask to select valid comparison pairs
-        # only pairs with sufficiently different ground-truth returns are kept
-        target_diff = r_i - r_j
-        mask = target_diff.abs() > self.epsilon
-
-        # Determine pairwise ranking labels:
-        # y_ij = +1 if return_i > return_j
-        # y_ij = -1 if return_i < return_j
-        # (pairs with nearly equal returns are masked out)
-        y = torch.sign(target_diff)
-
-        # Extract valid pairs and flatten to 1D
-        # Expanding (N, 1) to (N, N) matches the shape of the mask
         N = preds.size(0)
-        valid_s_i = s_i.expand(N, N)[mask]
-        valid_s_j = s_j.expand(N, N)[mask]
-        valid_y = y[mask]
+        if N <= 1:
+            return preds.new_tensor(0.0, requires_grad=True)
 
-        # Compute the standard Margin Ranking Loss:
-        # Loss(x1, x2, y) = max(0, -y * (x1 - x2) + margin)
-        loss = self.loss_fn(valid_s_i, valid_s_j, valid_y)
+        diff_r = targets - targets.T
+        mask = diff_r.abs() > self.epsilon
+        if not mask.any():
+            return preds.new_tensor(0.0, requires_grad=True)
 
-        return loss
+        y = torch.where(diff_r > 0, 1.0, -1.0)
+
+        diff_s = preds - preds.T
+        loss = torch.relu(self.margin - y * diff_s)
+
+        return loss[mask].mean()
