@@ -11,7 +11,7 @@ class MarginRankingLoss(nn.Module):
     than those with lower returns, maintaining at least a specified margin.
     """
 
-    def __init__(self, margin: float = 0.1, epsilon: float = 1e-4):
+    def __init__(self, margin: float = 0.1, epsilon: float = 0.01):
         super().__init__()
         self.margin = margin
         self.epsilon = epsilon

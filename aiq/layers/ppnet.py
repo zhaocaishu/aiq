@@ -154,7 +154,6 @@ class TemporalAttention(nn.Module):
         super().__init__()
         self.trans = nn.Linear(d_model, d_model, bias=False)
         self.context_vector = nn.Parameter(torch.Tensor(d_model, 1))
-        self.attn_dropout = nn.Dropout(dropout)
 
         nn.init.xavier_uniform_(self.context_vector)
 
@@ -162,10 +161,7 @@ class TemporalAttention(nn.Module):
         # z: [N, T, D]
         h = torch.tanh(self.trans(z))
         scores = torch.matmul(h, self.context_vector).squeeze(-1)  # [N, T]
-
         attn_weights = torch.softmax(scores, dim=1).unsqueeze(1)  # [N, 1, T]
-        attn_weights = self.attn_dropout(attn_weights)
-
         output = torch.matmul(attn_weights, z).squeeze(1)  # [N, D]
         return output
 
