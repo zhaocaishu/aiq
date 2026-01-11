@@ -30,9 +30,9 @@ class PPNetModel(BaseModel):
         beta=5.0,
         epochs=50,
         batch_size=1,
-        warmup_ratio=0.1,
+        warmup_ratio=0.02,
         lr_scheduler_type="cosine",
-        learning_rate=0.0001,
+        learning_rate=0.00002,
         criterion_name="MSE",
         early_stopping_patience=5,
         pretrained=None,
@@ -106,7 +106,7 @@ class PPNetModel(BaseModel):
             self.model.parameters(),
             lr=self.learning_rate,
             betas=(0.9, 0.999),
-            weight_decay=0.01,
+            weight_decay=0.05,
         )
         lr_scheduler = get_scheduler(
             name=self.lr_scheduler_type,
@@ -167,6 +167,9 @@ class PPNetModel(BaseModel):
                 optimizer.step()
                 lr_scheduler.step()
 
+                train_losses.append(loss.item())
+
+                # Log training progress
                 if (i + 1) % 100 == 0:
                     speed = (time.time() - time_now) / iter_count
                     left_time = speed * (
@@ -182,36 +185,35 @@ class PPNetModel(BaseModel):
                     iter_count = 0
                     time_now = time.time()
 
-                train_losses.append(loss.item())
-
-            if (
-                val_dataset is not None
-                and global_step % val_check_interval == 0
-                and global_step > num_warmup_steps
-            ):
-                val_loss = self.eval(val_dataset)
-                self.logger.info(
-                    f"[Step {global_step}] Validation loss: {val_loss:.8f}"
-                )
-
-                if val_loss < best_val_loss:
-                    best_val_loss = val_loss
-                    best_step = global_step
-                    self.best_model_state = copy.deepcopy(self.model.state_dict())
+                # Step-based validation check
+                if (
+                    val_dataset is not None
+                    and global_step % val_check_interval == 0
+                    and global_step > num_warmup_steps
+                ):
+                    val_loss = self.eval(val_dataset)
                     self.logger.info(
-                        f"New best validation loss: {best_val_loss:.8f} at step {best_step}"
+                        f"[Step {global_step}] Validation loss: {val_loss:.8f}"
                     )
-                else:
-                    steps_since_best = global_step - best_step
-                    self.logger.info(
-                        f"(No improvement, {steps_since_best}/{patience_steps} steps)"
-                    )
-                    if steps_since_best >= patience_steps:
+
+                    if val_loss < best_val_loss:
+                        best_val_loss = val_loss
+                        best_step = global_step
+                        self.best_model_state = copy.deepcopy(self.model.state_dict())
                         self.logger.info(
-                            f"Early stopping triggered at step {global_step}"
+                            f"New best validation loss: {best_val_loss:.8f} at step {best_step}"
                         )
-                        stop_training = True
-                        break
+                    else:
+                        steps_since_best = global_step - best_step
+                        self.logger.info(
+                            f"(No improvement, {steps_since_best}/{patience_steps} steps)"
+                        )
+                        if steps_since_best >= patience_steps:
+                            self.logger.info(
+                                f"Early stopping triggered at step {global_step}"
+                            )
+                            stop_training = True
+                            break
 
             train_loss = np.mean(train_losses)
             if val_dataset is not None:
