@@ -57,10 +57,6 @@ class TAttention(nn.Module):
         k = self.k_proj(hidden_states)
         v = self.v_proj(hidden_states)
 
-        causal_mask = torch.tril(torch.ones(T, T, device=x.device)).unsqueeze(
-            0
-        )  # (1, T, T)
-
         attn_outputs = []
         for i in range(self.nhead):
             if i == self.nhead - 1:
@@ -76,9 +72,6 @@ class TAttention(nn.Module):
             attn_logits = torch.matmul(qh, kh.transpose(1, 2)) / math.sqrt(
                 self.head_dim
             )
-
-            # Apply causal mask
-            attn_logits = attn_logits.masked_fill(causal_mask == 0, float("-inf"))
 
             attn_weights = torch.softmax(attn_logits, dim=-1)
             attn_weights = self.attn_dropout[i](attn_weights)

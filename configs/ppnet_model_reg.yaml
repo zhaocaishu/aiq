@@ -64,14 +64,14 @@ model:
     d_model: 256
     t_nhead: 4
     s_nhead: 2
-    dropout: 0.3
+    dropout: 0.5
     beta: 3.0
-    epochs: 50
+    epochs: 100
     batch_size: 1
-    warmup_ratio: 0.02
-    learning_rate: 2e-5
+    warmup_ratio: 0.01
+    learning_rate: 0.001
     criterion_name: "Hybrid"
-    early_stopping_patience: 5
+    early_stopping_patience: 10
 evaluator:
   class: Evaluator
   module_path: aiq.evaluation.evaluator

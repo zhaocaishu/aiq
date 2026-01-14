@@ -24,8 +24,6 @@ from aiq.ops import (
     Sum,
     Abs,
     EMA,
-    Skew,
-    Kurt,
 )
 from aiq.utils.module import init_instance_by_config
 

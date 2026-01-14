@@ -26,13 +26,13 @@ class PPNetModel(BaseModel):
         d_model=256,
         t_nhead=4,
         s_nhead=2,
-        dropout=0.3,
+        dropout=0.5,
         beta=5.0,
         epochs=50,
         batch_size=1,
         warmup_ratio=0.02,
         lr_scheduler_type="cosine",
-        learning_rate=2e-5,
+        learning_rate=0.001,
         criterion_name="MSE",
         early_stopping_patience=5,
         pretrained=None,
@@ -46,7 +46,7 @@ class PPNetModel(BaseModel):
         self.batch_size = batch_size
         self.warmup_ratio = warmup_ratio
         self.lr_scheduler_type = lr_scheduler_type
-        self.learning_rate = float(learning_rate)
+        self.learning_rate = learning_rate
         self.criterion_name = criterion_name
         self.early_stopping_patience = early_stopping_patience
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -102,22 +102,12 @@ class PPNetModel(BaseModel):
         num_training_steps = self.epochs * train_steps_epoch
         num_warmup_steps = int(self.warmup_ratio * num_training_steps)
 
-        # AdamW optimizer with weight decay
-        decay_params = []
-        no_decay_params = []
-        for name, param in self.model.named_parameters():
-            if any(nd in name for nd in ["bias", "LayerNorm.weight", "LayerNorm.bias"]):
-                no_decay_params.append(param)
-            else:
-                decay_params.append(param)
-
-        optimizer = optim.AdamW(
-            [
-                {"params": decay_params, "weight_decay": 0.05},
-                {"params": no_decay_params, "weight_decay": 0.0},
-            ],
+        # Adam optimizer
+        optimizer = optim.Adam(
+            self.model.parameters(),
             lr=self.learning_rate,
             betas=(0.9, 0.999),
+            weight_decay=0.001,
         )
 
         # Cosine scheduler
@@ -144,6 +134,10 @@ class PPNetModel(BaseModel):
             time_now = time.time()
 
             for i, batch_dict in enumerate(train_loader):
+                # 检查是否需要停止训练
+                if stop_training:
+                    break
+
                 iter_count += 1
                 global_step += 1
 
@@ -201,7 +195,10 @@ class PPNetModel(BaseModel):
                 # Step-based validation check
                 if (
                     val_dataset is not None
-                    and global_step % val_check_interval == 0
+                    and (
+                        global_step % val_check_interval == 0
+                        or i == train_steps_epoch - 1
+                    )
                     and global_step > num_warmup_steps
                 ):
                     val_loss = self.eval(val_dataset)
@@ -214,7 +211,7 @@ class PPNetModel(BaseModel):
                         self.best_model_state = copy.deepcopy(self.model.state_dict())
                         msg += f" | 🔥 New Best at Step {best_step}"
                     else:
-                        msg += f" | (No improvement, {steps_since_best}/{patience_steps} steps)"
+                        msg += f" | 😐 No improvement, {steps_since_best}/{patience_steps} steps"
                         if steps_since_best >= patience_steps:
                             msg += " | ⏹ Early stopping triggered"
                             stop_training = True
@@ -226,8 +223,7 @@ class PPNetModel(BaseModel):
                 val_loss = self.eval(val_dataset)
                 self.logger.info(
                     f"[Epoch {epoch+1}/{self.epochs}] "
-                    f"Train Loss: {train_loss:.6f}, Val Loss: {val_loss:.6f}, "
-                    f"Best Val Loss: {best_val_loss:.6f} (Step {best_step})"
+                    f"Train Loss: {train_loss:.6f}, Val Loss: {val_loss:.6f}"
                 )
             else:
                 self.logger.info(
@@ -245,11 +241,11 @@ class PPNetModel(BaseModel):
             )
 
     def eval(self, val_dataset: Dataset):
-        self.model.eval()
-
         val_loader = DataLoader(val_dataset, batch_size=self.batch_size, shuffle=False)
 
         total_losses = []
+
+        self.model.eval()
 
         for i, batch_dict in enumerate(val_loader):
             batch_industry_ids = self.to_device(batch_dict["industry_ids"])
