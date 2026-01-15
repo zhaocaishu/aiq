@@ -185,6 +185,9 @@ class Gate(nn.Module):
             nn.Linear(d_output, d_output),
         )
 
+        # 控制行业矩阵的衰减程度：市场波动大时，行业间联动可能增强或减弱
+        self.cohesion_head = nn.Linear(d_output, 1)
+
     def forward(self, x):
         x_enc = self.encoder(x)
 
@@ -192,7 +195,10 @@ class Gate(nn.Module):
         x_scale = torch.softmax(x_enc / self.t, dim=-1)
         x_scale = self.d_output * x_scale
 
-        return x_scale
+        # 限制在 [0, 1] 之间，作为 delta 的缩放因子
+        cohesion_scale = torch.sigmoid(self.cohesion_head(x_enc[0:1]))
+
+        return x_scale, cohesion_scale
 
 
 class PPNet(nn.Module):
@@ -326,7 +332,9 @@ class PPNet(nn.Module):
         concat_states = torch.cat([temporal_agg, stock_cs_features], dim=-1)
 
         # Apply gating to market features and modulate stock states
-        feature_gated_weights = self.market_gate(market_features)
+        feature_gated_weights, industry_cohesion_weights = self.market_gate(
+            market_features
+        )
         gated_states = (
             concat_states * feature_gated_weights
         )  # (N, temporal_hidden_dim + d_cs_feat)
@@ -336,6 +344,7 @@ class PPNet(nn.Module):
 
         # Industry-aware spatial attention
         industry_decay = self._build_industry_decay(industry_indices)
+        industry_decay = industry_decay * industry_cohesion_weights
         spatial_out = self.spatial_attn(
             fused_states, industry_decay=industry_decay
         )  # (N, d_model)
