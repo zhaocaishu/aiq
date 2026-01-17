@@ -40,11 +40,13 @@ class MarginRankingLoss(nn.Module):
         # base loss
         diff_r = targets.unsqueeze(1) - targets.unsqueeze(0)
         mask = diff_r.abs() > self.epsilon
+
         if not mask.any():
             return preds.new_tensor(0.0, requires_grad=True)
 
         y = torch.where(diff_r > 0, 1.0, -1.0)
         diff_s = preds.unsqueeze(1) - preds.unsqueeze(0)
+
         base_loss = torch.relu(self.margin - y * diff_s)
 
         if self.weighted:
@@ -56,12 +58,12 @@ class MarginRankingLoss(nn.Module):
             ri = ranks.unsqueeze(1).float()
             rj = ranks.unsqueeze(0).float()
 
-            rank_weight = torch.abs(
+            weight = torch.abs(
                 1.0 / torch.log2(ri + 1.0) - 1.0 / torch.log2(rj + 1.0)
             )
 
             # weighted loss
-            loss = base_loss * rank_weight
+            loss = base_loss * weight
         else:
             loss = base_loss
 
