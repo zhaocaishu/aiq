@@ -12,12 +12,11 @@ class MarginRankingLoss(nn.Module):
     """
 
     def __init__(
-        self, margin: float = 0.1, epsilon: float = 1e-3, gap_scale: float = 1.0, weighted: bool = True
+        self, margin: float = 0.1, epsilon: float = 1e-3, weighted: bool = True
     ):
         super().__init__()
         self.margin = margin
         self.epsilon = epsilon
-        self.gap_scale = gap_scale
         self.weighted = weighted
 
     def forward(self, preds: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
@@ -45,30 +44,24 @@ class MarginRankingLoss(nn.Module):
             return preds.new_tensor(0.0, requires_grad=True)
 
         y = torch.where(diff_r > 0, 1.0, -1.0)
-
         diff_s = preds.unsqueeze(1) - preds.unsqueeze(0)
         base_loss = torch.relu(self.margin - y * diff_s)
 
         if self.weighted:
             # rank-based weight (rank-based, non-linear)
-            _, order  = targets.sort(descending=True)
+            _, order = targets.sort(descending=True)
             ranks = torch.empty_like(order)
             ranks[order] = torch.arange(1, N + 1, device=targets.device)
-            
+
             ri = ranks.unsqueeze(1).float()
             rj = ranks.unsqueeze(0).float()
-            
+
             rank_weight = torch.abs(
-                1.0 / torch.log2(ri + 1.0) -
-                1.0 / torch.log2(rj + 1.0)
+                1.0 / torch.log2(ri + 1.0) - 1.0 / torch.log2(rj + 1.0)
             )
 
-            # gap weight (return difference)
-            gap = diff_r.abs()
-            gap_weight = torch.log1p(gap / self.gap_scale)
-
             # weighted loss
-            loss = base_loss * rank_weight * gap_weight
+            loss = base_loss * rank_weight
         else:
             loss = base_loss
 
