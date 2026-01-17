@@ -47,7 +47,6 @@ class TAttention(nn.Module):
     def forward(self, x):
         # Embedding
         x_enc = self.enc_embedding(x)
-        N, T, D = x_enc.shape
 
         # Self Attention
         residual = x_enc

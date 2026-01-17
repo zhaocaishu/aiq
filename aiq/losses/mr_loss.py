@@ -11,10 +11,14 @@ class MarginRankingLoss(nn.Module):
     than those with lower returns, maintaining at least a specified margin.
     """
 
-    def __init__(self, margin: float = 0.1, epsilon: float = 1e-3):
+    def __init__(
+        self, margin: float = 0.1, epsilon: float = 1e-3, gap_scale: float = 1.0, weighted: bool = True
+    ):
         super().__init__()
         self.margin = margin
         self.epsilon = epsilon
+        self.gap_scale = gap_scale
+        self.weighted = weighted
 
     def forward(self, preds: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         """
@@ -27,21 +31,45 @@ class MarginRankingLoss(nn.Module):
         Returns:
             torch.Tensor: Scalar mean loss across all valid pairs.
         """
-        preds = preds.view(-1, 1)
-        targets = targets.view(-1, 1)
+        preds = preds.view(-1)
+        targets = targets.view(-1)
 
         N = preds.size(0)
         if N <= 1:
             return preds.new_tensor(0.0, requires_grad=True)
 
-        diff_r = targets - targets.T
+        # base loss
+        diff_r = targets.unsqueeze(1) - targets.unsqueeze(0)
         mask = diff_r.abs() > self.epsilon
         if not mask.any():
             return preds.new_tensor(0.0, requires_grad=True)
 
         y = torch.where(diff_r > 0, 1.0, -1.0)
 
-        diff_s = preds - preds.T
-        loss = torch.relu(self.margin - y * diff_s)
+        diff_s = preds.unsqueeze(1) - preds.unsqueeze(0)
+        base_loss = torch.relu(self.margin - y * diff_s)
+
+        if self.weighted:
+            # rank-based weight (rank-based, non-linear)
+            _, order  = targets.sort(descending=True)
+            ranks = torch.empty_like(order)
+            ranks[order] = torch.arange(1, N + 1, device=targets.device)
+            
+            ri = ranks.unsqueeze(1).float()
+            rj = ranks.unsqueeze(0).float()
+            
+            rank_weight = torch.abs(
+                1.0 / torch.log2(ri + 1.0) -
+                1.0 / torch.log2(rj + 1.0)
+            )
+
+            # gap weight (return difference)
+            gap = diff_r.abs()
+            gap_weight = torch.log1p(gap / self.gap_scale)
+
+            # weighted loss
+            loss = base_loss * rank_weight * gap_weight
+        else:
+            loss = base_loss
 
         return loss[mask].mean()
