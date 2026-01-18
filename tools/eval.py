@@ -31,6 +31,13 @@ def parse_args() -> argparse.Namespace:
         default="test",
         help="Data split for evaluation.",
     )
+    parser.add_argument(
+        "--model_names",
+        type=str,
+        nargs="+",
+        default=["model.pth"],
+        help="Model checkpoint names for ensemble, e.g. model1.pth model2.pth",
+    )
 
     return parser.parse_args()
 
@@ -46,18 +53,46 @@ def load_data_handler(save_dir: str, logger) -> object:
         return pickle.load(f)
 
 
-def load_model(cfg, val_dataset, save_dir: str, logger) -> object:
-    logger.info("Initializing model...")
-    model = init_instance_by_config(
-        cfg.model,
-        feature_names=val_dataset.feature_names,
-        label_names=val_dataset.label_names,
-        save_dir=save_dir,
-        logger=logger,
-    )
-    model.load()
-    logger.info("Model loaded successfully.")
-    return model
+def load_models(cfg, val_dataset, save_dir: str, model_names, logger) -> list:
+    models = []
+
+    for model_name in model_names:
+        logger.info(f"Loading model: {model_name}")
+        model = init_instance_by_config(
+            cfg.model,
+            feature_names=val_dataset.feature_names,
+            label_names=val_dataset.label_names,
+            save_dir=save_dir,
+            logger=logger,
+        )
+        model.load(model_name)
+        models.append(model)
+
+    logger.info("Total models loaded: %d", len(models))
+    return models
+
+
+def ensemble_predict(models, dataset, logger):
+    """
+    Run prediction for multiple models and average prediction columns.
+    """
+    pred_dfs = []
+
+    for i, model in enumerate(models):
+        logger.info(f"Running prediction for model {i + 1}/{len(models)}")
+        pred_df = model.predict(dataset).reset_index(drop=True)
+        pred_dfs.append(pred_df)
+
+    # 以第一个为基准
+    base_df = pred_dfs[0].copy()
+    pred_cols = [c for c in base_df.columns if c.startswith("PRED_")]
+
+    logger.info("Ensembling prediction columns: %s", pred_cols)
+
+    for col in pred_cols:
+        base_df[col] = sum(df[col] for df in pred_dfs) / len(pred_dfs)
+
+    return base_df
 
 
 def main():
@@ -85,9 +120,16 @@ def main():
     logger.info("Evaluation dataset loaded: %d samples", len(eval_dataset))
 
     # Load and predict
-    model = load_model(cfg, eval_dataset, args.save_dir, logger)
-    pred_df = model.predict(eval_dataset).reset_index()
-    logger.info("Prediction completed. Shape: %s", pred_df.shape)
+    models = load_models(
+        cfg,
+        eval_dataset,
+        args.save_dir,
+        args.model_names,
+        logger,
+    )
+
+    pred_df = ensemble_predict(models, eval_dataset, logger)
+    logger.info("Ensemble prediction completed. Shape: %s", pred_df.shape)
 
     # Evaluate
     evaluator = init_instance_by_config(
