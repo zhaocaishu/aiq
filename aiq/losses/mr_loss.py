@@ -12,7 +12,7 @@ class MarginRankingLoss(nn.Module):
     """
 
     def __init__(
-        self, margin: float = 0.1, epsilon: float = 1e-3, weighted: bool = True
+        self, margin: float = 0.1, epsilon: float = 1e-3, weighted: bool = False
     ):
         super().__init__()
         self.margin = margin
