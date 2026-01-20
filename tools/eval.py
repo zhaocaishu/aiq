@@ -80,7 +80,7 @@ def ensemble_predict(models, dataset, logger):
 
     for i, model in enumerate(models):
         logger.info(f"Running prediction for model {i + 1}/{len(models)}")
-        pred_df = model.predict(dataset).reset_index(drop=True)
+        pred_df = model.predict(dataset).reset_index()
         pred_dfs.append(pred_df)
 
     # 以第一个为基准
