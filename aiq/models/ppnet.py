@@ -103,11 +103,11 @@ class PPNetModel(BaseModel):
         num_warmup_steps = int(self.warmup_ratio * num_training_steps)
 
         # Adam optimizer
-        optimizer = optim.Adam(
+        optimizer = optim.AdamW(
             self.model.parameters(),
             lr=self.learning_rate,
             betas=(0.9, 0.999),
-            weight_decay=0.001,
+            weight_decay=0.05,
         )
 
         # Cosine scheduler
