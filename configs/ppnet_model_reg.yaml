@@ -23,6 +23,7 @@ data_handler:
           factor_cols:
             - "FUND_BP"
             - "FUND_EP"
+            - "FUND_ROE"
             - "^CS_STD(?:5|10|20|30|60)$"
             - "^CS_VSTD(?:5|10|20|30|60)$"
             - "^CS_WVMA(?:5|10|20|30|60)$"
@@ -58,7 +59,7 @@ model:
   module_path: aiq.models.ppnet
   kwargs:
     d_ts_feat: 14
-    d_cs_feat: 125
+    d_cs_feat: 129
     d_market: 63
     d_emb: 16
     d_model: 256
