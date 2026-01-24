@@ -46,7 +46,7 @@ class PPNetModel(BaseModel):
         self.batch_size = batch_size
         self.warmup_ratio = warmup_ratio
         self.lr_scheduler_type = lr_scheduler_type
-        self.learning_rate = learning_rate
+        self.learning_rate = float(learning_rate)
         self.criterion_name = criterion_name
         self.early_stopping_patience = early_stopping_patience
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
