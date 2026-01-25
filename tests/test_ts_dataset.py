@@ -30,6 +30,7 @@ if __name__ == "__main__":
         data_dict["industry_ids"].shape,
         data_dict["stock_ts_features"].shape,
         data_dict["stock_cs_features"].shape,
+        data_dict["stock_fund_features"].shape,
         data_dict["market_features"].shape,
         data_dict["labels"].shape,
     )

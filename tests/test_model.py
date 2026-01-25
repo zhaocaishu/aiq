@@ -28,6 +28,9 @@ if __name__ == "__main__":
     dummy_stock_cs_features = torch.zeros(100, 125).to(
         "cuda" if torch.cuda.is_available() else "cpu"
     )
+    dummy_stock_fund_features = torch.zeros(100, 3).to(
+        "cuda" if torch.cuda.is_available() else "cpu"
+    )
     dummy_market_features = torch.zeros(100, 63).to(
         "cuda" if torch.cuda.is_available() else "cpu"
     )
@@ -35,6 +38,7 @@ if __name__ == "__main__":
         dummy_industry_ids,
         dummy_stock_ts_features,
         dummy_stock_cs_features,
+        dummy_stock_fund_features,
         dummy_market_features,
     )
     logger.info(output)

@@ -21,6 +21,7 @@ class PPNetModel(BaseModel):
         label_names=None,
         d_ts_feat=14,
         d_cs_feat=125,
+        d_fund_feat=3,
         d_market=63,
         d_emb=8,
         d_model=256,
@@ -55,6 +56,7 @@ class PPNetModel(BaseModel):
         self.model = PPNet(
             d_ts_feat=d_ts_feat,
             d_cs_feat=d_cs_feat,
+            d_fund_feat=d_fund_feat,
             d_market=d_market,
             d_emb=d_emb,
             d_model=d_model,

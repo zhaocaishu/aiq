@@ -134,7 +134,7 @@ class SAttention(nn.Module):
             vh = v[:, i, :]  # (N, head_dim)
 
             attn_logits = torch.matmul(qh, kh.transpose(0, 1)) / self.temperature
-            attn_logits += torch.log(industry_decay + 1e-8).clamp(min=-100.0)
+            attn_logits += torch.log(industry_decay)
             attn_weights = torch.softmax(attn_logits, dim=-1)
 
             attn_weights = self.attn_dropout[i](attn_weights)
@@ -199,6 +199,7 @@ class PPNet(nn.Module):
         self,
         d_ts_feat,
         d_cs_feat,
+        d_fund_feat,
         d_market,
         d_emb,
         d_model,
@@ -222,13 +223,11 @@ class PPNet(nn.Module):
         )
 
         # Market layers
-        self.market_gate = Gate(
-            d_market, self.temporal_hidden_dim + d_cs_feat, beta=beta
-        )
+        self.market_gate = Gate(d_market, d_cs_feat, beta=beta)
 
         # Fusion layers
         self.fusion_proj = nn.Sequential(
-            nn.Linear(self.temporal_hidden_dim + d_cs_feat, 2 * d_model),
+            nn.Linear(self.temporal_hidden_dim + d_cs_feat + d_fund_feat, 2 * d_model),
             nn.SiLU(),
             nn.Dropout(p=dropout),
             nn.Linear(2 * d_model, d_model),
@@ -302,6 +301,7 @@ class PPNet(nn.Module):
         industry_indices,
         stock_ts_features,
         stock_cs_features,
+        stock_fund_features,
         market_features,
     ):
         """
@@ -309,6 +309,7 @@ class PPNet(nn.Module):
             industry_indices: (N, 2) l1 and l2 industry index for each stock
             stock_ts_features: (N, T, d_ts_feat) temporal features of stocks
             stock_cs_features: (N, d_cs_feat) cross-sectional features of stocks
+            stock_fund_features: (N, d_fund_feat) fundamental features of stocks
             market_features: (N, d_market) market features
         Returns:
             predictions: (N, 1) prediction for each stock
@@ -321,17 +322,15 @@ class PPNet(nn.Module):
             temporal_out
         )  # (N, temporal_hidden_dim), aggregate over time
 
-        # Concat temporal and cross-sectional representations
-        concat_states = torch.cat([temporal_agg, stock_cs_features], dim=-1)
-
         # Apply gating to market features and modulate stock states
         feature_gated_weights = self.market_gate(market_features)
-        gated_states = (
-            concat_states * feature_gated_weights
-        )  # (N, temporal_hidden_dim + d_cs_feat)
+        gated_cs_states = stock_cs_features * feature_gated_weights
 
-        # Fuse temporal and cross-sectional representations
-        fused_states = self.fusion_proj(gated_states)  # (N, d_model)
+        # Fuse temporal， cross-sectional and fundamental representations
+        concat_states = torch.cat(
+            [temporal_agg, gated_cs_states, stock_fund_features], dim=-1
+        )
+        fused_states = self.fusion_proj(concat_states)  # (N, d_model)
 
         # Industry-aware spatial attention
         industry_decay = self._build_industry_decay(industry_indices)

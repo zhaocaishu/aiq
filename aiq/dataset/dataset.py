@@ -110,9 +110,10 @@ class TSDataset(Dataset):
             i for i, name in enumerate(self.feature_names) if name.startswith("TS_")
         ]
         self.stock_cs_feature_indices = [
-            i
-            for i, name in enumerate(self.feature_names)
-            if name.startswith("CS_") or name.startswith("FUND_")
+            i for i, name in enumerate(self.feature_names) if name.startswith("CS_")
+        ]
+        self.stock_fund_feature_indices = [
+            i for i, name in enumerate(self.feature_names) if name.startswith("FUND_")
         ]
         self.market_feature_indices = [
             i for i, name in enumerate(self.feature_names) if name.startswith("MKT_")
@@ -254,15 +255,18 @@ class TSDataset(Dataset):
         # Split features into functional subsets
         stock_ts_features = features[:, :, self.stock_ts_feature_indices]
         stock_cs_features = features[:, -1, self.stock_cs_feature_indices]
+        stock_fund_features = features[:, -1, self.stock_fund_feature_indices]
         market_features = features[:, -1, self.market_feature_indices]
 
         # Data Normalization Pipeline
         stock_ts_features = ts_cross_robust_zscore(stock_ts_features, clip_outlier=True)
         stock_cs_features = robust_zscore(stock_cs_features, clip_outlier=True)
+        stock_fund_features = robust_zscore(stock_fund_features, clip_outlier=True)
 
         # Impute missing values (NaNs) with zero
         stock_ts_features = fillna(stock_ts_features, fill_value=0.0)
         stock_cs_features = fillna(stock_cs_features, fill_value=0.0)
+        stock_fund_features = fillna(stock_fund_features, fill_value=0.0)
 
         # Construct the finalized data payload for model input
         data_dict = {
@@ -276,6 +280,7 @@ class TSDataset(Dataset):
             ),
             "stock_ts_features": stock_ts_features,
             "stock_cs_features": stock_cs_features,
+            "stock_fund_features": stock_fund_features,
             "market_features": market_features,
         }
 
