@@ -210,8 +210,12 @@ class PPNet(nn.Module):
     ):
         super(PPNet, self).__init__()
 
-        # Temporal layers
+        # Feature hidden dimensions
+        self.cs_hidden_dim = d_model
         self.temporal_hidden_dim = d_model // 4
+        self.fund_hidden_dim = d_model // 8
+
+        # Temporal layers
         self.temporal_attn = TAttention(
             d_in=d_ts_feat,
             d_model=self.temporal_hidden_dim,
@@ -226,8 +230,13 @@ class PPNet(nn.Module):
         self.market_gate = Gate(d_market, d_cs_feat, beta=beta)
 
         # Fusion layers
+        self.cs_proj = nn.Linear(d_cs_feat, self.cs_hidden_dim)
+        self.fund_proj = nn.Linear(d_fund_feat, self.fund_hidden_dim)
         self.fusion_proj = nn.Sequential(
-            nn.Linear(self.temporal_hidden_dim + d_cs_feat + d_fund_feat, 2 * d_model),
+            nn.Linear(
+                self.temporal_hidden_dim + self.cs_hidden_dim + self.fund_hidden_dim,
+                2 * d_model,
+            ),
             nn.SiLU(),
             nn.Dropout(p=dropout),
             nn.Linear(2 * d_model, d_model),
