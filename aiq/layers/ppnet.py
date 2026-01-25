@@ -327,26 +327,28 @@ class PPNet(nn.Module):
         temporal_out = self.temporal_attn(
             stock_ts_features
         )  # Intra-stock temporal attention
-        temporal_agg = self.temporal_aggregator(
+        temporal_states = self.temporal_aggregator(
             temporal_out
         )  # (N, temporal_hidden_dim), aggregate over time
 
-        # Apply gating to market features and modulate stock states
+        # Modulate stock cs features based on market context
         feature_gated_weights = self.market_gate(market_features)
-        gated_cs_states = stock_cs_features * feature_gated_weights
+        gated_cs_features = stock_cs_features * feature_gated_weights
+        cs_states = self.cs_proj(gated_cs_features)
 
-        # Fuse temporal， cross-sectional and fundamental representations
-        concat_states = torch.cat(
-            [temporal_agg, gated_cs_states, stock_fund_features], dim=-1
-        )
-        fused_states = self.fusion_proj(concat_states)  # (N, d_model)
+        # Encode fundamental features
+        fund_states = self.fund_proj(stock_fund_features)
+
+        # Fuse temporal，cross-sectional and fundamental representations
+        fused_states = torch.cat([temporal_states, cs_states, fund_states], dim=-1)
+        fused_states = self.fusion_proj(fused_states)  # (N, d_model)
 
         # Industry-aware spatial attention
         industry_decay = self._build_industry_decay(industry_indices)
-        spatial_out = self.spatial_attn(
+        spatial_states = self.spatial_attn(
             fused_states, industry_decay=industry_decay
         )  # (N, d_model)
 
         # Generate final prediction
-        predictions = self.prediction_head(spatial_out)  # (N, 1)
+        predictions = self.prediction_head(spatial_states)  # (N, 1)
         return predictions
