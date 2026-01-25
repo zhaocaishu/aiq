@@ -344,11 +344,11 @@ class PPNet(nn.Module):
             predictions: (N, 1) prediction for each stock
         """
         # Temporal Feature Extraction
-        temporal_out = self.temporal_attn(
+        temporal_features = self.temporal_attn(
             stock_ts_features
         )  # Intra-stock temporal attention
         temporal_states = self.temporal_aggregator(
-            temporal_out
+            temporal_features
         )  # (N, temporal_hidden_dim), aggregate over time
 
         # Modulate stock cross-sectional features based on market context
