@@ -7,7 +7,7 @@ import numpy as np
 from sklearn.linear_model import LinearRegression
 
 
-def ts_ohlcv_normalizer(x: np.ndarray):
+def ts_ohlcv_normalize(x: np.ndarray):
     """
     对N*T*D维的时序特征进行归一化
 
@@ -95,7 +95,7 @@ def ts_robust_zscore(x: np.ndarray, clip_outlier: bool = False) -> np.ndarray:
     return z
 
 
-def ts_cross_robust_zscore(x: np.ndarray, clip_outlier: bool = False) -> np.ndarray:
+def ts_cs_robust_zscore(x: np.ndarray, clip_outlier: bool = False) -> np.ndarray:
     """
     Two-step Robust Z-Score Normalization (Time-series then Cross-sectional).
 
@@ -146,14 +146,6 @@ def ts_cross_robust_zscore(x: np.ndarray, clip_outlier: bool = False) -> np.ndar
         z = np.clip(z, -3.0, 3.0)
 
     return z
-
-
-def fillna(x: np.ndarray, fill_value=0.0):
-    if not isinstance(x, np.ndarray):
-        raise TypeError("输入必须是 numpy.ndarray 类型")
-
-    x_filled = np.where(np.isnan(x), fill_value, x)
-    return x_filled
 
 
 def robust_zscore(
@@ -297,3 +289,11 @@ def drop_extreme_label(x: np.ndarray, percentile: float = 2.5):
     lower, upper = np.percentile(x, [percentile, 100 - percentile])
     mask = (x[:, 0] >= lower) & (x[:, 0] <= upper)
     return mask, x[mask]
+
+
+def fillna(x: np.ndarray, fill_value=0.0):
+    if not isinstance(x, np.ndarray):
+        raise TypeError("输入必须是 numpy.ndarray 类型")
+
+    x_filled = np.where(np.isnan(x), fill_value, x)
+    return x_filled
