@@ -51,10 +51,7 @@ def ts_robust_zscore(x: np.ndarray, clip_outlier: bool = False) -> np.ndarray:
     """
     Time-series Robust Z-Score Normalization
 
-    This function applies robust statistics for Z-Score normalization across all samples
-    and time steps (axes 0 and 1) of a 3D array x of shape (N, T, D):
-        - Location estimate (mean) is replaced by the median over (N, T).
-        - Scale estimate (std) is replaced by MAD * 1.4826 (to make it consistent with std).
+    Normalize along the time dimension (T) for each (N, D) using median and MAD.
 
     Parameters
     ----------
@@ -78,13 +75,13 @@ def ts_robust_zscore(x: np.ndarray, clip_outlier: bool = False) -> np.ndarray:
         raise ValueError(f"Input array must be 3D (N, T, D), but got shape {x.shape}")
 
     # Compute global median over samples and time: shape (1, 1, D)
-    med = np.nanmedian(x, axis=(0, 1), keepdims=True)
+    med = np.nanmedian(x, axis=1, keepdims=True)
 
     # Center the data
     x_centered = x - med
 
-    # Compute MAD over samples and time: shape (1, 1, D)
-    mad = np.nanmedian(np.abs(x_centered), axis=(0, 1), keepdims=True)
+    # Compute MAD over time
+    mad = np.nanmedian(np.abs(x_centered), axis=1, keepdims=True)
 
     # Scale factor for consistency
     std = mad * 1.4826 + 1e-12

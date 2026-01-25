@@ -146,6 +146,7 @@ class PPNetModel(BaseModel):
                 batch_industry_ids = self.to_device(batch_dict["industry_ids"])
                 batch_ts_features = self.to_device(batch_dict["stock_ts_features"])
                 batch_cs_features = self.to_device(batch_dict["stock_cs_features"])
+                batch_fund_features = self.to_device(batch_dict["stock_fund_features"])
                 batch_market_features = self.to_device(batch_dict["market_features"])
                 batch_labels = self.to_device(batch_dict["labels"])
 
@@ -159,6 +160,9 @@ class PPNetModel(BaseModel):
                     batch_cs_features
                 ).any(), "NaN at batch_cs_features"
                 assert not torch.isnan(
+                    batch_fund_features
+                ).any(), "NaN at batch_fund_features"
+                assert not torch.isnan(
                     batch_market_features
                 ).any(), "NaN at batch_market_features"
                 assert not torch.isnan(batch_labels).any(), "NaN at batch_labels"
@@ -168,6 +172,7 @@ class PPNetModel(BaseModel):
                     batch_industry_ids,
                     batch_ts_features,
                     batch_cs_features,
+                    batch_fund_features,
                     batch_market_features,
                 )
                 loss = self.criterion(outputs, batch_labels)
@@ -253,6 +258,7 @@ class PPNetModel(BaseModel):
             batch_industry_ids = self.to_device(batch_dict["industry_ids"])
             batch_ts_features = self.to_device(batch_dict["stock_ts_features"])
             batch_cs_features = self.to_device(batch_dict["stock_cs_features"])
+            batch_fund_features = self.to_device(batch_dict["stock_fund_features"])
             batch_market_features = self.to_device(batch_dict["market_features"])
             batch_labels = self.to_device(batch_dict["labels"])
 
@@ -261,6 +267,7 @@ class PPNetModel(BaseModel):
                     batch_industry_ids,
                     batch_ts_features,
                     batch_cs_features,
+                    batch_fund_features,
                     batch_market_features,
                 )
 
@@ -287,6 +294,7 @@ class PPNetModel(BaseModel):
             batch_industry_ids = self.to_device(batch_dict["industry_ids"])
             batch_ts_features = self.to_device(batch_dict["stock_ts_features"])
             batch_cs_features = self.to_device(batch_dict["stock_cs_features"])
+            batch_fund_features = self.to_device(batch_dict["stock_fund_features"])
             batch_market_features = self.to_device(batch_dict["market_features"])
 
             with torch.no_grad():
@@ -294,6 +302,7 @@ class PPNetModel(BaseModel):
                     batch_industry_ids,
                     batch_ts_features,
                     batch_cs_features,
+                    batch_fund_features,
                     batch_market_features,
                 )
 
