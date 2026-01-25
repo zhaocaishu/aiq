@@ -228,28 +228,12 @@ class PPNet(nn.Module):
             d_model=self.temporal_hidden_dim, dropout=dropout
         )
 
-        # Market layers
+        # Gated layers
         self.market_gate = Gate(d_market, d_cs_feat, beta=beta)
 
         # Feature encoders
-        self.ts_proj = nn.Sequential(
-            nn.Linear(self.temporal_hidden_dim, self.temporal_hidden_dim),
-            nn.SiLU(),
-            nn.LayerNorm(self.temporal_hidden_dim),
-            nn.Dropout(dropout),
-        )
-        self.cs_proj = nn.Sequential(
-            nn.Linear(d_cs_feat, self.cs_hidden_dim),
-            nn.SiLU(),
-            nn.LayerNorm(self.cs_hidden_dim),
-            nn.Dropout(dropout),
-        )
-        self.fund_proj = nn.Sequential(
-            nn.Linear(d_fund_feat, self.fund_hidden_dim),
-            nn.SiLU(),
-            nn.LayerNorm(self.fund_hidden_dim),
-            nn.Dropout(dropout),
-        )
+        self.cs_proj = nn.Linear(d_cs_feat, self.cs_hidden_dim)
+        self.fund_proj = nn.Linear(d_fund_feat, self.fund_hidden_dim)
 
         # Fusion layers
         self.fusion_proj = nn.Sequential(
@@ -356,7 +340,6 @@ class PPNet(nn.Module):
         gated_cs_features = stock_cs_features * feature_gated_weights
 
         # Map heterogeneous features into a unified latent space
-        temporal_states = self.ts_proj(temporal_states)
         cs_states = self.cs_proj(gated_cs_features)
         fund_states = self.fund_proj(stock_fund_features)
 
