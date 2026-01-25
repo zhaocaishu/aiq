@@ -154,7 +154,7 @@ class Alpha158(DataHandler):
         feature_names = [
             "IND_CLS_L1",
             "IND_CLS_L2",
-            "FUND_CAP",
+            "CAP",
             "FUND_EP",
             "FUND_BP",
             "FUND_ROE",
