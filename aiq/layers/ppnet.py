@@ -159,6 +159,7 @@ class TemporalAttention(nn.Module):
         super().__init__()
         self.trans = nn.Linear(d_model, d_model, bias=False)
         self.context_vector = nn.Parameter(torch.Tensor(d_model, 1))
+        self.dropout = nn.Dropout(dropout)
 
         nn.init.xavier_uniform_(self.context_vector)
 
@@ -167,6 +168,7 @@ class TemporalAttention(nn.Module):
         h = torch.tanh(self.trans(z))
         scores = torch.matmul(h, self.context_vector).squeeze(-1)  # [N, T]
         attn_weights = torch.softmax(scores, dim=1).unsqueeze(1)  # [N, 1, T]
+        attn_weights = self.dropout(attn_weights)
         output = torch.matmul(attn_weights, z).squeeze(1)  # [N, D]
         return output
 
@@ -213,7 +215,7 @@ class PPNet(nn.Module):
         # Feature hidden dimensions
         self.cs_hidden_dim = d_model
         self.temporal_hidden_dim = d_model // 4
-        self.fund_hidden_dim = d_model // 8
+        self.fund_hidden_dim = d_model // 16
 
         # Temporal layers
         self.temporal_attn = TAttention(
@@ -229,9 +231,27 @@ class PPNet(nn.Module):
         # Market layers
         self.market_gate = Gate(d_market, d_cs_feat, beta=beta)
 
+        # Feature encoders
+        self.ts_proj = nn.Sequential(
+            nn.Linear(self.temporal_hidden_dim, self.temporal_hidden_dim),
+            nn.SiLU(),
+            nn.LayerNorm(self.temporal_hidden_dim),
+            nn.Dropout(dropout),
+        )
+        self.cs_proj = nn.Sequential(
+            nn.Linear(d_cs_feat, self.cs_hidden_dim),
+            nn.SiLU(),
+            nn.LayerNorm(self.cs_hidden_dim),
+            nn.Dropout(dropout),
+        )
+        self.fund_proj = nn.Sequential(
+            nn.Linear(d_fund_feat, self.fund_hidden_dim),
+            nn.SiLU(),
+            nn.LayerNorm(self.fund_hidden_dim),
+            nn.Dropout(dropout),
+        )
+
         # Fusion layers
-        self.cs_proj = nn.Linear(d_cs_feat, self.cs_hidden_dim)
-        self.fund_proj = nn.Linear(d_fund_feat, self.fund_hidden_dim)
         self.fusion_proj = nn.Sequential(
             nn.Linear(
                 self.temporal_hidden_dim + self.cs_hidden_dim + self.fund_hidden_dim,
@@ -252,7 +272,7 @@ class PPNet(nn.Module):
         )
 
         # Prediction head
-        self.prediction_head = nn.Linear(d_model, 1, bias=False)
+        self.prediction_head = nn.Linear(d_model, 1)
 
     def _build_industry_decay(
         self, industry_indices: torch.Tensor, delta1: float = 0.65, delta2: float = 0.2
@@ -323,7 +343,7 @@ class PPNet(nn.Module):
         Returns:
             predictions: (N, 1) prediction for each stock
         """
-        # Process temporal stock features
+        # Temporal Feature Extraction
         temporal_out = self.temporal_attn(
             stock_ts_features
         )  # Intra-stock temporal attention
@@ -331,24 +351,25 @@ class PPNet(nn.Module):
             temporal_out
         )  # (N, temporal_hidden_dim), aggregate over time
 
-        # Modulate stock cs features based on market context
+        # Modulate stock cross-sectional features based on market context
         feature_gated_weights = self.market_gate(market_features)
         gated_cs_features = stock_cs_features * feature_gated_weights
-        cs_states = self.cs_proj(gated_cs_features)
 
-        # Encode fundamental features
+        # Map heterogeneous features into a unified latent space
+        temporal_states = self.ts_proj(temporal_states)
+        cs_states = self.cs_proj(gated_cs_features)
         fund_states = self.fund_proj(stock_fund_features)
 
         # Fuse temporal，cross-sectional and fundamental representations
         fused_states = torch.cat([temporal_states, cs_states, fund_states], dim=-1)
         fused_states = self.fusion_proj(fused_states)  # (N, d_model)
 
-        # Industry-aware spatial attention
+        # Industry-aware attention to capture inter-stock correlations
         industry_decay = self._build_industry_decay(industry_indices)
         spatial_states = self.spatial_attn(
             fused_states, industry_decay=industry_decay
         )  # (N, d_model)
 
-        # Generate final prediction
+        # Map refined representations to final predictions
         predictions = self.prediction_head(spatial_states)  # (N, 1)
         return predictions
