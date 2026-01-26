@@ -155,37 +155,19 @@ class SAttention(nn.Module):
 
 
 class TemporalAttention(nn.Module):
-    """
-    Conditioned temporal attention for time-series aggregation.
-    Input:  z ∈ [N, T, D]
-    Output: h ∈ [N, D]
-    """
-
-    def __init__(self, d_model, dropout=0.1):
+    def __init__(self, d_model):
         super().__init__()
-
-        self.score_mlp = nn.Sequential(
+        self.score = nn.Sequential(
             nn.Linear(d_model, d_model),
             nn.SiLU(),
             nn.Linear(d_model, 1, bias=False),
         )
 
-        self.dropout = nn.Dropout(dropout)
-        self.scale = math.sqrt(d_model)
-
     def forward(self, z):
-        # z: [N, T, D]
-
-        # score: [N, T, 1] → [N, T]
-        scores = self.score_mlp(z).squeeze(-1)
-        scores = scores / self.scale
-
-        attn_weights = torch.softmax(scores, dim=1)
-        attn_weights = self.dropout(attn_weights)
-
-        # weighted sum
-        output = torch.sum(attn_weights.unsqueeze(-1) * z, dim=1)
-        return output
+        scores = self.score(z).squeeze(-1)  # [N, T]
+        attn = torch.softmax(scores, dim=1).unsqueeze(1)
+        out = torch.matmul(attn, z).squeeze(1)
+        return out
 
 
 class Gate(nn.Module):
