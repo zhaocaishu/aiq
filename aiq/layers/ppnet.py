@@ -155,21 +155,36 @@ class SAttention(nn.Module):
 
 
 class TemporalAttention(nn.Module):
-    def __init__(self, d_model, dropout):
-        super().__init__()
-        self.trans = nn.Linear(d_model, d_model, bias=False)
-        self.context_vector = nn.Parameter(torch.Tensor(d_model, 1))
-        self.dropout = nn.Dropout(dropout)
+    """
+    Conditioned temporal attention for time-series aggregation.
+    Input:  z ∈ [N, T, D]
+    Output: h ∈ [N, D]
+    """
 
-        nn.init.xavier_uniform_(self.context_vector)
+    def __init__(self, d_model, dropout=0.1):
+        super().__init__()
+
+        self.score_mlp = nn.Sequential(
+            nn.Linear(d_model, d_model),
+            nn.SiLU(),
+            nn.Linear(d_model, 1, bias=False),
+        )
+
+        self.dropout = nn.Dropout(dropout)
+        self.scale = math.sqrt(d_model)
 
     def forward(self, z):
         # z: [N, T, D]
-        h = torch.tanh(self.trans(z))
-        scores = torch.matmul(h, self.context_vector).squeeze(-1)  # [N, T]
-        attn_weights = torch.softmax(scores, dim=1).unsqueeze(1)  # [N, 1, T]
+
+        # score: [N, T, 1] → [N, T]
+        scores = self.score_mlp(z).squeeze(-1)
+        scores = scores / self.scale
+
+        attn_weights = torch.softmax(scores, dim=1)
         attn_weights = self.dropout(attn_weights)
-        output = torch.matmul(attn_weights, z).squeeze(1)  # [N, D]
+
+        # weighted sum
+        output = torch.sum(attn_weights.unsqueeze(-1) * z, dim=1)
         return output
 
 
@@ -224,9 +239,7 @@ class PPNet(nn.Module):
             nhead=t_nhead,
             dropout=dropout,
         )
-        self.temporal_aggregator = TemporalAttention(
-            d_model=self.temporal_hidden_dim, dropout=dropout
-        )
+        self.temporal_aggregator = TemporalAttention(d_model=self.temporal_hidden_dim)
 
         # Gated layers
         self.market_gate = Gate(d_market, d_cs_feat, beta=beta)
