@@ -134,7 +134,7 @@ class SAttention(nn.Module):
             vh = v[:, i, :]  # (N, head_dim)
 
             attn_logits = torch.matmul(qh, kh.transpose(0, 1)) / self.temperature
-            attn_logits += torch.log(industry_decay)
+            attn_logits += torch.log(industry_decay.clamp(min=1e-8))
             attn_weights = torch.softmax(attn_logits, dim=-1)
 
             attn_weights = self.attn_dropout[i](attn_weights)
@@ -152,22 +152,6 @@ class SAttention(nn.Module):
         hidden_states = self.mlp(hidden_states)
         hidden_states = residual + hidden_states
         return hidden_states
-
-
-class TemporalAttention(nn.Module):
-    def __init__(self, d_model):
-        super().__init__()
-        self.score = nn.Sequential(
-            nn.Linear(d_model, d_model),
-            nn.SiLU(),
-            nn.Linear(d_model, 1, bias=False),
-        )
-
-    def forward(self, z):
-        scores = self.score(z).squeeze(-1)  # [N, T]
-        attn = torch.softmax(scores, dim=1).unsqueeze(1)
-        out = torch.matmul(attn, z).squeeze(1)
-        return out
 
 
 class Gate(nn.Module):
@@ -193,6 +177,66 @@ class Gate(nn.Module):
         return x_scale
 
 
+class TemporalAttention(nn.Module):
+    def __init__(self, d_model):
+        super().__init__()
+        self.score = nn.Sequential(
+            nn.Linear(d_model, d_model),
+            nn.SiLU(),
+            nn.Linear(d_model, 1, bias=False),
+        )
+
+    def forward(self, z):
+        scores = self.score(z).squeeze(-1)  # [N, T]
+        attn = torch.softmax(scores, dim=1).unsqueeze(1)
+        out = torch.matmul(attn, z).squeeze(1)
+        return out
+
+
+class CrossLayer(nn.Module):
+    """Cross network layer.
+
+    Args:
+        input_dim (int): input tensor dimension.
+        cross_num (int): number of cross layers.
+        low_rank (int): W dimension
+    """
+
+    def __init__(self, input_dim: int, cross_num: int = 3, low_rank: int = 32) -> None:
+        super(CrossLayer, self).__init__()
+        self.cross_num = cross_num
+        self._low_rank = low_rank
+        self._input_dim = input_dim
+
+        self.u_kernels = nn.ModuleList(
+            [
+                nn.Linear(self._input_dim, self._low_rank, bias=False)
+                for _ in range(cross_num)
+            ]
+        )
+        self.v_kernels = nn.ModuleList(
+            [
+                nn.Linear(self._low_rank, self._input_dim, bias=True)
+                for _ in range(cross_num)
+            ]
+        )
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        """Forward the module.
+
+        Args:
+            input (torch.Tensor): tensor with shape [batch_size, input_dim].
+        """
+        x_0 = input
+        x_l = x_0
+        for i in range(self.cross_num):
+            x_l_v = self.u_kernels[i](x_l)
+            x_l_w = self.v_kernels[i](x_l_v)
+            x_l = x_0 * x_l_w + x_l  # (batch_size, input_dim)
+
+        return x_l
+
+
 class PPNet(nn.Module):
     def __init__(
         self,
@@ -209,10 +253,10 @@ class PPNet(nn.Module):
     ):
         super(PPNet, self).__init__()
 
-        # Feature hidden dimensions
-        self.cs_hidden_dim = d_model
+        # Feature dimensions
         self.temporal_hidden_dim = d_model // 4
-        self.fund_hidden_dim = d_model // 16
+        self.cs_hidden_dim = d_cs_feat + d_fund_feat
+        self.fusion_hidden_dim = self.temporal_hidden_dim + self.cs_hidden_dim
 
         # Temporal layers
         self.temporal_attn = TAttention(
@@ -226,32 +270,29 @@ class PPNet(nn.Module):
         # Gated layers
         self.market_gate = Gate(d_market, d_cs_feat, beta=beta)
 
-        # Feature encoders
-        self.cs_proj = nn.Linear(d_cs_feat, self.cs_hidden_dim)
-        self.fund_proj = nn.Linear(d_fund_feat, self.fund_hidden_dim)
+        # Cross layers
+        self.cs_proj = nn.Linear(self.cs_hidden_dim, self.cs_hidden_dim)
+        self.cross_layer = CrossLayer(input_dim=self.cs_hidden_dim)
 
         # Fusion layers
         self.fusion_proj = nn.Sequential(
-            nn.Linear(
-                self.temporal_hidden_dim + self.cs_hidden_dim + self.fund_hidden_dim,
-                2 * d_model,
-            ),
+            nn.Linear(self.fusion_hidden_dim, 2 * d_model),
             nn.SiLU(),
             nn.Dropout(p=dropout),
             nn.Linear(2 * d_model, d_model),
         )
 
         # Spatial layers
-        self.industry_embed = nn.Embedding(256, d_emb)
         self.spatial_attn = SAttention(
             d_model=d_model,
             d_emb=d_emb,
             nhead=s_nhead,
             dropout=dropout,
         )
+        self.norm = nn.LayerNorm(d_model, eps=1e-5)
 
         # Prediction head
-        self.prediction_head = nn.Linear(d_model, 1)
+        self.prediction_head = nn.Linear(d_model, 1, bias=False)
 
     def _build_industry_decay(
         self, industry_indices: torch.Tensor, delta1: float = 0.65, delta2: float = 0.2
@@ -322,32 +363,27 @@ class PPNet(nn.Module):
         Returns:
             predictions: (N, 1) prediction for each stock
         """
-        # Temporal Feature Extraction
-        temporal_features = self.temporal_attn(
-            stock_ts_features
-        )  # Intra-stock temporal attention
-        temporal_states = self.temporal_aggregator(
-            temporal_features
-        )  # (N, temporal_hidden_dim), aggregate over time
+        # Intra-Stock Temporal Modeling
+        temporal_features = self.temporal_attn(stock_ts_features)
+        temporal_states = self.temporal_aggregator(temporal_features)
 
-        # Modulate stock cross-sectional features based on market context
+        #  Market-Conditioned Cross-Sectional Feature Gating
         feature_gated_weights = self.market_gate(market_features)
         gated_cs_features = stock_cs_features * feature_gated_weights
 
-        # Map heterogeneous features into a unified latent space
-        cs_states = self.cs_proj(gated_cs_features)
-        fund_states = self.fund_proj(stock_fund_features)
+        # Cross-Sectional Feature Enhancement via Deep Cross Network
+        cs_states = torch.cat([gated_cs_features, stock_fund_features], dim=-1)
+        cs_states = self.cross_layer(cs_states) + self.cs_proj(cs_states)
 
-        # Fuse temporal，cross-sectional and fundamental representations
-        fused_states = torch.cat([temporal_states, cs_states, fund_states], dim=-1)
-        fused_states = self.fusion_proj(fused_states)  # (N, d_model)
+        # Multi-Source Representation Fusion
+        fused_states = torch.cat([temporal_states, cs_states], dim=-1)
+        fused_states = self.fusion_proj(fused_states)
 
-        # Industry-aware attention to capture inter-stock correlations
+        # Industry-aware Inter-Stock Attention
         industry_decay = self._build_industry_decay(industry_indices)
-        spatial_states = self.spatial_attn(
-            fused_states, industry_decay=industry_decay
-        )  # (N, d_model)
+        spatial_states = self.spatial_attn(fused_states, industry_decay=industry_decay)
+        spatial_states = self.norm(spatial_states)
 
-        # Map refined representations to final predictions
+        # Final Prediction on Spatial Representations
         predictions = self.prediction_head(spatial_states)  # (N, 1)
         return predictions

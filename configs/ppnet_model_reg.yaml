@@ -19,11 +19,11 @@ data_handler:
         module_path: aiq.dataset.processor
         kwargs:
           industry_col: "IND_CLS_L1"
-          cap_col: "CAP"
+          cap_col: "FUND_CAP"
           factor_cols:
             - "FUND_BP"
             - "FUND_EP"
-            - "FUND_ROE"
+            - "FUND_SP"
             - "CS_STD(?:5|10|20|30|60)$"
             - "CS_VSTD(?:5|10|20|30|60)$"
             - "CS_WVMA(?:5|10|20|30|60)$"
@@ -60,7 +60,7 @@ model:
   kwargs:
     d_ts_feat: 14
     d_cs_feat: 125
-    d_fund_feat: 3
+    d_fund_feat: 4
     d_market: 63
     d_emb: 16
     d_model: 256

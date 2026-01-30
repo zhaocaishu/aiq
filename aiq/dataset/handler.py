@@ -108,8 +108,8 @@ class Alpha158(DataHandler):
         ind_class_l2 = df["Ind_class_l2"]
         ep = (1.0 / df["Pe_ttm"].replace(0, np.nan)).fillna(0)
         bp = (1.0 / df["Pb"].replace(0, np.nan)).fillna(0)
+        sp = (1.0 / df["Ps_ttm"].replace(0, np.nan)).fillna(0)
         cap = np.log(df["Circ_mv"])
-        roe = df["Q_dt_roe"]
 
         # adjusted prices
         adj_factor = df["Adj_factor"]
@@ -135,7 +135,7 @@ class Alpha158(DataHandler):
             cap,
             ep,
             bp,
-            roe,
+            sp,
             (high - low) / open,
             (open - Ref(close, 1)) / Ref(close, 1),
             (close - open) / open,
@@ -154,10 +154,10 @@ class Alpha158(DataHandler):
         feature_names = [
             "IND_CLS_L1",
             "IND_CLS_L2",
-            "CAP",
+            "FUND_CAP",
             "FUND_EP",
             "FUND_BP",
-            "FUND_ROE",
+            "FUND_SP",
             "TS_KLEN",
             "TS_KGAP",
             "TS_KMID1",
