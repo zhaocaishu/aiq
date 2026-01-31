@@ -246,39 +246,6 @@ class TemporalAttention(nn.Module):
         return out
 
 
-class CrossLayer(nn.Module):
-    """DCN-v2 标准 Cross Layer: x_{l+1} = x0 ⊙ (W_l @ x_l + b_l) + x_l"""
-
-    def __init__(self, input_dim):
-        super().__init__()
-        self.weight = nn.Parameter(
-            torch.randn(input_dim, input_dim) * 0.01
-        )  # W_l: (d, d)
-        self.bias = nn.Parameter(torch.zeros(input_dim))  # b_l: (d,)
-
-    def forward(self, x0, xl):
-        # x0, xl: (batch_size, input_dim)
-        linear = torch.matmul(xl, self.weight.T) + self.bias  # (B, d)
-        return x0 * linear + xl  # Hadamard product + residual
-
-
-class CrossNetwork(nn.Module):
-    def __init__(self, input_dim, output_dim, num_layers=2):
-        super().__init__()
-        self.cross_net = nn.ModuleList()
-        for _ in range(num_layers):
-            self.cross_net.append(CrossLayer(input_dim))
-
-        self.deep_net = nn.Linear(2 * input_dim, output_dim)
-
-    def forward(self, x0):
-        xl = x0.clone()
-        for layer in self.cross_net:
-            xl = layer(x0, xl)
-        xl = self.deep_net(torch.cat([x0, xl], dim=-1))
-        return xl  # (batch_size, output_dim)
-
-
 class PPNet(nn.Module):
     def __init__(
         self,
@@ -312,9 +279,11 @@ class PPNet(nn.Module):
         # Gated layers
         self.market_gate = Gate(d_market, d_cs_feat, beta=beta)
 
-        # Cross layers
-        self.cross_net = CrossNetwork(
-            input_dim=d_cs_feat, output_dim=self.cs_hidden_dim
+        # Projection layers
+        self.cs_proj = nn.Sequential(
+            nn.Linear(d_cs_feat, 2 * self.cs_hidden_dim),
+            nn.SiLU(),
+            nn.Linear(2 * self.cs_hidden_dim, self.cs_hidden_dim, bias=False),
         )
 
         # Fusion layers
@@ -332,7 +301,6 @@ class PPNet(nn.Module):
             nhead=s_nhead,
             dropout=dropout,
         )
-        self.norm = nn.LayerNorm(d_model, eps=1e-5)
 
         # Prediction head
         self.prediction_head = nn.Linear(d_model, 1, bias=False)
@@ -363,8 +331,8 @@ class PPNet(nn.Module):
         feature_gated_weights = self.market_gate(market_features)
         gated_cs_features = stock_cs_features * feature_gated_weights
 
-        # Cross-Sectional Feature Enhancement via Deep Cross Network
-        cs_states = self.cross_net(gated_cs_features)
+        # Cross-Sectional Feature Projection
+        cs_states = self.cs_proj(gated_cs_features)
 
         # Multi-Source Representation Fusion
         fused_states = torch.cat([temporal_states, cs_states], dim=-1)
@@ -374,7 +342,6 @@ class PPNet(nn.Module):
         spatial_states = self.spatial_attn(
             fused_states, industry_indices=industry_indices
         )
-        spatial_states = self.norm(spatial_states)
 
         # Final Prediction on Spatial Representations
         predictions = self.prediction_head(spatial_states)  # (N, 1)
