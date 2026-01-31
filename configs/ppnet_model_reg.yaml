@@ -66,7 +66,7 @@ model:
     d_model: 256
     t_nhead: 4
     s_nhead: 2
-    dropout: 0.5
+    dropout: 0.3
     beta: 3.0
     epochs: 100
     batch_size: 1

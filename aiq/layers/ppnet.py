@@ -111,9 +111,62 @@ class SAttention(nn.Module):
         self.input_layernorm = nn.LayerNorm(d_model, eps=1e-5)
         self.post_attention_layernorm = nn.LayerNorm(d_model, eps=1e-5)
 
-    def forward(self, x, industry_decay):
-        # x: (N, D)  — 股票特征
+    def _build_industry_decay(
+        self, industry_indices: torch.Tensor, delta1: float = 0.65, delta2: float = 0.2
+    ) -> torch.Tensor:
+        """
+        Build Industry Decay Matrix as described in the paper.
+
+        Args:
+            industry_indices: (N, 2) tensor where each row contains [l1_i, l2_i],
+                            l1 = primary industry index, l2 = secondary industry index (integer encoded)
+            delta1: Decay factor for same primary industry but different secondary industry (1 > delta1 > delta2 ≥ 0)
+            delta2: Decay factor for different primary industries
+
+        Returns:
+            D: (N, N) Industry Decay Matrix where D[i,j] represents industry association weight between stock i and j
+        """
+        # Input validation
+        N = industry_indices.shape[0]
+        assert industry_indices.shape[1] == 2, "industry_indices must have shape (N, 2)"
+        assert (
+            1 > delta1 > delta2 >= 0
+        ), "Decay factors must satisfy 1 > delta1 > delta2 ≥ 0"
+
+        # Extract industry indices
+        l1 = industry_indices[:, 0]  # (N,) primary industry indices
+        l2 = industry_indices[:, 1]  # (N,) secondary industry indices
+
+        # Create comparison matrices using broadcasting for vectorized operations
+        # This replaces the nested loops for better performance
+        l2_eq = l2.unsqueeze(1) == l2.unsqueeze(
+            0
+        )  # (N, N) boolean matrix for same secondary industry
+        l1_eq = l1.unsqueeze(1) == l1.unsqueeze(
+            0
+        )  # (N, N) boolean matrix for same primary industry
+
+        # Initialize matrix with delta2 (different primary industry case)
+        D = torch.full(
+            (N, N), delta2, dtype=torch.float32, device=industry_indices.device
+        )
+
+        # Update to delta1 for same primary but different secondary industry
+        D[(l1_eq & ~l2_eq)] = delta1
+
+        # Update to 1.0 for same secondary industry
+        D[l2_eq] = 1.0
+
+        # Set diagonal to 1.0 (self-connection)
+        D.fill_diagonal_(1.0)
+
+        return D
+
+    def forward(self, x, industry_indices):
         # industry_decay: (N, N) — 行业衰减矩阵
+        industry_decay = self._build_industry_decay(industry_indices)
+
+        # x: (N, D)  — 股票特征
         residual = x
         x_states = self.input_layernorm(x)
 
@@ -194,47 +247,36 @@ class TemporalAttention(nn.Module):
 
 
 class CrossLayer(nn.Module):
-    """Cross network layer.
+    """DCN-v2 标准 Cross Layer: x_{l+1} = x0 ⊙ (W_l @ x_l + b_l) + x_l"""
 
-    Args:
-        input_dim (int): input tensor dimension.
-        cross_num (int): number of cross layers.
-        low_rank (int): W dimension
-    """
+    def __init__(self, input_dim):
+        super().__init__()
+        self.weight = nn.Parameter(
+            torch.randn(input_dim, input_dim) * 0.01
+        )  # W_l: (d, d)
+        self.bias = nn.Parameter(torch.zeros(input_dim))  # b_l: (d,)
 
-    def __init__(self, input_dim: int, cross_num: int = 3, low_rank: int = 32) -> None:
-        super(CrossLayer, self).__init__()
-        self.cross_num = cross_num
-        self._low_rank = low_rank
-        self._input_dim = input_dim
+    def forward(self, x0, xl):
+        # x0, xl: (batch_size, input_dim)
+        linear = torch.matmul(xl, self.weight.T) + self.bias  # (B, d)
+        return x0 * linear + xl  # Hadamard product + residual
 
-        self.u_kernels = nn.ModuleList(
-            [
-                nn.Linear(self._input_dim, self._low_rank, bias=False)
-                for _ in range(cross_num)
-            ]
-        )
-        self.v_kernels = nn.ModuleList(
-            [
-                nn.Linear(self._low_rank, self._input_dim, bias=True)
-                for _ in range(cross_num)
-            ]
-        )
 
-    def forward(self, input: torch.Tensor) -> torch.Tensor:
-        """Forward the module.
+class CrossNetwork(nn.Module):
+    def __init__(self, input_dim, output_dim, num_layers=2):
+        super().__init__()
+        self.cross_net = nn.ModuleList()
+        for _ in range(num_layers):
+            self.cross_net.append(CrossLayer(input_dim))
 
-        Args:
-            input (torch.Tensor): tensor with shape [batch_size, input_dim].
-        """
-        x_0 = input
-        x_l = x_0
-        for i in range(self.cross_num):
-            x_l_v = self.u_kernels[i](x_l)
-            x_l_w = self.v_kernels[i](x_l_v)
-            x_l = x_0 * x_l_w + x_l  # (batch_size, input_dim)
+        self.deep_net = nn.Linear(2 * input_dim, output_dim)
 
-        return x_l
+    def forward(self, x0):
+        xl = x0.clone()
+        for layer in self.cross_net:
+            xl = layer(x0, xl)
+        xl = self.deep_net(torch.cat([x0, xl], dim=-1))
+        return xl  # (batch_size, output_dim)
 
 
 class PPNet(nn.Module):
@@ -254,8 +296,8 @@ class PPNet(nn.Module):
         super(PPNet, self).__init__()
 
         # Feature dimensions
-        self.temporal_hidden_dim = d_model // 4
-        self.cs_hidden_dim = d_cs_feat + d_fund_feat
+        self.temporal_hidden_dim = d_model // 2
+        self.cs_hidden_dim = d_model
         self.fusion_hidden_dim = self.temporal_hidden_dim + self.cs_hidden_dim
 
         # Temporal layers
@@ -271,8 +313,9 @@ class PPNet(nn.Module):
         self.market_gate = Gate(d_market, d_cs_feat, beta=beta)
 
         # Cross layers
-        self.cs_proj = nn.Linear(self.cs_hidden_dim, self.cs_hidden_dim)
-        self.cross_layer = CrossLayer(input_dim=self.cs_hidden_dim)
+        self.cross_net = CrossNetwork(
+            input_dim=d_cs_feat, output_dim=self.cs_hidden_dim
+        )
 
         # Fusion layers
         self.fusion_proj = nn.Sequential(
@@ -293,57 +336,6 @@ class PPNet(nn.Module):
 
         # Prediction head
         self.prediction_head = nn.Linear(d_model, 1, bias=False)
-
-    def _build_industry_decay(
-        self, industry_indices: torch.Tensor, delta1: float = 0.65, delta2: float = 0.2
-    ) -> torch.Tensor:
-        """
-        Build Industry Decay Matrix as described in the paper.
-
-        Args:
-            industry_indices: (N, 2) tensor where each row contains [l1_i, l2_i],
-                            l1 = primary industry index, l2 = secondary industry index (integer encoded)
-            delta1: Decay factor for same primary industry but different secondary industry (1 > delta1 > delta2 ≥ 0)
-            delta2: Decay factor for different primary industries
-
-        Returns:
-            D: (N, N) Industry Decay Matrix where D[i,j] represents industry association weight between stock i and j
-        """
-        # Input validation
-        N = industry_indices.shape[0]
-        assert industry_indices.shape[1] == 2, "industry_indices must have shape (N, 2)"
-        assert (
-            1 > delta1 > delta2 >= 0
-        ), "Decay factors must satisfy 1 > delta1 > delta2 ≥ 0"
-
-        # Extract industry indices
-        l1 = industry_indices[:, 0]  # (N,) primary industry indices
-        l2 = industry_indices[:, 1]  # (N,) secondary industry indices
-
-        # Create comparison matrices using broadcasting for vectorized operations
-        # This replaces the nested loops for better performance
-        l2_eq = l2.unsqueeze(1) == l2.unsqueeze(
-            0
-        )  # (N, N) boolean matrix for same secondary industry
-        l1_eq = l1.unsqueeze(1) == l1.unsqueeze(
-            0
-        )  # (N, N) boolean matrix for same primary industry
-
-        # Initialize matrix with delta2 (different primary industry case)
-        D = torch.full(
-            (N, N), delta2, dtype=torch.float32, device=industry_indices.device
-        )
-
-        # Update to delta1 for same primary but different secondary industry
-        D[(l1_eq & ~l2_eq)] = delta1
-
-        # Update to 1.0 for same secondary industry
-        D[l2_eq] = 1.0
-
-        # Set diagonal to 1.0 (self-connection)
-        D.fill_diagonal_(1.0)
-
-        return D
 
     def forward(
         self,
@@ -372,16 +364,16 @@ class PPNet(nn.Module):
         gated_cs_features = stock_cs_features * feature_gated_weights
 
         # Cross-Sectional Feature Enhancement via Deep Cross Network
-        cs_states = torch.cat([gated_cs_features, stock_fund_features], dim=-1)
-        cs_states = self.cross_layer(cs_states) + self.cs_proj(cs_states)
+        cs_states = self.cross_net(gated_cs_features)
 
         # Multi-Source Representation Fusion
         fused_states = torch.cat([temporal_states, cs_states], dim=-1)
         fused_states = self.fusion_proj(fused_states)
 
         # Industry-aware Inter-Stock Attention
-        industry_decay = self._build_industry_decay(industry_indices)
-        spatial_states = self.spatial_attn(fused_states, industry_decay=industry_decay)
+        spatial_states = self.spatial_attn(
+            fused_states, industry_indices=industry_indices
+        )
         spatial_states = self.norm(spatial_states)
 
         # Final Prediction on Spatial Representations
