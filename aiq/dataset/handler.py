@@ -106,10 +106,10 @@ class Alpha158(DataHandler):
         # fundamental data
         ind_class_l1 = df["Ind_class_l1"]
         ind_class_l2 = df["Ind_class_l2"]
+        cap = np.log(df["Circ_mv"])
         ep = (1.0 / df["Pe_ttm"].replace(0, np.nan)).fillna(0)
         bp = (1.0 / df["Pb"].replace(0, np.nan)).fillna(0)
         sp = (1.0 / df["Ps_ttm"].replace(0, np.nan)).fillna(0)
-        cap = np.log(df["Circ_mv"])
 
         # adjusted prices
         adj_factor = df["Adj_factor"]
