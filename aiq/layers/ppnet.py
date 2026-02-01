@@ -226,15 +226,24 @@ class Gate(nn.Module):
 
 
 class TemporalAttention(nn.Module):
-    def __init__(self, d_model):
+    def __init__(self, d_model, temperature=1.0):
         super().__init__()
-        self.mlp = MLP(d_model, 2 * d_model)
-        self.proj = nn.Linear(d_model, 1, bias=False)
+        self.score_proj = nn.Sequential(
+            nn.Linear(d_model, d_model, bias=False),
+            nn.SiLU(),
+            nn.Linear(d_model, 1, bias=False),
+        )
+        self.temperature = temperature
 
     def forward(self, z):
-        scores = self.proj(self.mlp(z)).squeeze(-1)  # [N, T]
-        attn = torch.softmax(scores, dim=1).unsqueeze(1)
-        out = torch.matmul(attn, z).squeeze(1)
+        """
+        z: [N, T, D]
+        """
+        scores = self.score_proj(z).squeeze(-1)  # [N, T]
+        scores = scores / self.temperature
+
+        attn = torch.softmax(scores, dim=1)  # [N, T]
+        out = torch.sum(attn.unsqueeze(-1) * z, dim=1)
         return out
 
 
@@ -256,7 +265,7 @@ class PPNet(nn.Module):
 
         # Feature dimensions
         self.temporal_hidden_dim = d_model // 4
-        self.cs_hidden_dim = d_model
+        self.cs_hidden_dim = d_model // 2
         self.fusion_hidden_dim = self.temporal_hidden_dim + self.cs_hidden_dim
 
         # Temporal layers
@@ -276,7 +285,10 @@ class PPNet(nn.Module):
 
         # Fusion layers
         self.fusion_proj = nn.Sequential(
-            MLP(hidden_size=self.fusion_hidden_dim, intermediate_size=2 * d_model),
+            MLP(
+                hidden_size=self.fusion_hidden_dim,
+                intermediate_size=2 * self.fusion_hidden_dim,
+            ),
             nn.Linear(self.fusion_hidden_dim, d_model),
             nn.Dropout(dropout),
         )
@@ -315,11 +327,11 @@ class PPNet(nn.Module):
         temporal_states = self.temporal_aggregator(temporal_features)
 
         #  Market-Conditioned Cross-Sectional Feature Gating
-        feature_gated_weights = self.market_gate(market_features)
-        gated_cs_features = stock_cs_features * feature_gated_weights
+        cs_gated_weights = self.market_gate(market_features)
+        cs_gated_features = stock_cs_features * cs_gated_weights
 
         # Cross-Sectional Feature Projection
-        cs_states = self.cs_proj(gated_cs_features)
+        cs_states = self.cs_proj(cs_gated_features)
 
         # Multi-Source Representation Fusion
         fused_states = torch.cat([temporal_states, cs_states], dim=-1)
