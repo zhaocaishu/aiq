@@ -253,7 +253,7 @@ class PPNet(nn.Module):
         d_ts_feat,
         d_cs_feat,
         d_fund_feat,
-        d_market,
+        d_mkt_feat,
         d_emb,
         d_model,
         t_nhead,
@@ -268,7 +268,7 @@ class PPNet(nn.Module):
         self.cs_hidden_dim = d_model // 2
         self.fusion_hidden_dim = self.temporal_hidden_dim + self.cs_hidden_dim
 
-        # Temporal layers
+        # Temporal Encoder (Intra-stock)
         self.temporal_attn = TAttention(
             d_in=d_ts_feat,
             d_model=self.temporal_hidden_dim,
@@ -277,23 +277,19 @@ class PPNet(nn.Module):
         )
         self.temporal_aggregator = TemporalAttention(d_model=self.temporal_hidden_dim)
 
-        # Gated layers
-        self.market_gate = Gate(d_market, d_cs_feat, beta=beta)
-
-        # Projection layers
+        # Market-conditioned Cross-sectional Encoder
+        self.market_gate = Gate(d_mkt_feat, d_cs_feat, beta=beta)
         self.cs_proj = nn.Linear(d_cs_feat, self.cs_hidden_dim)
 
-        # Fusion layers
-        self.fusion_proj = nn.Sequential(
-            MLP(
-                hidden_size=self.fusion_hidden_dim,
-                intermediate_size=2 * self.fusion_hidden_dim,
-            ),
-            nn.Linear(self.fusion_hidden_dim, d_model),
-            nn.Dropout(dropout),
+        # Multi-source Feature Fusion
+        self.fusion_proj = nn.Linear(self.fusion_hidden_dim, d_model)
+        self.fusion_ffn = MLP(
+            hidden_size=d_model,
+            intermediate_size=2 * d_model,
         )
+        self.fusion_dropout = nn.Dropout(dropout)
 
-        # Spatial layers
+        # Spatial Encoder (Inter-stock / Industry-aware)
         self.spatial_attn = SAttention(
             d_model=d_model,
             d_emb=d_emb,
@@ -329,13 +325,12 @@ class PPNet(nn.Module):
         #  Market-Conditioned Cross-Sectional Feature Gating
         cs_gated_weights = self.market_gate(market_features)
         cs_gated_features = stock_cs_features * cs_gated_weights
-
-        # Cross-Sectional Feature Projection
         cs_states = self.cs_proj(cs_gated_features)
 
         # Multi-Source Representation Fusion
         fused_states = torch.cat([temporal_states, cs_states], dim=-1)
         fused_states = self.fusion_proj(fused_states)
+        fused_states = fused_states + self.fusion_dropout(self.fusion_ffn(fused_states))
 
         # Industry-aware Inter-Stock Attention
         spatial_states = self.spatial_attn(
