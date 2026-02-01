@@ -210,16 +210,16 @@ class SAttention(nn.Module):
 class Gate(nn.Module):
     def __init__(self, d_input, d_output, beta=1.0):
         super().__init__()
+        self.enc = nn.Sequential(
+            nn.Linear(d_input, d_output),
+            nn.SiLU(),
+            nn.Linear(d_output, d_output),
+        )
         self.d_output = d_output
         self.t = beta
 
-        self.encoder = MLP(hidden_size=d_input, intermediate_size=2 * d_output)
-        self.proj = nn.Linear(d_input, d_output)
-
     def forward(self, x):
-        x_enc = self.encoder(x)
-        x_enc = self.proj(x_enc)
-
+        x_enc = self.enc(x)
         x_scale = torch.softmax(x_enc / self.t, dim=-1)
         x_scale = self.d_output * x_scale
         return x_scale
