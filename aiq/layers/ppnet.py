@@ -210,37 +210,29 @@ class SAttention(nn.Module):
 class Gate(nn.Module):
     def __init__(self, d_input, d_output, beta=1.0):
         super().__init__()
-
         self.d_output = d_output
         self.t = beta
 
-        self.encoder = nn.Sequential(
-            nn.Linear(d_input, d_output),
-            nn.SiLU(),
-            nn.Linear(d_output, d_output),
-        )
+        self.encoder = MLP(hidden_size=d_input, intermediate_size=2 * d_output)
+        self.proj = nn.Linear(d_input, d_output)
 
     def forward(self, x):
         x_enc = self.encoder(x)
+        x_enc = self.proj(x_enc)
 
-        # 特征缩放因子
         x_scale = torch.softmax(x_enc / self.t, dim=-1)
         x_scale = self.d_output * x_scale
-
         return x_scale
 
 
 class TemporalAttention(nn.Module):
     def __init__(self, d_model):
         super().__init__()
-        self.score = nn.Sequential(
-            nn.Linear(d_model, d_model),
-            nn.SiLU(),
-            nn.Linear(d_model, 1, bias=False),
-        )
+        self.mlp = MLP(d_model, 2 * d_model)
+        self.proj = nn.Linear(d_model, 1, bias=False)
 
     def forward(self, z):
-        scores = self.score(z).squeeze(-1)  # [N, T]
+        scores = self.proj(self.mlp(z)).squeeze(-1)  # [N, T]
         attn = torch.softmax(scores, dim=1).unsqueeze(1)
         out = torch.matmul(attn, z).squeeze(1)
         return out
@@ -263,7 +255,7 @@ class PPNet(nn.Module):
         super(PPNet, self).__init__()
 
         # Feature dimensions
-        self.temporal_hidden_dim = d_model // 2
+        self.temporal_hidden_dim = d_model // 4
         self.cs_hidden_dim = d_model
         self.fusion_hidden_dim = self.temporal_hidden_dim + self.cs_hidden_dim
 
@@ -280,18 +272,13 @@ class PPNet(nn.Module):
         self.market_gate = Gate(d_market, d_cs_feat, beta=beta)
 
         # Projection layers
-        self.cs_proj = nn.Sequential(
-            nn.Linear(d_cs_feat, 2 * self.cs_hidden_dim),
-            nn.SiLU(),
-            nn.Linear(2 * self.cs_hidden_dim, self.cs_hidden_dim, bias=False),
-        )
+        self.cs_proj = nn.Linear(d_cs_feat, self.cs_hidden_dim)
 
         # Fusion layers
         self.fusion_proj = nn.Sequential(
-            nn.Linear(self.fusion_hidden_dim, 2 * d_model),
-            nn.SiLU(),
-            nn.Dropout(p=dropout),
-            nn.Linear(2 * d_model, d_model),
+            MLP(hidden_size=self.fusion_hidden_dim, intermediate_size=2 * d_model),
+            nn.Linear(self.fusion_hidden_dim, d_model),
+            nn.Dropout(dropout),
         )
 
         # Spatial layers
