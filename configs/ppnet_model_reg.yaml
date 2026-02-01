@@ -21,7 +21,6 @@ data_handler:
           industry_col: "IND_CLS_L1"
           cap_col: "FUND_CAP"
           factor_cols:
-            - "FUND_BP"
             - "FUND_EP"
             - "FUND_BP"
             - "FUND_SP"
