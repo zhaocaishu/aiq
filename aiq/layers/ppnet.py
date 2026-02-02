@@ -265,11 +265,10 @@ class PPNet(nn.Module):
 
         # Feature dimensions
         self.temporal_hidden_dim = d_model // 4
-        self.cs_hidden_dim = d_model // 2
-        self.fusion_hidden_dim = self.temporal_hidden_dim + self.cs_hidden_dim
+        self.fusion_hidden_dim = self.temporal_hidden_dim + d_cs_feat
 
         # Temporal Encoder (Intra-stock)
-        self.temporal_attn = TAttention(
+        self.temporal_encoder = TAttention(
             d_in=d_ts_feat,
             d_model=self.temporal_hidden_dim,
             nhead=t_nhead,
@@ -277,20 +276,19 @@ class PPNet(nn.Module):
         )
         self.temporal_aggregator = TemporalAttention(d_model=self.temporal_hidden_dim)
 
-        # Market-conditioned Cross-sectional Encoder
-        self.market_gate = Gate(d_mkt_feat, d_cs_feat, beta=beta)
-        self.cs_proj = nn.Linear(d_cs_feat, self.cs_hidden_dim)
+        # Market-conditioned Gating
+        self.market_gate = Gate(d_mkt_feat, self.fusion_hidden_dim, beta=beta)
 
-        # Multi-source Feature Fusion
-        self.fusion_proj = nn.Linear(self.fusion_hidden_dim, d_model)
+        # Fusion Encoder (Temporal + Cross-Sectional Feature Integration)
         self.fusion_ffn = MLP(
-            hidden_size=d_model,
-            intermediate_size=2 * d_model,
+            hidden_size=self.fusion_hidden_dim,
+            intermediate_size=2 * self.fusion_hidden_dim,
         )
         self.fusion_dropout = nn.Dropout(dropout)
+        self.fusion_proj = nn.Linear(2 * self.fusion_hidden_dim, d_model)
 
         # Spatial Encoder (Inter-stock / Industry-aware)
-        self.spatial_attn = SAttention(
+        self.spatial_encoder = SAttention(
             d_model=d_model,
             d_emb=d_emb,
             nhead=s_nhead,
@@ -319,21 +317,22 @@ class PPNet(nn.Module):
             predictions: (N, 1) prediction for each stock
         """
         # Intra-Stock Temporal Modeling
-        temporal_features = self.temporal_attn(stock_ts_features)
-        temporal_states = self.temporal_aggregator(temporal_features)
+        temporal_features = self.temporal_encoder(stock_ts_features)
+        temporal_features = self.temporal_aggregator(temporal_features)
 
-        #  Market-Conditioned Cross-Sectional Feature Gating
-        cs_gated_weights = self.market_gate(market_features)
-        cs_gated_features = stock_cs_features * cs_gated_weights
-        cs_states = self.cs_proj(cs_gated_features)
+        # Market-Conditioned Feature Gating
+        fused_features = torch.cat([temporal_features, stock_cs_features], dim=-1)
+        gate_weights = self.market_gate(market_features)
+        gated_features = fused_features * gate_weights
 
-        # Multi-Source Representation Fusion
-        fused_states = torch.cat([temporal_states, cs_states], dim=-1)
+        # Feature Fusion: Nonlinear Enhancement + Dimension Alignment
+        enhanced_features = self.fusion_ffn(gated_features)
+        fused_states = torch.cat([gated_features, enhanced_features], dim=-1)
+        fused_states = self.fusion_dropout(fused_states)
         fused_states = self.fusion_proj(fused_states)
-        fused_states = fused_states + self.fusion_dropout(self.fusion_ffn(fused_states))
 
         # Industry-aware Inter-Stock Attention
-        spatial_states = self.spatial_attn(
+        spatial_states = self.spatial_encoder(
             fused_states, industry_indices=industry_indices
         )
 
