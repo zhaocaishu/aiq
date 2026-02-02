@@ -247,6 +247,22 @@ class TemporalAttention(nn.Module):
         return out
 
 
+class FusionBlock(nn.Module):
+    def __init__(self, d_in, d_model, dropout):
+        super().__init__()
+        self.proj = nn.Linear(d_in, d_model)
+        self.norm = nn.LayerNorm(d_model, eps=1e-5)
+        self.dropout = nn.Dropout(dropout)
+        self.mlp = MLP(hidden_size=d_model, intermediate_size=2 * d_model)
+
+    def forward(self, x):
+        res = self.proj(x)
+        x = self.norm(res)
+        x = self.mlp(x)
+        x = self.dropout(x)
+        return x + res
+
+
 class PPNet(nn.Module):
     def __init__(
         self,
@@ -280,12 +296,7 @@ class PPNet(nn.Module):
         self.market_gate = Gate(d_mkt_feat, self.fusion_hidden_dim, beta=beta)
 
         # Fusion Encoder (Temporal + Cross-Sectional Feature Integration)
-        self.fusion_ffn = MLP(
-            hidden_size=self.fusion_hidden_dim,
-            intermediate_size=2 * self.fusion_hidden_dim,
-        )
-        self.fusion_dropout = nn.Dropout(dropout)
-        self.fusion_proj = nn.Linear(2 * self.fusion_hidden_dim, d_model)
+        self.fusion_block = FusionBlock(self.fusion_hidden_dim, d_model, dropout)
 
         # Spatial Encoder (Inter-stock / Industry-aware)
         self.spatial_encoder = SAttention(
@@ -326,10 +337,7 @@ class PPNet(nn.Module):
         gated_features = fused_features * gate_weights
 
         # Feature Fusion: Nonlinear Enhancement + Dimension Alignment
-        enhanced_features = self.fusion_ffn(gated_features)
-        fused_states = torch.cat([gated_features, enhanced_features], dim=-1)
-        fused_states = self.fusion_dropout(fused_states)
-        fused_states = self.fusion_proj(fused_states)
+        fused_states = self.fusion_block(gated_features)
 
         # Industry-aware Inter-Stock Attention
         spatial_states = self.spatial_encoder(
