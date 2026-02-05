@@ -250,17 +250,19 @@ class TemporalAttention(nn.Module):
 class FusionBlock(nn.Module):
     def __init__(self, d_in, d_model, dropout):
         super().__init__()
-        self.proj = nn.Linear(d_in, d_model)
-        self.norm = nn.LayerNorm(d_model, eps=1e-5)
+        self.mlp = nn.Sequential(
+            nn.Linear(d_in, 2 * d_in), nn.GELU(), nn.Linear(2 * d_in, d_in)
+        )
         self.dropout = nn.Dropout(dropout)
-        self.mlp = MLP(hidden_size=d_model, intermediate_size=2 * d_model)
+        self.proj = nn.Linear(2 * d_in, d_model)
 
     def forward(self, x):
-        res = self.proj(x)
-        x = self.norm(res)
+        residual = x
         x = self.mlp(x)
         x = self.dropout(x)
-        return x + res
+        x = torch.cat([residual, x], dim=-1)
+        x = self.proj(x)
+        return x
 
 
 class PPNet(nn.Module):
