@@ -1,8 +1,10 @@
 import math
+from turtle import mode
 
 import torch
 from torch import nn
 
+from aiq.layers.revin import RevIN
 from .embed import DataEmbedding
 
 
@@ -286,6 +288,7 @@ class PPNet(nn.Module):
         self.fusion_hidden_dim = self.temporal_hidden_dim + d_cs_feat
 
         # Temporal Encoder (Intra-stock)
+        self.revin_layer = RevIN(d_ts_feat, affine=True)
         self.temporal_encoder = TAttention(
             d_in=d_ts_feat,
             d_model=self.temporal_hidden_dim,
@@ -330,7 +333,8 @@ class PPNet(nn.Module):
             predictions: (N, 1) prediction for each stock
         """
         # Intra-Stock Temporal Modeling
-        temporal_features = self.temporal_encoder(stock_ts_features)
+        temporal_features = self.revin_layer(stock_ts_features, "norm")
+        temporal_features = self.temporal_encoder(temporal_features)
         temporal_features = self.temporal_aggregator(temporal_features)
 
         # Market-Conditioned Feature Gating

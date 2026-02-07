@@ -37,95 +37,50 @@ def ts_robust_zscore(x: np.ndarray, clip_outlier: bool = False) -> np.ndarray:
     return z
 
 
-def ts_cs_robust_zscore(x: np.ndarray, clip_outlier: bool = False) -> np.ndarray:
-    """
-    Time-series mean scaling, then cross-sectional robust z-score.
-
-    Args:
-        x: Input array with shape (N, T, D).
-        clip_outlier: Whether to clip z-scores into [-3, 3].
-
-    Returns:
-        Normalized array with shape (N, T, D)
-    """
-    if x.ndim != 3:
-        raise ValueError(f"Input must be 3D (N, T, D), got {x.shape}")
-
-    # Time-series scaling (per sample)
-    ts_mean = np.nanmean(x, axis=1, keepdims=True) + 1e-12
-    x = x / ts_mean
-
-    # Cross-sectional robust z-score (per timestamp)
-    cs_med = np.nanmedian(x, axis=0, keepdims=True)
-    cs_mad = np.nanmedian(np.abs(x - cs_med), axis=0, keepdims=True)
-    cs_std = cs_mad * 1.4826 + 1e-12
-    z = (x - cs_med) / cs_std
-
-    if clip_outlier:
-        z = np.clip(z, -3.0, 3.0)
-
-    return z
-
-
 def robust_zscore(
     x: Union[pd.Series, np.ndarray], clip_outlier: bool = False
 ) -> Union[pd.Series, np.ndarray]:
     """
-    Robust ZScore Normalization using median and MAD.
+    Robust Z-score normalization using median and MAD.
 
-    Uses robust statistics for Z-Score normalization:
-        center = median(x)
-        scale = MAD(x) * 1.4826
+    Computes:
+        z = (x - median(x)) / (MAD(x) * 1.4826)
 
-    The result can be optionally clipped to [-3, 3] range.
-
-    NaN values are ignored in median and MAD calculations but remain in output.
+    NaNs are ignored in median/MAD computation but preserved in output.
+    Optionally clips z-scores to [-3, 3] to limit extreme outliers.
 
     Parameters
     ----------
     x : pd.Series or np.ndarray
         Input data
-    clip_outlier : bool, optional
-        If True, clip the resulting z-scores to the range [-3, 3] to limit extreme outliers.
-        Default is False.
+    clip_outlier : bool, default False
+        Whether to clip z-scores to [-3, 3].
 
     Returns
     -------
     pd.Series or np.ndarray
-        Normalized data with same type as input. NaN values remain in place.
+        Normalized data of same type as input.
 
-    References
-    ----------
+    Reference
+    ---------
     https://en.wikipedia.org/wiki/Median_absolute_deviation
     """
     if len(x) == 0:
         return x
 
-    # 保存输入类型和元数据
     is_series = isinstance(x, pd.Series)
-    index = x.index if is_series else None
-    name = x.name if is_series else None
+    index, name = (x.index, x.name) if is_series else (None, None)
 
-    # 转换为ndarray进行计算，避免修改原始数据
     arr = np.asarray(x, dtype=np.float32).copy()
-
-    # 计算中位数并中心化
     med = np.nanmedian(arr)
     arr_centered = arr - med
-
-    # 计算MAD并标准化
     mad = np.nanmedian(np.abs(arr_centered))
-    std = mad * 1.4826 + 1e-12
-    result = arr_centered / std
+    z = arr_centered / (mad * 1.4826 + 1e-12)
 
     if clip_outlier:
-        result = np.clip(result, -3.0, 3.0)
+        z = np.clip(z, -3.0, 3.0)
 
-    # 转换回原始类型
-    if is_series:
-        return pd.Series(result, index=index, name=name)
-
-    return result
+    return pd.Series(z, index=index, name=name) if is_series else z
 
 
 def zscore(x, clip_min=-3.0, clip_max=3.0):
