@@ -283,8 +283,7 @@ class PPNet(nn.Module):
 
         # Feature dimensions
         self.temporal_hidden_dim = d_model // 4
-        self.cs_hidden_dim = d_model // 2
-        self.fusion_hidden_dim = self.temporal_hidden_dim + self.cs_hidden_dim
+        self.fusion_hidden_dim = self.temporal_hidden_dim + d_cs_feat
 
         # Temporal Encoder (Intra-stock)
         self.temporal_encoder = TAttention(
@@ -294,13 +293,6 @@ class PPNet(nn.Module):
             dropout=dropout,
         )
         self.temporal_aggregator = TemporalAttention(d_model=self.temporal_hidden_dim)
-
-        # Cross-Sectional Projection
-        self.cs_proj = nn.Sequential(
-            nn.LayerNorm(d_cs_feat),
-            nn.Linear(d_cs_feat, self.cs_hidden_dim),
-            nn.SiLU()
-        )
 
         # Market-conditioned Gating
         self.market_gate = Gate(d_mkt_feat, self.fusion_hidden_dim, beta=beta)
@@ -341,11 +333,8 @@ class PPNet(nn.Module):
         temporal_features = self.temporal_encoder(stock_ts_features)
         temporal_features = self.temporal_aggregator(temporal_features)
 
-        # Cross-Sectional Projection
-        cs_states = self.cs_proj(stock_cs_features)
-
         # Market-Conditioned Feature Gating
-        fused_features = torch.cat([temporal_features, cs_states], dim=-1)
+        fused_features = torch.cat([temporal_features, stock_cs_features], dim=-1)
         gate_weights = self.market_gate(market_features)
         gated_features = fused_features * gate_weights
 
