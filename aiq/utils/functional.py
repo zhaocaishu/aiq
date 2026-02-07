@@ -9,44 +9,26 @@ from sklearn.linear_model import LinearRegression
 
 def ts_robust_zscore(x: np.ndarray, clip_outlier: bool = False) -> np.ndarray:
     """
-    Time-series Robust Z-Score Normalization
+    Robust z-score normalization along the time axis.
 
-    Normalize along the time dimension (T) for each (N, D) using median and MAD.
+    For each sample and feature in (N, T, D), subtract the median over T and
+    divide by MAD (median absolute deviation).
 
-    Parameters
-    ----------
-    x : np.ndarray
-        Input data of shape (N, T, D), where N is the batch size, T is the time length,
-        and D is the feature dimension.
-    clip_outlier : bool, optional
-        If True, clip the resulting z-scores to the range [-3, 3] to limit extreme outliers.
-        Default is False.
+    Args:
+        x: Input array with shape (N, T, D).
+        clip_outlier: Whether to clip z-scores into [-3, 3].
 
-    Returns
-    -------
-    np.ndarray
-        The normalized data of the same shape as input.
-
-    Reference
-    ---------
-    https://en.wikipedia.org/wiki/Median_absolute_deviation
+    Returns:
+        Normalized array with shape (N, T, D)
     """
     if x.ndim != 3:
         raise ValueError(f"Input array must be 3D (N, T, D), but got shape {x.shape}")
 
-    # Compute global median over samples and time: shape (1, 1, D)
     med = np.nanmedian(x, axis=1, keepdims=True)
-
-    # Center the data
     x_centered = x - med
-
-    # Compute MAD over time
     mad = np.nanmedian(np.abs(x_centered), axis=1, keepdims=True)
 
-    # Scale factor for consistency
     std = mad * 1.4826 + 1e-12
-
-    # Compute robust z-score
     z = x_centered / std
 
     if clip_outlier:
@@ -60,26 +42,24 @@ def ts_cs_robust_zscore(x: np.ndarray, clip_outlier: bool = False) -> np.ndarray
     Time-series mean scaling, then cross-sectional robust z-score.
 
     Args:
-        x: array of shape (N, T, D)
-        clip_outlier: whether to clip output into [-3, 3]
+        x: Input array with shape (N, T, D).
+        clip_outlier: Whether to clip z-scores into [-3, 3].
 
     Returns:
-        normalized array with shape (N, T, D)
+        Normalized array with shape (N, T, D)
     """
     if x.ndim != 3:
-        raise ValueError(f"Input array must be 3D (N, T, D), but got shape {x.shape}")
+        raise ValueError(f"Input must be 3D (N, T, D), got {x.shape}")
 
     # Time-series scaling (per sample)
-    t_mean = np.nanmean(x, axis=1, keepdims=True) + 1e-12
-    x_t_norm = x / t_mean
+    ts_mean = np.nanmean(x, axis=1, keepdims=True) + 1e-12
+    x = x / ts_mean
 
     # Cross-sectional robust z-score (per timestamp)
-    c_med = np.nanmedian(x_t_norm, axis=0, keepdims=True)
-    c_centered = x_t_norm - c_med
-    c_mad = np.nanmedian(np.abs(c_centered), axis=0, keepdims=True)
-    c_std = c_mad * 1.4826 + 1e-12
-
-    z = c_centered / c_std
+    cs_med = np.nanmedian(x, axis=0, keepdims=True)
+    cs_mad = np.nanmedian(np.abs(x - cs_med), axis=0, keepdims=True)
+    cs_std = cs_mad * 1.4826 + 1e-12
+    z = (x - cs_med) / cs_std
 
     if clip_outlier:
         z = np.clip(z, -3.0, 3.0)
