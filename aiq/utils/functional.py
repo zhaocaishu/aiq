@@ -7,46 +7,6 @@ import numpy as np
 from sklearn.linear_model import LinearRegression
 
 
-def ts_ohlcv_normalize(x: np.ndarray):
-    """
-    对N*T*D维的时序特征进行归一化
-
-    参数:
-        x: np.ndarray, shape (N, T, D)
-            D维度特征顺序: open(0), high(1), low(2), close(3), volume(4), amount(5)
-
-    返回:
-        np.ndarray, shape (N, T, D), 归一化后的特征
-    """
-    # 特征索引定义
-    IDX_OPEN, IDX_HIGH, IDX_LOW, IDX_CLOSE = 0, 1, 2, 3
-    IDX_VOLUME, IDX_AMOUNT = 4, 5
-
-    # 创建输出数组
-    normalized_x = x.astype(np.float32).copy()
-
-    # 基准：每个样本最后一个时间步的收盘价 (shape: N,)
-    base_close = normalized_x[:, -1, IDX_CLOSE]
-
-    # 四个价格特征分别进行归一化
-    price_indices = [IDX_OPEN, IDX_HIGH, IDX_LOW, IDX_CLOSE]
-    for idx in price_indices:
-        price_feat = normalized_x[:, :, idx]
-        normalized_x[:, :, idx] = np.log(price_feat / base_close[:, np.newaxis])
-
-    # 成交量标准化: volume / mean(volume_over_time)
-    volume_feat = normalized_x[:, :, IDX_VOLUME]
-    volume_mean = np.mean(volume_feat, axis=1, keepdims=True)
-    normalized_x[:, :, IDX_VOLUME] = volume_feat / volume_mean
-
-    # 成交额标准化: amount / mean(amount_over_time)
-    amount_feat = normalized_x[:, :, IDX_AMOUNT]
-    amount_mean = np.mean(amount_feat, axis=1, keepdims=True)
-    normalized_x[:, :, IDX_AMOUNT] = amount_feat / amount_mean
-
-    return normalized_x
-
-
 def ts_robust_zscore(x: np.ndarray, clip_outlier: bool = False) -> np.ndarray:
     """
     Time-series Robust Z-Score Normalization
@@ -97,44 +57,23 @@ def ts_robust_zscore(x: np.ndarray, clip_outlier: bool = False) -> np.ndarray:
 
 def ts_cs_robust_zscore(x: np.ndarray, clip_outlier: bool = False) -> np.ndarray:
     """
-    Two-step Robust Z-Score Normalization (Time-series then Cross-sectional).
+    Time-series mean scaling, then cross-sectional robust z-score.
 
-    This function performs normalization in two stages:
-    1. Temporal: Normalizes each sample (N) across its time steps (T).
-    2. Cross-sectional: Normalizes across all samples (N) at each time step (T).
+    Args:
+        x: array of shape (N, T, D)
+        clip_outlier: whether to clip output into [-3, 3]
 
-    This dual-stage approach is common in quantitative finance to remove both
-    individual asset bias and market-wide systematic noise.
-
-    Parameters
-    ----------
-    x : np.ndarray
-        Input data of shape (N, T, D).
-        N: Number of samples (e.g., assets/stocks).
-        T: Time steps (history length).
-        D: Feature dimension.
-    clip_outlier : bool, optional
-        If True, clips result to [-3, 3]. Default is False.
-
-    Returns
-    -------
-    np.ndarray
-        Normalized data of shape (N, T, D).
+    Returns:
+        normalized array with shape (N, T, D)
     """
     if x.ndim != 3:
         raise ValueError(f"Input array must be 3D (N, T, D), but got shape {x.shape}")
 
-    # Time-series Normalization
-    # Normalizes each feature of each sample over its own history.
-    t_med = np.nanmedian(x, axis=1, keepdims=True)
-    t_centered = x - t_med
-    t_mad = np.nanmedian(np.abs(t_centered), axis=1, keepdims=True)
-    t_std = t_mad * 1.4826 + 1e-12
+    # Time-series scaling (per sample)
+    t_mean = np.nanmean(x, axis=1, keepdims=True) + 1e-12
+    x_t_norm = x / t_mean
 
-    x_t_norm = t_centered / t_std
-
-    # Cross-sectional Normalization
-    # Normalizes across all samples for every specific time step.
+    # Cross-sectional robust z-score (per timestamp)
     c_med = np.nanmedian(x_t_norm, axis=0, keepdims=True)
     c_centered = x_t_norm - c_med
     c_mad = np.nanmedian(np.abs(c_centered), axis=0, keepdims=True)
