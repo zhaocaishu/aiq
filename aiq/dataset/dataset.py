@@ -10,6 +10,7 @@ from aiq.utils.functional import (
     fillna,
     zscore,
     robust_zscore,
+    ts_robust_zscore,
     drop_extreme_label,
 )
 
@@ -258,6 +259,7 @@ class TSDataset(Dataset):
         market_features = features[:, -1, self.market_feature_indices]
 
         # Data Normalization Pipeline
+        stock_ts_features = ts_robust_zscore(stock_ts_features, clip_outlier=True)
         stock_cs_features = robust_zscore(stock_cs_features, clip_outlier=True)
         stock_fund_features = robust_zscore(stock_fund_features, clip_outlier=True)
 

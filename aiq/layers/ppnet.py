@@ -1,5 +1,4 @@
 import math
-from turtle import mode
 
 import torch
 from torch import nn
@@ -252,9 +251,7 @@ class TemporalAttention(nn.Module):
 class FusionBlock(nn.Module):
     def __init__(self, d_in, d_model, dropout):
         super().__init__()
-        self.mlp = nn.Sequential(
-            nn.Linear(d_in, 2 * d_in), nn.GELU(), nn.Linear(2 * d_in, d_in)
-        )
+        self.mlp = MLP(hidden_size=d_in, intermediate_size=2 * d_in)
         self.dropout = nn.Dropout(dropout)
         self.proj = nn.Linear(2 * d_in, d_model)
 
@@ -288,7 +285,6 @@ class PPNet(nn.Module):
         self.fusion_hidden_dim = self.temporal_hidden_dim + d_cs_feat
 
         # Temporal Encoder (Intra-stock)
-        self.revin_layer = RevIN(d_ts_feat, affine=True)
         self.temporal_encoder = TAttention(
             d_in=d_ts_feat,
             d_model=self.temporal_hidden_dim,
@@ -296,6 +292,7 @@ class PPNet(nn.Module):
             dropout=dropout,
         )
         self.temporal_aggregator = TemporalAttention(d_model=self.temporal_hidden_dim)
+        self.temporal_norm = nn.LayerNorm(self.temporal_hidden_dim)
 
         # Market-conditioned Gating
         self.market_gate = Gate(d_mkt_feat, self.fusion_hidden_dim, beta=beta)
@@ -333,9 +330,9 @@ class PPNet(nn.Module):
             predictions: (N, 1) prediction for each stock
         """
         # Intra-Stock Temporal Modeling
-        temporal_features = self.revin_layer(stock_ts_features, "norm")
-        temporal_features = self.temporal_encoder(temporal_features)
+        temporal_features = self.temporal_encoder(stock_ts_features)
         temporal_features = self.temporal_aggregator(temporal_features)
+        temporal_features = self.temporal_norm(temporal_features)
 
         # Market-Conditioned Feature Gating
         fused_features = torch.cat([temporal_features, stock_cs_features], dim=-1)
