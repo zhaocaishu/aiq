@@ -3,7 +3,6 @@ import math
 import torch
 from torch import nn
 
-from aiq.layers.revin import RevIN
 from .embed import DataEmbedding
 
 
@@ -188,8 +187,9 @@ class SAttention(nn.Module):
             vh = v[:, i, :]  # (N, head_dim)
 
             attn_logits = torch.matmul(qh, kh.transpose(0, 1)) / self.temperature
-            attn_logits += torch.log(industry_decay.clamp(min=1e-8))
             attn_weights = torch.softmax(attn_logits, dim=-1)
+            attn_weights = attn_weights * industry_decay
+            attn_weights = attn_weights / attn_weights.sum(-1, keepdim=True)
 
             attn_weights = self.attn_dropout[i](attn_weights)
 
@@ -208,7 +208,7 @@ class SAttention(nn.Module):
         return hidden_states
 
 
-class Gate(nn.Module):
+class MarketGate(nn.Module):
     def __init__(self, d_input, d_output, beta=1.0):
         super().__init__()
         self.enc = nn.Sequential(
@@ -230,9 +230,9 @@ class TemporalAttention(nn.Module):
     def __init__(self, d_model, temperature=1.0):
         super().__init__()
         self.score_proj = nn.Sequential(
-            nn.Linear(d_model, d_model, bias=False),
+            nn.Linear(d_model, d_model),
             nn.SiLU(),
-            nn.Linear(d_model, 1, bias=False),
+            nn.Linear(d_model, 1),
         )
         self.temperature = temperature
 
@@ -292,10 +292,9 @@ class PPNet(nn.Module):
             dropout=dropout,
         )
         self.temporal_aggregator = TemporalAttention(d_model=self.temporal_hidden_dim)
-        self.temporal_norm = nn.LayerNorm(self.temporal_hidden_dim)
 
-        # Market-conditioned Gating
-        self.market_gate = Gate(d_mkt_feat, self.fusion_hidden_dim, beta=beta)
+        # Market-Conditioned Feature Gating
+        self.market_gate = MarketGate(d_mkt_feat, self.fusion_hidden_dim, beta=beta)
 
         # Fusion Encoder (Temporal + Cross-Sectional Feature Integration)
         self.fusion_block = FusionBlock(self.fusion_hidden_dim, d_model, dropout)
@@ -330,14 +329,13 @@ class PPNet(nn.Module):
             predictions: (N, 1) prediction for each stock
         """
         # Intra-Stock Temporal Modeling
-        temporal_features = self.temporal_encoder(stock_ts_features)
-        temporal_features = self.temporal_aggregator(temporal_features)
-        temporal_features = self.temporal_norm(temporal_features)
+        stock_temporal_states = self.temporal_encoder(stock_ts_features)
+        stock_temporal_features = self.temporal_aggregator(stock_temporal_states)
 
         # Market-Conditioned Feature Gating
-        fused_features = torch.cat([temporal_features, stock_cs_features], dim=-1)
+        stock_features = torch.cat([stock_temporal_features, stock_cs_features], dim=-1)
         gate_weights = self.market_gate(market_features)
-        gated_features = fused_features * gate_weights
+        gated_features = stock_features * gate_weights
 
         # Feature Fusion: Nonlinear Enhancement + Dimension Alignment
         fused_states = self.fusion_block(gated_features)
