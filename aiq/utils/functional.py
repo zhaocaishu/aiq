@@ -7,6 +7,66 @@ import numpy as np
 from sklearn.linear_model import LinearRegression
 
 
+def ts_ohlcv_normalize(x: np.ndarray) -> np.ndarray:
+    """Normalize OHLCV time-series data (sample-wise normalization).
+
+    Price features use log relative values: log(price / last_close)
+    Volume/Amount use temporal mean normalization: value / temporal_mean
+
+    Args:
+        x: Input data with shape (N, T, D), where D must contain at least 6 features:
+           [open, high, low, close, volume, amount]
+           N: number of samples, T: time steps, D: feature dimensions
+
+    Returns:
+        Normalized data with same shape as input, dtype float32
+
+    Raises:
+        ValueError: When input dimensions are incorrect or insufficient features
+    """
+    # Input validation
+    if x.ndim != 3:
+        raise ValueError(f"Expected 3D array (N, T, D), got dimension: {x.ndim}")
+    if x.shape[2] < 6:
+        raise ValueError(f"Expected at least 6 features, got: {x.shape[2]}")
+
+    # Feature index constants
+    OPEN, HIGH, LOW, CLOSE, VOLUME, AMOUNT = 0, 1, 2, 3, 4, 5
+
+    # Create copy and convert to float32
+    normalized = x.astype(np.float32, copy=True)
+
+    # Price feature normalization: log relative values
+    # Using the last closing price of each sample as reference
+    last_close = normalized[:, -1:, CLOSE][:, :, np.newaxis]  # Shape: (N, 1, 1)
+    price_indices = (OPEN, HIGH, LOW, CLOSE)
+
+    # Calculate log relative values for all price features at once
+    # Add epsilon to avoid division by zero
+    epsilon = 1e-10
+    price_ratio = normalized[:, :, price_indices] / (last_close + epsilon)
+    normalized[:, :, price_indices] = np.log(
+        price_ratio
+    )  # Equivalent to np.log(price_ratio)
+
+    # Volume normalization: temporal mean normalization
+    volume_data = normalized[:, :, VOLUME]
+    volume_mean = np.mean(volume_data, axis=1, keepdims=True)
+    # Safe division to handle zero mean
+    normalized[:, :, VOLUME] = np.divide(
+        volume_data, volume_mean, out=np.zeros_like(volume_data), where=volume_mean != 0
+    )
+
+    # Amount normalization: temporal mean normalization
+    amount_data = normalized[:, :, AMOUNT]
+    amount_mean = np.mean(amount_data, axis=1, keepdims=True)
+    normalized[:, :, AMOUNT] = np.divide(
+        amount_data, amount_mean, out=np.zeros_like(amount_data), where=amount_mean != 0
+    )
+
+    return normalized
+
+
 def ts_robust_zscore(x: np.ndarray, clip_outlier: bool = False) -> np.ndarray:
     """
     Robust z-score normalization along the time axis.
@@ -84,7 +144,9 @@ def robust_zscore(
 
 
 def zscore(x, clip_min=-3.0, clip_max=3.0):
-    return np.clip((x - x.mean()) / (x.std() + 1e-8), clip_min, clip_max)
+    mean = x.mean(axis=0, keepdims=True)
+    std = x.std(axis=0, keepdims=True)
+    return np.clip((x - mean) / (std + 1e-8), clip_min, clip_max)
 
 
 def neutralize(

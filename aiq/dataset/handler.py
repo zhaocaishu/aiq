@@ -118,8 +118,9 @@ class Alpha158(DataHandler):
         high = df["High"] * adj_factor
         low = df["Low"] * adj_factor
 
-        # volume
+        # volume & amount
         volume = df["Volume"]
+        amount = df["AMount"]
 
         # turnover rate
         turn = df["Turnover_rate_f"]
@@ -136,6 +137,12 @@ class Alpha158(DataHandler):
             ep,
             bp,
             sp,
+            open,
+            high,
+            low,
+            close,
+            volume,
+            amount,
             (high - low) / open,
             (open - Ref(close, 1)) / Ref(close, 1),
             (close - open) / open,
@@ -158,20 +165,26 @@ class Alpha158(DataHandler):
             "FUND_EP",
             "FUND_BP",
             "FUND_SP",
-            "TS_KLEN",
-            "TS_KGAP",
-            "TS_KMID1",
-            "TS_KMID2",
-            "TS_KUP1",
-            "TS_KUP2",
-            "TS_KLOW1",
-            "TS_KLOW2",
-            "TS_KSFT1",
-            "TS_KSFT2",
-            "TS_HIGH0",
-            "TS_LOW0",
-            "TS_MFD_INFLOW_VOL_RATIO",
-            "TS_MFD_LARGE_AMT_RATIO",
+            "TS_OPEN",
+            "TS_HIGH",
+            "TS_LOW",
+            "TS_CLOSE",
+            "TS_VOLUME",
+            "TS_AMOUNT",
+            "CS_KLEN",
+            "CS_KGAP",
+            "CS_KMID1",
+            "CS_KMID2",
+            "CS_KUP1",
+            "CS_KUP2",
+            "CS_KLOW1",
+            "CS_KLOW2",
+            "CS_KSFT1",
+            "CS_KSFT2",
+            "CS_HIGH0",
+            "CS_LOW0",
+            "CS_MFD_INFLOW_VOL_RATIO",
+            "CS_MFD_LARGE_AMT_RATIO",
         ]
 
         # rolling

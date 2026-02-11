@@ -164,7 +164,7 @@ class SAttention(nn.Module):
 
     def forward(self, x, industry_indices):
         # industry_decay: (N, N) — 行业衰减矩阵
-        industry_decay = self._build_industry_decay(industry_indices)
+        industry_decay = self._build_industry_decay(industry_indices).detach()
 
         # x: (N, D)  — 股票特征
         residual = x
@@ -187,10 +187,8 @@ class SAttention(nn.Module):
             vh = v[:, i, :]  # (N, head_dim)
 
             attn_logits = torch.matmul(qh, kh.transpose(0, 1)) / self.temperature
+            attn_logits = attn_logits + torch.log(industry_decay + 1e-8)
             attn_weights = torch.softmax(attn_logits, dim=-1)
-            attn_weights = attn_weights * industry_decay
-            attn_weights = attn_weights / attn_weights.sum(-1, keepdim=True)
-
             attn_weights = self.attn_dropout[i](attn_weights)
 
             attn_out = torch.matmul(attn_weights, vh)
@@ -294,7 +292,7 @@ class PPNet(nn.Module):
         self.temporal_aggregator = TemporalAttention(d_model=self.temporal_hidden_dim)
 
         # Market-Conditioned Feature Gating
-        self.market_gate = MarketGate(d_mkt_feat, self.fusion_hidden_dim, beta=beta)
+        self.market_gate = MarketGate(d_mkt_feat, d_cs_feat, beta=beta)
 
         # Fusion Encoder (Temporal + Cross-Sectional Feature Integration)
         self.fusion_block = FusionBlock(self.fusion_hidden_dim, d_model, dropout)
@@ -333,12 +331,14 @@ class PPNet(nn.Module):
         stock_temporal_features = self.temporal_aggregator(stock_temporal_states)
 
         # Market-Conditioned Feature Gating
-        stock_features = torch.cat([stock_temporal_features, stock_cs_features], dim=-1)
         gate_weights = self.market_gate(market_features)
-        gated_features = stock_features * gate_weights
+        stock_gated_cs_features = stock_cs_features * gate_weights
 
         # Feature Fusion: Nonlinear Enhancement + Dimension Alignment
-        fused_states = self.fusion_block(gated_features)
+        stock_features = torch.cat(
+            [stock_temporal_features, stock_gated_cs_features], dim=-1
+        )
+        fused_states = self.fusion_block(stock_features)
 
         # Industry-aware Inter-Stock Attention
         spatial_states = self.spatial_encoder(
