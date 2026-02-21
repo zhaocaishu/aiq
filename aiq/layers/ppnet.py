@@ -23,10 +23,8 @@ class MLP(nn.Module):
 
 
 class TAttention(nn.Module):
-    def __init__(self, d_in, d_model, nhead, dropout):
+    def __init__(self, d_model, nhead, dropout):
         super().__init__()
-
-        self.enc_embedding = DataEmbedding(d_in, d_model, dropout)
 
         self.d_model = d_model
         self.nhead = nhead
@@ -45,12 +43,9 @@ class TAttention(nn.Module):
         self.post_attention_layernorm = nn.LayerNorm(d_model, eps=1e-5)
 
     def forward(self, x):
-        # Embedding
-        x_enc = self.enc_embedding(x)
-
         # Self Attention
-        residual = x_enc
-        hidden_states = self.input_layernorm(x_enc)
+        residual = x
+        hidden_states = self.input_layernorm(x)
 
         q = self.q_proj(hidden_states)
         k = self.k_proj(hidden_states)
@@ -278,24 +273,24 @@ class PPNet(nn.Module):
     ):
         super(PPNet, self).__init__()
 
-        # Feature dimensions
-        self.temporal_hidden_dim = d_model // 4
-        self.fusion_hidden_dim = self.temporal_hidden_dim + d_cs_feat
+        # Feature Dimensions
+        self.d_temporal_hidden = d_model // 4
+        self.d_fusion_input = self.d_temporal_hidden + d_cs_feat
 
         # Temporal Encoder (Intra-stock)
+        self.data_embedding = DataEmbedding(d_ts_feat, self.d_temporal_hidden, dropout)
         self.temporal_encoder = TAttention(
-            d_in=d_ts_feat,
-            d_model=self.temporal_hidden_dim,
+            d_model=self.d_temporal_hidden,
             nhead=t_nhead,
             dropout=dropout,
         )
-        self.temporal_aggregator = TemporalAttention(d_model=self.temporal_hidden_dim)
+        self.temporal_aggregator = TemporalAttention(d_model=self.d_temporal_hidden)
 
         # Market-Conditioned Feature Gating
         self.market_gate = MarketGate(d_mkt_feat, d_cs_feat, beta=beta)
 
         # Fusion Encoder (Temporal + Cross-Sectional Feature Integration)
-        self.fusion_block = FusionBlock(self.fusion_hidden_dim, d_model, dropout)
+        self.fusion_block = FusionBlock(self.d_fusion_input, d_model, dropout)
 
         # Spatial Encoder (Inter-stock / Industry-aware)
         self.spatial_encoder = SAttention(
@@ -327,7 +322,8 @@ class PPNet(nn.Module):
             predictions: (N, 1) prediction for each stock
         """
         # Intra-Stock Temporal Modeling
-        stock_temporal_states = self.temporal_encoder(stock_ts_features)
+        ts_enc = self.data_embedding(stock_ts_features)
+        stock_temporal_states = self.temporal_encoder(ts_enc)
         stock_temporal_features = self.temporal_aggregator(stock_temporal_states)
 
         # Market-Conditioned Feature Gating
