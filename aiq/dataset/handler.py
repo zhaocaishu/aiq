@@ -143,6 +143,8 @@ class Alpha158(DataHandler):
             close,
             volume,
             amount,
+            mfd_inflow_vol_ratio,
+            mfd_large_amount_ratio,
             (high - low) / open,
             (open - Ref(close, 1)) / Ref(close, 1),
             (close - open) / open,
@@ -155,8 +157,6 @@ class Alpha158(DataHandler):
             (2 * close - high - low) / ((high - low) + 1e-12),
             (high - close) / close,
             (low - close) / close,
-            mfd_inflow_vol_ratio,
-            mfd_large_amount_ratio,
         ]
         feature_names = [
             "IND_CLS_L1",
@@ -171,6 +171,8 @@ class Alpha158(DataHandler):
             "TS_CLOSE",
             "TS_VOLUME",
             "TS_AMOUNT",
+            "TS_MFD_INFLOW_VOL_RATIO",
+            "TS_MFD_LARGE_AMT_RATIO",
             "CS_KLEN",
             "CS_KGAP",
             "CS_KMID1",
@@ -183,8 +185,6 @@ class Alpha158(DataHandler):
             "CS_KSFT2",
             "CS_HIGH0",
             "CS_LOW0",
-            "CS_MFD_INFLOW_VOL_RATIO",
-            "CS_MFD_LARGE_AMT_RATIO",
         ]
 
         # rolling

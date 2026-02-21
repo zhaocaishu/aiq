@@ -84,7 +84,7 @@ class TAttention(nn.Module):
 
 
 class SAttention(nn.Module):
-    def __init__(self, d_model, nhead, dropout, d_emb):
+    def __init__(self, d_model, d_emb, nhead, dropout):
         super().__init__()
         assert d_model % nhead == 0, "d_model 必须能被 nhead 整除"
 
@@ -278,19 +278,33 @@ class PPNet(nn.Module):
         self.d_fusion_input = self.d_temporal_hidden + d_cs_feat
 
         # Temporal Encoder (Intra-stock)
-        self.data_embedding = DataEmbedding(d_ts_feat, self.d_temporal_hidden, dropout)
+        self.data_embedding = DataEmbedding(
+            c_in=d_ts_feat,
+            d_model=self.d_temporal_hidden,
+            dropout=dropout,
+        )
         self.temporal_encoder = TAttention(
             d_model=self.d_temporal_hidden,
             nhead=t_nhead,
             dropout=dropout,
         )
-        self.temporal_aggregator = TemporalAttention(d_model=self.d_temporal_hidden)
+        self.temporal_aggregator = TemporalAttention(
+            d_model=self.d_temporal_hidden,
+        )
 
         # Market-Conditioned Feature Gating
-        self.market_gate = MarketGate(d_mkt_feat, d_cs_feat, beta=beta)
+        self.market_gate = MarketGate(
+            d_input=d_mkt_feat,
+            d_output=d_cs_feat,
+            beta=beta,
+        )
 
         # Fusion Encoder (Temporal + Cross-Sectional Feature Integration)
-        self.fusion_block = FusionBlock(self.d_fusion_input, d_model, dropout)
+        self.fusion_block = FusionBlock(
+            d_in=self.d_fusion_input,
+            d_model=d_model,
+            dropout=dropout,
+        )
 
         # Spatial Encoder (Inter-stock / Industry-aware)
         self.spatial_encoder = SAttention(
@@ -322,8 +336,8 @@ class PPNet(nn.Module):
             predictions: (N, 1) prediction for each stock
         """
         # Intra-Stock Temporal Modeling
-        ts_enc = self.data_embedding(stock_ts_features)
-        stock_temporal_states = self.temporal_encoder(ts_enc)
+        stock_temporal_embeds = self.data_embedding(stock_ts_features)
+        stock_temporal_states = self.temporal_encoder(stock_temporal_embeds)
         stock_temporal_features = self.temporal_aggregator(stock_temporal_states)
 
         # Market-Conditioned Feature Gating
