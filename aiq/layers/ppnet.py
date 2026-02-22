@@ -255,39 +255,31 @@ class FusionBlock(nn.Module):
 
 class MarketCrossAttention(nn.Module):
     """
-    Cross-attention conditioning stock states on a global market regime.
+    Cross-attention conditioning stock states on a global market state.
     """
 
     def __init__(self, d_stock, d_market, d_model, nhead):
         super().__init__()
-
         self.stock_proj = nn.Linear(d_stock, d_model)
-        self.regime_proj = nn.Linear(d_market, d_model)
-
-        self.attn = nn.MultiheadAttention(
+        self.market_proj = nn.Linear(d_market, d_model)
+        self.cross_attn = nn.MultiheadAttention(
             embed_dim=d_model,
             num_heads=nhead,
             batch_first=True,
         )
-
         self.norm = nn.LayerNorm(d_model)
 
     def forward(self, stock_states, market_states):
-        stock_embed = self.stock_proj(stock_states)  # (N, D)
-        regime_embed = self.regime_proj(market_states[0])  # (D,)
-
-        stock_embed = stock_embed.unsqueeze(0)  # (1, N, D)
-        regime_embed = regime_embed.unsqueeze(0).unsqueeze(1)  # (1, 1, D)
-
-        attn_out, _ = self.attn(
-            query=stock_embed,
-            key=regime_embed,
-            value=regime_embed,
+        query = self.stock_proj(stock_states).unsqueeze(0) # (1, N, D)
+        context = self.market_proj(market_states[0]).view(1, 1, -1) # (1, 1, D)
+        
+        attn_out, _ = self.cross_attn(
+            query=query,
+            key=context,
+            value=context,
         )
 
-        output = self.norm(stock_embed + attn_out)
-
-        return output.squeeze(0)
+        return self.norm(query + attn_out).squeeze(0)
 
 
 class PPNet(nn.Module):
@@ -338,7 +330,6 @@ class PPNet(nn.Module):
             d_input=d_mkt_feat,
             d_output=self.d_market_hidden,
         )
-
         self.market_attn = MarketCrossAttention(
             d_stock=d_model,
             d_market=self.d_market_hidden,
