@@ -42,10 +42,15 @@ class Evaluator:
         else:
             adj_close = df["Close"]
 
-        returns = Ref(adj_close, -5) / Ref(adj_close, -1) - 1
+        ret_1d = Ref(adj_close, -2) / Ref(adj_close, -1) - 1
+        ret_5d = Ref(adj_close, -5) / Ref(adj_close, -1) - 1
 
         return pd.concat(
-            [df[["Date", "Instrument"]], returns.rename("RET_5D")],
+            [
+                df[["Date", "Instrument"]],
+                ret_1d.rename("RET_1D"),
+                ret_5d.rename("RET_5D"),
+            ],
             axis=1,
         )
 
@@ -74,7 +79,12 @@ class Evaluator:
         benchmark_returns = (
             self._extract_instrument_returns(benchmark_features)
             .dropna(subset=["RET_5D"])
-            .rename(columns={"RET_5D": "BENCH_RET_5D"})[["Date", "BENCH_RET_5D"]]
+            .rename(
+                columns={
+                    "RET_1D": "BENCH_RET_1D",
+                    "RET_5D": "BENCH_RET_5D",
+                }
+            )[["Date", "BENCH_RET_1D", "BENCH_RET_5D"]]
         )
 
         # Multi-stage merge to align actual, predicted, and benchmark data
@@ -122,61 +132,55 @@ class Evaluator:
 
         return {f"Precision@{self.top_k}": precision_at_k}
 
-    def _compute_portfolio_metrics(
-        self, pred_df, trading_days_per_year=252, holding_period=5
-    ):
-        """
-        Compute portfolio evaluation metrics based on Top-K predicted returns.
-        """
+    def _compute_portfolio_metrics(self, df, trading_days=252, n_drop=5):
+        df = df.sort_values([self.date_col, self.pred_col], ascending=[True, False])
 
-        # Select the Top N stocks for each date based on PRED_RET_5D
-        daily_top_stocks = (
-            pred_df.sort_values([self.date_col, self.pred_col], ascending=[True, False])
-            .groupby(self.date_col)
-            .head(self.top_k)
-        )
+        current_holdings = set()
+        daily_excess_rets = []
 
-        # Calculate the daily average excess return of the Top N portfolio
-        daily_top_stocks["EXCESS_RET_5D"] = (
-            daily_top_stocks[self.label_col] - daily_top_stocks["BENCH_RET_5D"]
-        )
-        period_ret = (
-            daily_top_stocks.groupby(self.date_col)["EXCESS_RET_5D"].mean().sort_index()
-        )
+        for _, daily_data in df.groupby(self.date_col):
+            if len(daily_data) < self.top_k:
+                continue
 
-        # Calculate the total cumulative growth factor over the entire dataset
-        nav = (1 + period_ret).cumprod()
-        total_growth = nav.iloc[-1]
+            if not current_holdings:
+                # Initial entry
+                current_holdings = set(daily_data.head(self.top_k)["Instrument"])
+            else:
+                # Sell: N instruments in holding with lowest predicted scores
+                in_hold = daily_data[daily_data["Instrument"].isin(current_holdings)]
+                sell_list = in_hold.nsmallest(n_drop, self.pred_col)[
+                    "Instrument"
+                ].tolist()
 
-        # Convert total growth to an average periodic growth rate
-        n_periods = len(period_ret)
-        geo_mean_periodic_ret = total_growth ** (1 / n_periods) - 1
+                # Buy: N instruments NOT in holding with highest predicted scores
+                not_in_hold = daily_data[
+                    ~daily_data["Instrument"].isin(current_holdings)
+                ]
+                buy_list = not_in_hold.head(n_drop)["Instrument"].tolist()
 
-        # Annualized return (ARR)
-        ann_factor = trading_days_per_year / holding_period
-        arr = (1 + geo_mean_periodic_ret) ** ann_factor - 1
+                current_holdings = (current_holdings - set(sell_list)) | set(buy_list)
 
-        # Volatility and Sharpe ratio
-        period_vol = period_ret.std()
-        ann_vol = period_vol * (ann_factor**0.5)
+            # Calculate daily equal-weighted excess return
+            port_ret = daily_data[daily_data["Instrument"].isin(current_holdings)][
+                "RET_1D"
+            ].mean()
+            bench_ret = daily_data["BENCH_RET_1D"].iloc[0]
+            daily_excess_rets.append(port_ret - bench_ret)
 
+        rets = pd.Series(daily_excess_rets).dropna()
+        if rets.empty:
+            return {}
+
+        # Risk and Return Analytics
+        nav = (1 + rets).cumprod()
+        arr = nav.iloc[-1] ** (trading_days / len(rets)) - 1
+        vol = rets.std() * np.sqrt(trading_days)
         sharpe = (
-            (geo_mean_periodic_ret / period_vol) * (ann_factor**0.5)
-            if period_vol > 0
-            else 0.0
+            (rets.mean() / rets.std() * np.sqrt(trading_days)) if rets.std() != 0 else 0
         )
+        mdd = (nav / nav.cummax() - 1).min()
 
-        # Maximum drawdown
-        rolling_max = nav.cummax()
-        drawdown = nav / rolling_max - 1
-        max_drawdown = drawdown.min()
-
-        return {
-            "ARR": arr,
-            "Sharpe": sharpe,
-            "MaxDrawdown": max_drawdown,
-            "AnnVol": ann_vol,
-        }
+        return {"ARR": arr, "Sharpe": sharpe, "MaxDrawdown": mdd, "AnnVol": vol}
 
     def evaluate(self, pred_df):
         """Evaluate model performance with IC, ICIR, and Hit Rate metrics."""
@@ -189,6 +193,8 @@ class Evaluator:
                 self.label_col,
                 self.pred_col,
                 "Instrument",
+                "RET_1D",
+                "BENCH_RET_1D",
                 "BENCH_RET_5D",
             ],
         )
