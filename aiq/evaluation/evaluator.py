@@ -18,7 +18,6 @@ class Evaluator:
         pred_col="PRED_RET_5D",
         label_col="RET_5D",
         top_k=30,
-        min_samples=50,
     ):
         self.data_dir = data_dir
         self.start_time = start_time
@@ -28,7 +27,6 @@ class Evaluator:
         self.pred_col = pred_col
         self.label_col = label_col
         self.top_k = top_k
-        self.min_samples = min_samples
 
     def _validate_columns(self, df, required_cols=None):
         """Check if DataFrame contains required columns."""
@@ -98,16 +96,10 @@ class Evaluator:
 
     def _compute_ic(self, group):
         """Calculate Spearman correlation coefficient (IC) for a group."""
-        if len(group) < self.min_samples:
-            return np.nan
-
         return group[self.pred_col].corr(group[self.label_col], method="spearman")
 
     def _compute_hit_rate(self, group):
         """Calculate Top-K and Bottom-K hit rates for a group."""
-        if len(group) < self.min_samples:
-            return {f"HR@Top{self.top_k}": np.nan, f"HR@Bottom{self.top_k}": np.nan}
-
         top_pred = set(group.nlargest(self.top_k, self.pred_col)["Instrument"])
         top_label = set(group.nlargest(self.top_k, self.label_col)["Instrument"])
         bottom_pred = set(group.nsmallest(self.top_k, self.pred_col)["Instrument"])
@@ -120,9 +112,6 @@ class Evaluator:
 
     def _compute_precision_at_k(self, group):
         """Compute Precision@K — proportion of correctly predicted positive samples among top-K predictions."""
-        if len(group) < self.min_samples:
-            return {f"Precision@{self.top_k}": np.nan}
-
         # Select the top-K records based on prediction scores
         top_pred = group.nlargest(self.top_k, self.pred_col, keep="first")
 
@@ -190,12 +179,12 @@ class Evaluator:
             df,
             required_cols=[
                 self.date_col,
-                self.label_col,
-                self.pred_col,
                 "Instrument",
                 "RET_1D",
+                self.label_col,
                 "BENCH_RET_1D",
                 "BENCH_RET_5D",
+                self.pred_col,
             ],
         )
 
