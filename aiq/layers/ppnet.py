@@ -201,18 +201,22 @@ class SAttention(nn.Module):
         return hidden_states
 
 
-class MarketEncoder(nn.Module):
-    def __init__(self, d_input, d_output):
+class MarketGate(nn.Module):
+    def __init__(self, d_input, d_output, beta=1.0):
         super().__init__()
         self.enc = nn.Sequential(
             nn.Linear(d_input, d_output),
             nn.SiLU(),
             nn.Linear(d_output, d_output),
         )
+        self.d_output = d_output
+        self.t = beta
 
     def forward(self, x):
         x_enc = self.enc(x)
-        return x_enc
+        x_scale = torch.softmax(x_enc / self.t, dim=-1)
+        x_scale = self.d_output * x_scale
+        return x_scale
 
 
 class TemporalAttention(nn.Module):
@@ -253,35 +257,6 @@ class FusionBlock(nn.Module):
         return x
 
 
-class MarketCrossAttention(nn.Module):
-    """
-    Cross-attention conditioning stock states on a global market state.
-    """
-
-    def __init__(self, d_stock, d_market, d_model, nhead):
-        super().__init__()
-        self.stock_proj = nn.Linear(d_stock, d_model)
-        self.market_proj = nn.Linear(d_market, d_model)
-        self.cross_attn = nn.MultiheadAttention(
-            embed_dim=d_model,
-            num_heads=nhead,
-            batch_first=True,
-        )
-        self.norm = nn.LayerNorm(d_model)
-
-    def forward(self, stock_states, market_states):
-        query = self.stock_proj(stock_states).unsqueeze(0) # (1, N, D)
-        context = self.market_proj(market_states[0]).view(1, 1, -1) # (1, 1, D)
-        
-        attn_out, _ = self.cross_attn(
-            query=query,
-            key=context,
-            value=context,
-        )
-
-        return self.norm(query + attn_out).squeeze(0)
-
-
 class PPNet(nn.Module):
     def __init__(
         self,
@@ -299,7 +274,6 @@ class PPNet(nn.Module):
         super(PPNet, self).__init__()
 
         # Feature Dimensions
-        self.d_market_hidden = d_model // 2
         self.d_temporal_hidden = d_model // 4
         self.d_fusion_input = self.d_temporal_hidden + d_cs_feat
 
@@ -318,23 +292,18 @@ class PPNet(nn.Module):
             d_model=self.d_temporal_hidden,
         )
 
+        # Market-Conditioned Feature Gating
+        self.market_gate = MarketGate(
+            d_input=d_mkt_feat,
+            d_output=d_cs_feat,
+            beta=beta
+        )
+
         # Fusion Encoder (Temporal + Cross-Sectional Feature Integration)
         self.fusion_block = FusionBlock(
             d_in=self.d_fusion_input,
             d_model=d_model,
             dropout=dropout,
-        )
-
-        # Market-Conditioned Feature Encoding
-        self.market_encoder = MarketEncoder(
-            d_input=d_mkt_feat,
-            d_output=self.d_market_hidden,
-        )
-        self.market_attn = MarketCrossAttention(
-            d_stock=d_model,
-            d_market=self.d_market_hidden,
-            d_model=d_model,
-            nhead=t_nhead,
         )
 
         # Spatial Encoder (Inter-stock / Industry-aware)
@@ -371,13 +340,13 @@ class PPNet(nn.Module):
         stock_temporal_states = self.temporal_encoder(stock_temporal_embeds)
         stock_temporal_features = self.temporal_aggregator(stock_temporal_states)
 
+        # Market-Conditioned Feature Gating
+        gate_weights = self.market_gate(market_features)
+        gated_stock_cs_features = stock_cs_features * gate_weights
+        
         # Feature Fusion: Nonlinear Enhancement + Dimension Alignment
-        stock_features = torch.cat([stock_temporal_features, stock_cs_features], dim=-1)
+        stock_features = torch.cat([stock_temporal_features, gated_stock_cs_features], dim=-1)
         fused_states = self.fusion_block(stock_features)
-
-        # Market-Conditioned Feature Encoding
-        market_states = self.market_encoder(market_features)
-        fused_states = self.market_attn(fused_states, market_states)
 
         # Industry-aware Inter-Stock Attention
         spatial_states = self.spatial_encoder(

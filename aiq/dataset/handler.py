@@ -579,16 +579,6 @@ class MarketAlpha158(Alpha158):
                 ]
             )
 
-        # Liquidity features
-        features.extend([
-            Mean(amount, 5) / Mean(amount, 20),
-            Std(amount, 5) / Mean(amount, 20),
-        ])
-        feature_names.extend([
-            "MKT_AMOUNT_MEAN_5D_20D",
-            "MKT_AMOUNT_STD_5D_20D",
-        ])
-
         # Concat features
         feature_df = pd.concat(
             [
