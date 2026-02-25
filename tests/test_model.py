@@ -31,7 +31,7 @@ if __name__ == "__main__":
     dummy_stock_fund_features = torch.zeros(100, 4).to(
         "cuda" if torch.cuda.is_available() else "cpu"
     )
-    dummy_market_features = torch.zeros(100, 69).to(
+    dummy_market_features = torch.zeros(100, 63).to(
         "cuda" if torch.cuda.is_available() else "cpu"
     )
     output = model.model(
