@@ -156,82 +156,131 @@ class Evaluator:
         df = df.sort_values([self.date_col, self.pred_col], ascending=[True, False])
         dates = sorted(df[self.date_col].unique())
 
-        capital = initial_capital
-        nav_series, daily_returns, turnover_series = [], [], []
-        prev_holdings = set()
+        cash = initial_capital
+        positions = {}  # {instrument: market_value}
+        nav_series = []
+        daily_returns = []
+        turnover_series = []
+
+        prev_total_value = initial_capital
 
         for date in dates:
             daily = df[df[self.date_col] == date]
+
+            # Apply natural position returns (T+1 realized PnL)
+            if positions:
+                total_value = cash
+
+                for inst in list(positions.keys()):
+                    row = daily[daily[self.instrument_col] == inst]
+                    if row.empty:
+                        continue
+
+                    ret = row["RET_1D"].values[0]
+                    positions[inst] *= 1.0 + ret
+
+                    total_value += positions[inst]
+
+                # Capital-weighted daily portfolio return
+                daily_ret = total_value / prev_total_value - 1.0
+                daily_returns.append(daily_ret)
+                nav_series.append(total_value)
+
+                prev_total_value = total_value
+            else:
+                # No position, NAV unchanged
+                nav_series.append(prev_total_value)
+                daily_returns.append(0.0)
+
+            # Rebalance logic (executed at close)
             if len(daily) < self.top_k:
                 continue
 
-            # Realize returns from previous day's holdings
-            if prev_holdings:
-                held = daily[daily[self.instrument_col].isin(prev_holdings)]
-                daily_ret = held["RET_1D"].mean() if not held.empty else 0.0
-                capital *= 1.0 + daily_ret
-                daily_returns.append(daily_ret)
-                nav_series.append(capital)
+            current_holdings = set(positions.keys())
 
-            # Update Portfolio with Trading Limits
-            if not prev_holdings:
-                # Initial setup: filter out limit-up stocks (cannot buy)
-                can_buy = daily[daily["Price"] < daily[self.up_limit_col]]
-                target_holdings = set(can_buy.head(self.top_k)[self.instrument_col])
-            else:
-                # Identify candidates to drop (lowest predictions)
-                in_hold = daily[daily[self.instrument_col].isin(prev_holdings)]
-                drop_candidates = set(
-                    in_hold.nsmallest(n_drop, self.pred_col)[self.instrument_col]
-                )
+            # Initial portfolio construction
+            if not current_holdings:
+                buy_candidates = daily[
+                    daily["Price"] < daily[self.up_limit_col]  # not limit-up
+                ].head(self.top_k)
 
-                # Limit-down constraint: cannot sell if price <= down_limit
-                cannot_sell = set(
-                    in_hold[
-                        (in_hold[self.instrument_col].isin(drop_candidates))
-                        & (in_hold["Price"] <= in_hold[self.down_limit_col])
-                    ][self.instrument_col]
-                )
-                actual_sell = drop_candidates - cannot_sell
+                if buy_candidates.empty:
+                    continue
 
-                # Limit-up constraint: cannot buy if price >= up_limit
-                not_in_hold = daily[~daily[self.instrument_col].isin(prev_holdings)]
-                can_buy_pool = not_in_hold[
-                    not_in_hold["Price"] < not_in_hold[self.up_limit_col]
-                ]
+                cash_per_stock = cash / len(buy_candidates)
 
-                # Match buy volume to actual sell volume to maintain TopK
-                actual_buy = set(
-                    can_buy_pool.head(len(actual_sell))[self.instrument_col]
-                )
-                target_holdings = (prev_holdings - actual_sell) | actual_buy
+                for _, row in buy_candidates.iterrows():
+                    cost = cash_per_stock * commission
+                    invest = cash_per_stock - cost
+                    positions[row[self.instrument_col]] = invest
+                    cash -= cash_per_stock
 
-            # Transaction Costs and Turnover
-            if prev_holdings:
-                sells = len(prev_holdings - target_holdings)
-                buys = len(target_holdings - prev_holdings)
+                turnover_series.append(1.0)
+                continue
 
-                turnover = (sells + buys) / self.top_k
-                turnover_series.append(turnover)
+            # Sell phase (drop worst n holdings)
+            hold_df = daily[daily[self.instrument_col].isin(current_holdings)]
+            drop_candidates = set(
+                hold_df.nsmallest(n_drop, self.pred_col)[self.instrument_col]
+            )
 
-                cost_rate = (
-                    sells * (commission + stamp_tax) + buys * commission
-                ) / self.top_k
-                capital *= 1.0 - cost_rate
+            sell_count = 0
 
-            prev_holdings = target_holdings.copy()
+            for inst in drop_candidates:
+                row = daily[daily[self.instrument_col] == inst]
+                if row.empty:
+                    continue
 
-        # Performance Metrics
-        if not daily_returns:
-            return {}
+                price = row["Price"].values[0]
+                down_limit = row[self.down_limit_col].values[0]
 
+                # Only sell if not limit-down
+                if price > down_limit:
+                    value = positions.pop(inst)
+
+                    # Commission + stamp tax (sell side)
+                    cost = value * (commission + stamp_tax)
+                    cash += value - cost
+                    sell_count += 1
+
+            #  Buy phase (fill vacancies) ----
+            not_hold = daily[~daily[self.instrument_col].isin(positions.keys())]
+
+            buy_list = []
+            for _, row in not_hold.iterrows():
+                if len(buy_list) >= sell_count:
+                    break
+
+                # Only buy if not limit-up
+                if row["Price"] < row[self.up_limit_col]:
+                    buy_list.append(row[self.instrument_col])
+
+            if buy_list:
+                cash_per_stock = cash / len(buy_list)
+
+                for inst in buy_list:
+                    cost = cash_per_stock * commission
+                    invest = cash_per_stock - cost
+                    positions[inst] = invest
+                    cash -= cash_per_stock
+
+            # Portfolio turnover ratio
+            turnover = (sell_count + len(buy_list)) / self.top_k
+            turnover_series.append(turnover)
+
+        # Performance statistics
         rets = np.array(daily_returns)
         nav = np.array(nav_series)
 
-        ann_ret = (nav[-1] / initial_capital) ** (trading_days / len(rets)) - 1.0
+        # Annualized return
+        ann_ret = (nav[-1] / initial_capital) ** (trading_days / len(nav)) - 1.0
+
+        # Annualized Sharpe ratio
         sharpe = (
-            (rets.mean() / rets.std() * np.sqrt(trading_days)) if rets.std() > 0 else 0
+            rets.mean() / rets.std() * np.sqrt(trading_days) if rets.std() > 0 else 0
         )
+
+        # Maximum drawdown
         mdd = np.min(nav / np.maximum.accumulate(nav) - 1.0)
 
         return {
