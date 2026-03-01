@@ -135,56 +135,100 @@ class Evaluator:
     def _run_topk_dropout_portfolio(
         self,
         df: pd.DataFrame,
+        initial_capital: float = 1_000_000,
         trading_days: int = 252,
         n_drop: int = 5,
+        commission: float = 0.0003,
+        stamp_tax: float = 0.001,
     ) -> dict:
 
         df = df.sort_values([self.date_col, self.pred_col], ascending=[True, False])
+        dates = sorted(df[self.date_col].unique())
 
-        holdings = set()
-        returns = []
+        capital = initial_capital
+        nav_series = []
+        daily_returns = []
+        turnover_series = []
 
-        for _, daily in df.groupby(self.date_col):
+        prev_holdings = set()
+        target_holdings = set()
+
+        for date in dates:
+
+            daily = df[df[self.date_col] == date]
             if len(daily) < self.top_k:
                 continue
 
-            if not holdings:
-                holdings = set(daily.head(self.top_k)[self.instrument_col])
+            # Realize return from previous holdings (T+1 -> T+2)
+            if prev_holdings:
+                held = daily[daily[self.instrument_col].isin(prev_holdings)]
+                daily_ret = held["RET_1D"].mean() if not held.empty else 0.0
+
+                capital *= 1.0 + daily_ret
+
+                daily_returns.append(daily_ret)
+                nav_series.append(capital)
+
+            # Generate next-day target portfolio using today's signal
+            if not prev_holdings:
+                target_holdings = set(daily.head(self.top_k)[self.instrument_col])
             else:
-                in_hold = daily[daily[self.instrument_col].isin(holdings)]
+                in_hold = daily[daily[self.instrument_col].isin(prev_holdings)]
+
                 sell = set(
                     in_hold.nsmallest(n_drop, self.pred_col)[self.instrument_col]
                 )
 
-                candidates = daily[~daily[self.instrument_col].isin(holdings)].head(
-                    n_drop
+                buy = set(
+                    daily[~daily[self.instrument_col].isin(prev_holdings)].head(n_drop)[
+                        self.instrument_col
+                    ]
                 )
 
-                buy = set(candidates[self.instrument_col])
+                target_holdings = (prev_holdings - sell) | buy
 
-                holdings = (holdings - sell) | buy
+            # Execute rebalance at T+1 close and apply transaction cost
+            if prev_holdings:
+                sell_count = len(prev_holdings - target_holdings)
+                buy_count = len(target_holdings - prev_holdings)
 
-            port_ret = daily[daily[self.instrument_col].isin(holdings)]["RET_1D"].mean()
+                turnover = (sell_count + buy_count) / self.top_k
+                turnover_series.append(turnover)
 
-            returns.append(port_ret)
+                cost_rate = (
+                    sell_count * (commission + stamp_tax) + buy_count * commission
+                ) / self.top_k
 
-        rets = pd.Series(returns).dropna()
+                capital *= 1.0 - cost_rate
 
-        if rets.empty:
+            prev_holdings = target_holdings.copy()
+
+        if not daily_returns:
             return {}
 
-        nav = (1 + rets).cumprod()
+        rets = np.array(daily_returns)
+        nav = np.array(nav_series)
 
-        arr = nav.iloc[-1] ** (trading_days / len(rets)) - 1
-        vol = rets.std() * np.sqrt(trading_days)
-        sharpe = rets.mean() / rets.std() * np.sqrt(trading_days)
-        mdd = (nav / nav.cummax() - 1).min()
+        ann_return = (nav[-1] / initial_capital) ** (trading_days / len(rets)) - 1.0
+
+        ann_vol = rets.std() * np.sqrt(trading_days)
+
+        sharpe = (
+            rets.mean() / rets.std() * np.sqrt(trading_days)
+            if rets.std() > 0
+            else np.nan
+        )
+
+        max_drawdown = np.min(nav / np.maximum.accumulate(nav) - 1.0)
+
+        avg_turnover = np.mean(turnover_series) if turnover_series else 0.0
 
         return {
-            "ARR": arr,
+            "ARR": ann_return,
             "Sharpe": sharpe,
-            "MaxDrawdown": mdd,
-            "AnnVol": vol,
+            "MaxDrawdown": max_drawdown,
+            "AnnVol": ann_vol,
+            "AvgTurnover": avg_turnover,
         }
 
     def evaluate(self, pred_df: pd.DataFrame) -> pd.DataFrame:
