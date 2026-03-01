@@ -55,8 +55,8 @@ class Evaluator:
             {
                 self.date_col: df[self.date_col],
                 self.instrument_col: df[self.instrument_col],
-                "RET_1D": ret_1d,
                 self.label_col: ret_5d,
+                "RET_1D": ret_1d,
             }
         )
 
@@ -89,10 +89,9 @@ class Evaluator:
 
         bench_ret = self._compute_forward_returns(bench_features).rename(
             columns={
-                "RET_1D": "BENCH_RET_1D",
                 self.label_col: "BENCH_RET_5D",
             }
-        )[[self.date_col, "BENCH_RET_1D", "BENCH_RET_5D"]]
+        )[[self.date_col, "BENCH_RET_5D"]]
 
         df = (
             inst_ret.merge(
@@ -143,7 +142,7 @@ class Evaluator:
         df = df.sort_values([self.date_col, self.pred_col], ascending=[True, False])
 
         holdings = set()
-        excess_returns = []
+        returns = []
 
         for _, daily in df.groupby(self.date_col):
             if len(daily) < self.top_k:
@@ -167,11 +166,9 @@ class Evaluator:
 
             port_ret = daily[daily[self.instrument_col].isin(holdings)]["RET_1D"].mean()
 
-            bench_ret = daily["BENCH_RET_1D"].iloc[0]
+            returns.append(port_ret)
 
-            excess_returns.append(port_ret - bench_ret)
-
-        rets = pd.Series(excess_returns).dropna()
+        rets = pd.Series(returns).dropna()
 
         if rets.empty:
             return {}
