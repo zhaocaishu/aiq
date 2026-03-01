@@ -24,6 +24,8 @@ class Evaluator:
         benchmark: str = "000905.SH",
         date_col: str = "Date",
         instrument_col: str = "Instrument",
+        up_limit_col: str = "Up_limit",
+        down_limit_col: str = "Down_limit",
         pred_col: str = "PRED_RET_5D",
         label_col: str = "RET_5D",
         top_k: int = 30,
@@ -35,6 +37,8 @@ class Evaluator:
 
         self.date_col = date_col
         self.instrument_col = instrument_col
+        self.up_limit_col = up_limit_col
+        self.down_limit_col = down_limit_col
         self.pred_col = pred_col
         self.label_col = label_col
         self.top_k = top_k
@@ -51,14 +55,21 @@ class Evaluator:
         ret_1d = Ref(adj_close, -2) / Ref(adj_close, -1) - 1
         ret_5d = Ref(adj_close, -5) / Ref(adj_close, -1) - 1
 
-        return pd.DataFrame(
-            {
-                self.date_col: df[self.date_col],
-                self.instrument_col: df[self.instrument_col],
-                self.label_col: ret_5d,
-                "RET_1D": ret_1d,
-            }
-        )
+        # Build core data dictionary
+        data = {
+            self.date_col: df[self.date_col],
+            self.instrument_col: df[self.instrument_col],
+            self.label_col: ret_5d,
+            "Price": df["Close"],
+            "RET_1D": ret_1d,
+        }
+
+        # Optional add trading limits if available
+        for col in [self.up_limit_col, self.down_limit_col]:
+            if col in df.columns:
+                data[col] = df[col]
+
+        return pd.DataFrame(data)
 
     def _prepare_dataset(self, pred_df: pd.DataFrame) -> pd.DataFrame:
         """Align prediction / label / benchmark returns."""
@@ -146,89 +157,89 @@ class Evaluator:
         dates = sorted(df[self.date_col].unique())
 
         capital = initial_capital
-        nav_series = []
-        daily_returns = []
-        turnover_series = []
-
+        nav_series, daily_returns, turnover_series = [], [], []
         prev_holdings = set()
-        target_holdings = set()
 
         for date in dates:
-
             daily = df[df[self.date_col] == date]
             if len(daily) < self.top_k:
                 continue
 
-            # Realize return from previous holdings (T+1 -> T+2)
+            # Realize returns from previous day's holdings
             if prev_holdings:
                 held = daily[daily[self.instrument_col].isin(prev_holdings)]
                 daily_ret = held["RET_1D"].mean() if not held.empty else 0.0
-
                 capital *= 1.0 + daily_ret
-
                 daily_returns.append(daily_ret)
                 nav_series.append(capital)
 
-            # Generate next-day target portfolio using today's signal
+            # Update Portfolio with Trading Limits
             if not prev_holdings:
-                target_holdings = set(daily.head(self.top_k)[self.instrument_col])
+                # Initial setup: filter out limit-up stocks (cannot buy)
+                can_buy = daily[daily["Price"] < daily[self.up_limit_col]]
+                target_holdings = set(can_buy.head(self.top_k)[self.instrument_col])
             else:
+                # Identify candidates to drop (lowest predictions)
                 in_hold = daily[daily[self.instrument_col].isin(prev_holdings)]
-
-                sell = set(
+                drop_candidates = set(
                     in_hold.nsmallest(n_drop, self.pred_col)[self.instrument_col]
                 )
 
-                buy = set(
-                    daily[~daily[self.instrument_col].isin(prev_holdings)].head(n_drop)[
-                        self.instrument_col
-                    ]
+                # Limit-down constraint: cannot sell if price <= down_limit
+                cannot_sell = set(
+                    in_hold[
+                        (in_hold[self.instrument_col].isin(drop_candidates))
+                        & (in_hold["Price"] <= in_hold[self.down_limit_col])
+                    ][self.instrument_col]
                 )
+                actual_sell = drop_candidates - cannot_sell
 
-                target_holdings = (prev_holdings - sell) | buy
+                # Limit-up constraint: cannot buy if price >= up_limit
+                not_in_hold = daily[~daily[self.instrument_col].isin(prev_holdings)]
+                can_buy_pool = not_in_hold[
+                    not_in_hold["Price"] < not_in_hold[self.up_limit_col]
+                ]
 
-            # Execute rebalance at T+1 close and apply transaction cost
+                # Match buy volume to actual sell volume to maintain TopK
+                actual_buy = set(
+                    can_buy_pool.head(len(actual_sell))[self.instrument_col]
+                )
+                target_holdings = (prev_holdings - actual_sell) | actual_buy
+
+            # Transaction Costs and Turnover
             if prev_holdings:
-                sell_count = len(prev_holdings - target_holdings)
-                buy_count = len(target_holdings - prev_holdings)
+                sells = len(prev_holdings - target_holdings)
+                buys = len(target_holdings - prev_holdings)
 
-                turnover = (sell_count + buy_count) / self.top_k
+                turnover = (sells + buys) / self.top_k
                 turnover_series.append(turnover)
 
                 cost_rate = (
-                    sell_count * (commission + stamp_tax) + buy_count * commission
+                    sells * (commission + stamp_tax) + buys * commission
                 ) / self.top_k
-
                 capital *= 1.0 - cost_rate
 
             prev_holdings = target_holdings.copy()
 
+        # Performance Metrics
         if not daily_returns:
             return {}
 
         rets = np.array(daily_returns)
         nav = np.array(nav_series)
 
-        ann_return = (nav[-1] / initial_capital) ** (trading_days / len(rets)) - 1.0
-
-        ann_vol = rets.std() * np.sqrt(trading_days)
-
+        ann_ret = (nav[-1] / initial_capital) ** (trading_days / len(rets)) - 1.0
         sharpe = (
-            rets.mean() / rets.std() * np.sqrt(trading_days)
-            if rets.std() > 0
-            else np.nan
+            (rets.mean() / rets.std() * np.sqrt(trading_days)) if rets.std() > 0 else 0
         )
-
-        max_drawdown = np.min(nav / np.maximum.accumulate(nav) - 1.0)
-
-        avg_turnover = np.mean(turnover_series) if turnover_series else 0.0
+        mdd = np.min(nav / np.maximum.accumulate(nav) - 1.0)
 
         return {
-            "ARR": ann_return,
+            "ARR": ann_ret,
             "Sharpe": sharpe,
-            "MaxDrawdown": max_drawdown,
-            "AnnVol": ann_vol,
-            "AvgTurnover": avg_turnover,
+            "MaxDrawdown": mdd,
+            "AnnVol": rets.std() * np.sqrt(trading_days),
+            "AvgTurnover": np.mean(turnover_series) if turnover_series else 0,
         }
 
     def evaluate(self, pred_df: pd.DataFrame) -> pd.DataFrame:
