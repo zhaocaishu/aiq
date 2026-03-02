@@ -52,7 +52,6 @@ class Evaluator:
             else df["Close"]
         )
 
-        ret_1d = Ref(adj_close, -2) / Ref(adj_close, -1) - 1
         ret_5d = Ref(adj_close, -5) / Ref(adj_close, -1) - 1
 
         # Build core data dictionary
@@ -61,7 +60,7 @@ class Evaluator:
             self.instrument_col: df[self.instrument_col],
             self.label_col: ret_5d,
             "Price": df["Close"],
-            "RET_1D": ret_1d,
+            "Return": adj_close / Ref(adj_close, 1) - 1,
         }
 
         # Optional add trading limits if available
@@ -157,138 +156,165 @@ class Evaluator:
         dates = sorted(df[self.date_col].unique())
 
         cash = initial_capital
-        positions = {}  # {instrument: market_value}
-        nav_series = []
-        daily_returns = []
-        turnover_series = []
+        positions = {}  # market value of holdings after previous close
+        nav_series = []  # daily net asset value
+        daily_returns = []  # daily portfolio return
+        turnover_series = []  # daily turnover rate
 
         prev_total_value = initial_capital
 
-        for date in dates:
+        for i, date in enumerate(dates):
             daily = df[df[self.date_col] == date]
+            if daily.empty:
+                continue
 
-            # Apply natural position returns (T+1 realized PnL)
+            # Convert daily data to a dictionary for fast lookup
+            daily_dict = daily.set_index(self.instrument_col).to_dict(orient="index")
+
+            # ---------- 1. Calculate daily return based on previous holdings ----------
             if positions:
                 total_value = cash
+                new_positions = {}
+                for inst, value in positions.items():
+                    if inst in daily_dict:
+                        # Update market value using daily return
+                        ret = daily_dict[inst]["Return"]
+                        new_value = value * (1.0 + ret)
+                        new_positions[inst] = new_value
+                        total_value += new_value
+                    else:
+                        # Stock missing for the day, keep value unchanged
+                        new_positions[inst] = value
+                        total_value += value
 
-                for inst in list(positions.keys()):
-                    row = daily[daily[self.instrument_col] == inst]
-                    if row.empty:
-                        continue
-
-                    ret = row["RET_1D"].values[0]
-                    positions[inst] *= 1.0 + ret
-
-                    total_value += positions[inst]
-
-                # Capital-weighted daily portfolio return
+                # Daily return and NAV
                 daily_ret = total_value / prev_total_value - 1.0
                 daily_returns.append(daily_ret)
                 nav_series.append(total_value)
-
                 prev_total_value = total_value
-            else:
-                # No position, NAV unchanged
-                nav_series.append(prev_total_value)
-                daily_returns.append(0.0)
 
-            # Rebalance logic (executed at close)
+                # Update positions to post‑return market values (for next rebalance)
+                positions = new_positions
+            else:
+                # No holdings, daily return is zero
+                daily_returns.append(0.0)
+                nav_series.append(prev_total_value)
+
+            # ---------- 2. Rebalance decision (using yesterday's predictions, update positions for current day) ----------
             if len(daily) < self.top_k:
+                # Not enough tradable stocks today to form target portfolio, skip rebalance
                 continue
 
             current_holdings = set(positions.keys())
 
-            # Initial portfolio construction
+            # 2.1 Initial build
             if not current_holdings:
-                buy_candidates = daily[
-                    daily["Price"] < daily[self.up_limit_col]  # not limit-up
-                ].head(self.top_k)
+                # Filter stocks that can be bought (not limit‑up)
+                buy_candidates = []
+                for inst, row in daily_dict.items():
+                    up_limit = row[self.up_limit_col]
+                    if row["Price"] < up_limit:
+                        buy_candidates.append(inst)
+                # Take top_k by descending prediction
+                buy_candidates.sort(
+                    key=lambda x: daily_dict[x][self.pred_col], reverse=True
+                )
+                buy_candidates = buy_candidates[: self.top_k]
 
-                if buy_candidates.empty:
-                    continue
-
-                cash_per_stock = cash / len(buy_candidates)
-
-                for _, row in buy_candidates.iterrows():
-                    cost = cash_per_stock * commission
-                    invest = cash_per_stock - cost
-                    positions[row[self.instrument_col]] = invest
-                    cash -= cash_per_stock
-
-                turnover_series.append(1.0)
+                if buy_candidates:
+                    cash_per_stock = cash / len(buy_candidates)
+                    for inst in buy_candidates:
+                        cost = cash_per_stock * commission
+                        invest = (
+                            cash_per_stock - cost
+                        )  # post‑purchase market value (net of commission)
+                        positions[inst] = invest
+                        cash -= cash_per_stock  # cash reduced by total expenditure (including commission)
+                    turnover_series.append(1.0)
                 continue
 
-            # Sell phase (drop worst n holdings)
-            hold_df = daily[daily[self.instrument_col].isin(current_holdings)]
-            drop_candidates = set(
-                hold_df.nsmallest(n_drop, self.pred_col)[self.instrument_col]
-            )
+            # 2.2 Rebalance with existing holdings
+            # Sell phase: select the n_drop holdings with the lowest predictions and not limit‑down
+            hold_preds = [
+                (inst, daily_dict[inst][self.pred_col])
+                for inst in current_holdings
+                if inst in daily_dict
+            ]
+            hold_preds.sort(
+                key=lambda x: x[1]
+            )  # ascending prediction, low scores sold first
 
             sell_count = 0
-
-            for inst in drop_candidates:
-                row = daily[daily[self.instrument_col] == inst]
-                if row.empty:
+            for inst, pred in hold_preds:
+                if sell_count >= n_drop:
+                    break
+                row = daily_dict[inst]
+                if row is None:
                     continue
-
-                price = row["Price"].values[0]
-                down_limit = row[self.down_limit_col].values[0]
-
-                # Only sell if not limit-down
-                if price > down_limit:
-                    value = positions.pop(inst)
-
-                    # Commission + stamp tax (sell side)
-                    cost = value * (commission + stamp_tax)
+                price = row["Price"]
+                down_limit = row[self.down_limit_col]
+                if price > down_limit:  # can be sold
+                    value = positions.pop(inst)  # remove from holdings
+                    cost = value * (commission + stamp_tax)  # selling expenses
                     cash += value - cost
                     sell_count += 1
 
-            #  Buy phase (fill vacancies) ----
-            not_hold = daily[~daily[self.instrument_col].isin(positions.keys())]
+            # Buy phase: select highest‑prediction stocks not currently held, number equals actual sold count
+            not_hold = [inst for inst in daily_dict if inst not in positions]
+            not_hold.sort(key=lambda x: daily_dict[x][self.pred_col], reverse=True)
 
             buy_list = []
-            for _, row in not_hold.iterrows():
+            for inst in not_hold:
                 if len(buy_list) >= sell_count:
                     break
-
-                # Only buy if not limit-up
-                if row["Price"] < row[self.up_limit_col]:
-                    buy_list.append(row[self.instrument_col])
+                row = daily_dict[inst]
+                up_limit = row[self.up_limit_col]
+                if row["Price"] < up_limit:  # can be bought
+                    buy_list.append(inst)
 
             if buy_list:
                 cash_per_stock = cash / len(buy_list)
-
                 for inst in buy_list:
                     cost = cash_per_stock * commission
                     invest = cash_per_stock - cost
                     positions[inst] = invest
                     cash -= cash_per_stock
 
-            # Portfolio turnover ratio
+            # Turnover rate
             turnover = (sell_count + len(buy_list)) / self.top_k
             turnover_series.append(turnover)
 
-        # Performance statistics
+        # ---------- 3. Calculate performance metrics ----------
         rets = np.array(daily_returns)
         nav = np.array(nav_series)
 
-        # Annualized return
+        if len(rets) == 0:
+            return {}
+
+        # Annualised return
         ann_ret = (nav[-1] / initial_capital) ** (trading_days / len(nav)) - 1.0
 
-        # Annualized Sharpe ratio
-        sharpe = (
-            rets.mean() / rets.std() * np.sqrt(trading_days) if rets.std() > 0 else 0
-        )
+        # Sharpe ratio
+        if rets.std() > 0:
+            sharpe = rets.mean() / rets.std() * np.sqrt(trading_days)
+        else:
+            sharpe = 0.0
 
         # Maximum drawdown
         mdd = np.min(nav / np.maximum.accumulate(nav) - 1.0)
+
+        # Annualised volatility
+        ann_vol = rets.std() * np.sqrt(trading_days)
+
+        # Average turnover
+        avg_turnover = np.mean(turnover_series) if turnover_series else 0.0
 
         return {
             "ARR": ann_ret,
             "Sharpe": sharpe,
             "MaxDrawdown": mdd,
-            "AnnVol": rets.std() * np.sqrt(trading_days),
-            "AvgTurnover": np.mean(turnover_series) if turnover_series else 0,
+            "AnnVol": ann_vol,
+            "AvgTurnover": avg_turnover,
         }
 
     def evaluate(self, pred_df: pd.DataFrame) -> pd.DataFrame:
