@@ -160,16 +160,14 @@ class Evaluator:
 
         prev_total_value = initial_capital
 
-        # Sort by instrument + date for proper shift
+        # Prepare lagged scores for execution (Trade at T using T-1 info)
         df = df.sort_values([self.instrument_col, self.date_col])
-
-        # Use previous day's prediction for today's trading decision
         df["Score"] = df.groupby(self.instrument_col)[self.pred_col].shift(1)
         df = df.dropna(subset=["Score"])
 
-        dates = sorted(df[self.date_col].unique())
+        trading_dates = sorted(df[self.date_col].unique())
 
-        for i, date in enumerate(dates):
+        for i, date in enumerate(trading_dates):
             daily = df[df[self.date_col] == date]
             if daily.empty:
                 continue
