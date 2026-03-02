@@ -1,3 +1,4 @@
+from turtle import pos
 import numpy as np
 import pandas as pd
 
@@ -52,6 +53,7 @@ class Evaluator:
             else df["Close"]
         )
 
+        ret_1d = adj_close / Ref(adj_close, 1) - 1
         ret_5d = Ref(adj_close, -5) / Ref(adj_close, -1) - 1
 
         # Build core data dictionary
@@ -60,7 +62,7 @@ class Evaluator:
             self.instrument_col: df[self.instrument_col],
             self.label_col: ret_5d,
             "Price": df["Close"],
-            "Return": adj_close / Ref(adj_close, 1) - 1,
+            "Return": ret_1d
         }
 
         # Optional add trading limits if available
@@ -151,10 +153,6 @@ class Evaluator:
         commission: float = 0.0003,
         stamp_tax: float = 0.001,
     ) -> dict:
-
-        df = df.sort_values([self.date_col, self.pred_col], ascending=[True, False])
-        dates = sorted(df[self.date_col].unique())
-
         cash = initial_capital
         positions = {}  # market value of holdings after previous close
         nav_series = []  # daily net asset value
@@ -162,6 +160,15 @@ class Evaluator:
         turnover_series = []  # daily turnover rate
 
         prev_total_value = initial_capital
+
+        # Sort by instrument + date for proper shift
+        df = df.sort_values([self.instrument_col, self.date_col])
+
+        # Use previous day's prediction for today's trading decision
+        df["Score"] = df.groupby(self.instrument_col)[self.pred_col].shift(1)
+        df = df.dropna(subset=["Score"])
+
+        dates = sorted(df[self.date_col].unique())
 
         for i, date in enumerate(dates):
             daily = df[df[self.date_col] == date]
@@ -216,9 +223,7 @@ class Evaluator:
                     if row["Price"] < up_limit:
                         buy_candidates.append(inst)
                 # Take top_k by descending prediction
-                buy_candidates.sort(
-                    key=lambda x: daily_dict[x][self.pred_col], reverse=True
-                )
+                buy_candidates.sort(key=lambda x: daily_dict[x]["Score"], reverse=True)
                 buy_candidates = buy_candidates[: self.top_k]
 
                 if buy_candidates:
@@ -236,7 +241,7 @@ class Evaluator:
             # 2.2 Rebalance with existing holdings
             # Sell phase: select the n_drop holdings with the lowest predictions and not limit‑down
             hold_preds = [
-                (inst, daily_dict[inst][self.pred_col])
+                (inst, daily_dict[inst]["Score"])
                 for inst in current_holdings
                 if inst in daily_dict
             ]
@@ -261,7 +266,7 @@ class Evaluator:
 
             # Buy phase: select highest‑prediction stocks not currently held, number equals actual sold count
             not_hold = [inst for inst in daily_dict if inst not in positions]
-            not_hold.sort(key=lambda x: daily_dict[x][self.pred_col], reverse=True)
+            not_hold.sort(key=lambda x: daily_dict[x]["Score"], reverse=True)
 
             buy_list = []
             for inst in not_hold:
