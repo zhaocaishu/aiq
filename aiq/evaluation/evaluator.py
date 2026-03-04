@@ -61,7 +61,7 @@ class Evaluator:
             self.instrument_col: df[self.instrument_col],
             self.label_col: ret_5d,
             "Price": df["Close"],
-            "Return": ret_1d
+            "Return": ret_1d,
         }
 
         # Optional add trading limits if available
@@ -151,16 +151,21 @@ class Evaluator:
         n_drop: int = 5,
         commission: float = 0.0003,
         stamp_tax: float = 0.001,
+        min_commission: float = 5
     ) -> dict:
         cash = initial_capital
-        positions = {}  # market value of holdings after previous close
-        nav_series = []  # daily net asset value
-        daily_returns = []  # daily portfolio return
-        turnover_series = []  # daily turnover rate
+        positions = {}
+        nav_series = []
+        daily_returns = []
+        turnover_series = []
 
         prev_total_value = initial_capital
 
-        # Prepare lagged scores for execution (Trade at T using T-1 info)
+        # Print initial parameters
+        print(
+            f"[策略启动] 初始资金: {initial_capital:,.2f}, TopK: {self.top_k}, 每期调出: {n_drop}, 佣金: {commission:.4%}, 印花税: {stamp_tax:.4%}"
+        )
+
         df = df.sort_values([self.instrument_col, self.date_col])
         df["Score"] = df.groupby(self.instrument_col)[self.pred_col].shift(1)
         df = df.dropna(subset=["Score"])
@@ -172,7 +177,6 @@ class Evaluator:
             if daily.empty:
                 continue
 
-            # Convert daily data to a dictionary for fast lookup
             daily_dict = daily.set_index(self.instrument_col).to_dict(orient="index")
 
             # ---------- 1. Calculate daily return based on previous holdings ----------
@@ -181,73 +185,82 @@ class Evaluator:
                 new_positions = {}
                 for inst, value in positions.items():
                     if inst in daily_dict:
-                        # Update market value using daily return
                         ret = daily_dict[inst]["Return"]
                         new_value = value * (1.0 + ret)
                         new_positions[inst] = new_value
                         total_value += new_value
                     else:
-                        # Stock missing for the day, keep value unchanged
                         new_positions[inst] = value
                         total_value += value
 
-                # Daily return and NAV
                 daily_ret = total_value / prev_total_value - 1.0
                 daily_returns.append(daily_ret)
                 nav_series.append(total_value)
                 prev_total_value = total_value
-
-                # Update positions to post‑return market values (for next rebalance)
                 positions = new_positions
+
+                # Print pre‑trading state after marking to market
+                print(f"\n{date} 盘前状态:")
+                print(f"  现金: {cash:>15,.2f}")
+                total_hold = sum(positions.values())
+                print(f"  持仓市值: {total_hold:>12,.2f} ({len(positions)} 只)")
+                print(f"  总资产: {total_value:>14,.2f}")
+                print(f"  日收益率: {daily_ret:>8.4%}")
             else:
-                # No holdings, daily return is zero
                 daily_returns.append(0.0)
                 nav_series.append(prev_total_value)
+                print(
+                    f"\n{date} 无持仓，现金: {cash:,.2f}, 总资产: {prev_total_value:,.2f}"
+                )
 
-            # ---------- 2. Rebalance decision (using yesterday's predictions, update positions for current day) ----------
+            # ---------- 2. Rebalance decision ----------
             if len(daily) < self.top_k:
-                # Not enough tradable stocks today to form target portfolio, skip rebalance
+                print(f"  可交易股票不足 {self.top_k} 只，跳过调仓")
                 continue
 
             current_holdings = set(positions.keys())
 
             # 2.1 Initial build
             if not current_holdings:
-                # Filter stocks that can be bought (not limit‑up)
                 buy_candidates = []
                 for inst, row in daily_dict.items():
                     up_limit = row[self.up_limit_col]
                     if row["Price"] < up_limit:
                         buy_candidates.append(inst)
-                # Take top_k by descending prediction
                 buy_candidates.sort(key=lambda x: daily_dict[x]["Score"], reverse=True)
                 buy_candidates = buy_candidates[: self.top_k]
 
                 if buy_candidates:
                     cash_per_stock = cash / len(buy_candidates)
+                    print(f"  初始建仓，买入 {len(buy_candidates)} 只股票:")
                     for inst in buy_candidates:
-                        cost = cash_per_stock * commission
-                        invest = (
-                            cash_per_stock - cost
-                        )  # post‑purchase market value (net of commission)
+                        cost = max(cash_per_stock * commission, min_commission)
+                        invest = cash_per_stock - cost
                         positions[inst] = invest
-                        cash -= cash_per_stock  # cash reduced by total expenditure (including commission)
+                        cash -= cash_per_stock
+                        price = daily_dict[inst]["Price"]
+                        print(
+                            f"    {inst}: 价格 {price:.2f}, 分配现金 {cash_per_stock:,.2f}, 佣金 {cost:,.2f}, 净买入市值 {invest:,.2f}"
+                        )
                     turnover_series.append(1.0)
+                    # Print state after initial build
+                    total_after = cash + sum(positions.values())
+                    print(
+                        f"  建仓后现金: {cash:,.2f}, 持仓市值: {sum(positions.values()):,.2f}, 总资产: {total_after:,.2f}"
+                    )
                 continue
 
-            # 2.2 Rebalance with existing holdings
-            # Sell phase: select the n_drop holdings with the lowest predictions and not limit‑down
+            # 2.2 Rebalance (sell + buy)
             hold_preds = [
                 (inst, daily_dict[inst]["Score"])
                 for inst in current_holdings
                 if inst in daily_dict
             ]
-            hold_preds.sort(
-                key=lambda x: x[1]
-            )  # ascending prediction, low scores sold first
+            hold_preds.sort(key=lambda x: x[1])
 
             sell_count = 0
-            for inst, pred in hold_preds:
+            sold_list = []
+            for inst, _ in hold_preds:
                 if sell_count >= n_drop:
                     break
                 row = daily_dict[inst]
@@ -255,13 +268,23 @@ class Evaluator:
                     continue
                 price = row["Price"]
                 down_limit = row[self.down_limit_col]
-                if price > down_limit:  # can be sold
-                    value = positions.pop(inst)  # remove from holdings
-                    cost = value * (commission + stamp_tax)  # selling expenses
+                if price > down_limit:  # can sell
+                    value = positions.pop(inst)
+                    comm_cost = max(value * commission, min_commission)
+                    tax_cost = value * stamp_tax
+                    cost = comm_cost + tax_cost
                     cash += value - cost
+                    sold_list.append((inst, value, cost, value - cost))
                     sell_count += 1
 
-            # Buy phase: select highest‑prediction stocks not currently held, number equals actual sold count
+            if sold_list:
+                print(f"  卖出 {sell_count} 只股票:")
+                for inst, val, cost, net in sold_list:
+                    print(
+                        f"    {inst}: 卖出前市值 {val:,.2f}, 费用 {cost:,.2f}, 净回笼 {net:,.2f}"
+                    )
+
+            # Buy phase
             not_hold = [inst for inst in daily_dict if inst not in positions]
             not_hold.sort(key=lambda x: daily_dict[x]["Score"], reverse=True)
 
@@ -271,45 +294,49 @@ class Evaluator:
                     break
                 row = daily_dict[inst]
                 up_limit = row[self.up_limit_col]
-                if row["Price"] < up_limit:  # can be bought
+                if row["Price"] < up_limit:
                     buy_list.append(inst)
 
             if buy_list:
                 cash_per_stock = cash / len(buy_list)
+                print(f"  买入 {len(buy_list)} 只股票:")
                 for inst in buy_list:
-                    cost = cash_per_stock * commission
+                    cost = max(cash_per_stock * commission, min_commission)
                     invest = cash_per_stock - cost
                     positions[inst] = invest
                     cash -= cash_per_stock
+                    price = daily_dict[inst]["Price"]
+                    print(
+                        f"    {inst}: 价格 {price:.2f}, 分配现金 {cash_per_stock:,.2f}, 佣金 {cost:,.2f}, 净买入市值 {invest:,.2f}"
+                    )
 
-            # Turnover rate
+            # State after rebalance
+            total_after = cash + sum(positions.values())
+            print(
+                f"  调仓后现金: {cash:,.2f}, 持仓市值: {sum(positions.values()):,.2f}, 总资产: {total_after:,.2f}"
+            )
+
             turnover = (sell_count + len(buy_list)) / self.top_k
             turnover_series.append(turnover)
 
-        # ---------- 3. Calculate performance metrics ----------
+        # ---------- 3. Final performance metrics ----------
         rets = np.array(daily_returns)
         nav = np.array(nav_series)
 
         if len(rets) == 0:
             return {}
 
-        # Annualised return
         ann_ret = (nav[-1] / initial_capital) ** (trading_days / len(nav)) - 1.0
-
-        # Sharpe ratio
-        if rets.std() > 0:
-            sharpe = rets.mean() / rets.std() * np.sqrt(trading_days)
-        else:
-            sharpe = 0.0
-
-        # Maximum drawdown
+        sharpe = (
+            rets.mean() / rets.std() * np.sqrt(trading_days) if rets.std() > 0 else 0.0
+        )
         mdd = np.min(nav / np.maximum.accumulate(nav) - 1.0)
-
-        # Annualised volatility
         ann_vol = rets.std() * np.sqrt(trading_days)
-
-        # Average turnover
         avg_turnover = np.mean(turnover_series) if turnover_series else 0.0
+
+        print(
+            f"\n[策略结束] 最终总资产: {nav[-1]:,.2f}, 年化收益: {ann_ret:.4%}, 夏普: {sharpe:.4f}, 最大回撤: {mdd:.4%}"
+        )
 
         return {
             "ARR": ann_ret,
