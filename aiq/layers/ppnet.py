@@ -47,6 +47,9 @@ class TAttention(nn.Module):
         residual = x
         hidden_states = self.input_layernorm(x)
 
+        N, T, _ = hidden_states.shape
+        mask = torch.triu(torch.ones(T, T, device=x.device), diagonal=1).bool()
+
         q = self.q_proj(hidden_states)
         k = self.k_proj(hidden_states)
         v = self.v_proj(hidden_states)
@@ -66,6 +69,8 @@ class TAttention(nn.Module):
             attn_logits = torch.matmul(qh, kh.transpose(1, 2)) / math.sqrt(
                 self.head_dim
             )
+
+            attn_logits = attn_logits.masked_fill(mask, float("-inf"))
 
             attn_weights = torch.softmax(attn_logits, dim=-1)
             attn_weights = self.attn_dropout[i](attn_weights)
@@ -225,15 +230,12 @@ class TemporalAttention(nn.Module):
         self.trans = nn.Linear(d_model, d_model, bias=False)
 
     def forward(self, z):
-        last = z[:, -1, :]
-
-        h = self.trans(z) # [N, T, D]
+        h = self.trans(z)  # [N, T, D]
         query = h[:, -1, :].unsqueeze(-1)
-        lam = torch.matmul(h, query).squeeze(-1) / math.sqrt(h.shape[-1]) # [N, T, D] --> [N, T]
+        lam = torch.matmul(h, query).squeeze(-1)  # [N, T, D] --> [N, T]
         lam = torch.softmax(lam, dim=1).unsqueeze(1)
-        context = torch.matmul(lam, z).squeeze(1) # [N, 1, T], [N, T, D] --> [N, D]
-
-        return last + context
+        output = torch.matmul(lam, z).squeeze(1)  # [N, 1, T], [N, T, D] --> [N, D]
+        return output
 
 
 class FusionBlock(nn.Module):
@@ -278,10 +280,13 @@ class PPNet(nn.Module):
             d_model=self.d_temporal_hidden,
             dropout=dropout,
         )
-        self.temporal_encoder = TAttention(
-            d_model=self.d_temporal_hidden,
-            nhead=t_nhead,
-            dropout=dropout,
+        self.temporal_layers = nn.Sequential(
+            *[
+                TAttention(
+                    d_model=self.d_temporal_hidden, nhead=t_nhead, dropout=dropout
+                )
+                for _ in range(2)
+            ]
         )
         self.temporal_aggregator = TemporalAttention(
             d_model=self.d_temporal_hidden,
@@ -328,7 +333,7 @@ class PPNet(nn.Module):
         """
         # Intra-Stock Temporal Modeling
         stock_temporal_embeds = self.data_embedding(stock_ts_features)
-        stock_temporal_states = self.temporal_encoder(stock_temporal_embeds)
+        stock_temporal_states = self.temporal_layers(stock_temporal_embeds)
         stock_temporal_features = self.temporal_aggregator(stock_temporal_states)
 
         # Market-Conditioned Feature Gating
