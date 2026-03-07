@@ -220,25 +220,20 @@ class MarketGate(nn.Module):
 
 
 class TemporalAttention(nn.Module):
-    def __init__(self, d_model, temperature=1.0):
+    def __init__(self, d_model):
         super().__init__()
-        self.score_proj = nn.Sequential(
-            nn.Linear(d_model, d_model),
-            nn.SiLU(),
-            nn.Linear(d_model, 1),
-        )
-        self.temperature = temperature
+        self.trans = nn.Linear(d_model, d_model, bias=False)
 
     def forward(self, z):
-        """
-        z: [N, T, D]
-        """
-        scores = self.score_proj(z).squeeze(-1)  # [N, T]
-        scores = scores / self.temperature
+        last = z[:, -1, :]
 
-        attn = torch.softmax(scores, dim=1)  # [N, T]
-        out = torch.sum(attn.unsqueeze(-1) * z, dim=1)
-        return out
+        h = self.trans(z) # [N, T, D]
+        query = h[:, -1, :].unsqueeze(-1)
+        lam = torch.matmul(h, query).squeeze(-1) / math.sqrt(h.shape[-1]) # [N, T, D] --> [N, T]
+        lam = torch.softmax(lam, dim=1).unsqueeze(1)
+        context = torch.matmul(lam, z).squeeze(1) # [N, 1, T], [N, T, D] --> [N, D]
+
+        return last + context
 
 
 class FusionBlock(nn.Module):
@@ -293,11 +288,7 @@ class PPNet(nn.Module):
         )
 
         # Market-Conditioned Feature Gating
-        self.market_gate = MarketGate(
-            d_input=d_mkt_feat,
-            d_output=d_cs_feat,
-            beta=beta
-        )
+        self.market_gate = MarketGate(d_input=d_mkt_feat, d_output=d_cs_feat, beta=beta)
 
         # Fusion Encoder (Temporal + Cross-Sectional Feature Integration)
         self.fusion_block = FusionBlock(
@@ -343,9 +334,11 @@ class PPNet(nn.Module):
         # Market-Conditioned Feature Gating
         gate_weights = self.market_gate(market_features)
         gated_stock_cs_features = stock_cs_features * gate_weights
-        
+
         # Feature Fusion: Nonlinear Enhancement + Dimension Alignment
-        stock_features = torch.cat([stock_temporal_features, gated_stock_cs_features], dim=-1)
+        stock_features = torch.cat(
+            [stock_temporal_features, gated_stock_cs_features], dim=-1
+        )
         fused_states = self.fusion_block(stock_features)
 
         # Industry-aware Inter-Stock Attention
