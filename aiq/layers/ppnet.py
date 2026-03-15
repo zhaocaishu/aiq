@@ -241,33 +241,30 @@ class TemporalAttention(nn.Module):
 class FusionBlock(nn.Module):
     def __init__(self, d_in, d_model, dropout=0.1):
         super().__init__()
-        # Dimension alignment
-        self.input_proj = nn.Linear(d_in, d_model)
-        self.ln = nn.LayerNorm(d_model)
 
-        # Non-linear transformation (using your existing MLP)
-        self.mlp = MLP(hidden_size=d_model, intermediate_size=d_model * 2)
+        self.proj = nn.Linear(d_in, d_model)
+        self.norm = nn.LayerNorm(d_model)
 
-        # Gating mechanism for feature selection
-        self.gate = nn.Sequential(nn.Linear(d_model, d_model), nn.Sigmoid())
+        self.mlp = MLP(
+            hidden_size=d_model,
+            intermediate_size=d_model * 2,
+        )
+
+        self.gate = nn.Sequential(
+            nn.Linear(d_model, d_model),
+            nn.Sigmoid(),
+        )
+
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
-        # Initial projection & residual connection
-        x = self.input_proj(x)
-        residual = x
+        x = self.proj(x)
+        h = self.norm(x)
 
-        # Pre-LN path for training stability
-        x_norm = self.ln(x)
+        feat = self.mlp(h)
+        gate = self.gate(h)
 
-        # SwiGLU-based feature extraction
-        x_feat = self.mlp(x_norm)
-
-        # Apply gate to filter noise/irrelevant features
-        g = self.gate(x_norm)
-
-        # Gated Residual output
-        return residual + self.dropout(g * x_feat)
+        return x + self.dropout(gate * feat)
 
 
 class PPNet(nn.Module):
