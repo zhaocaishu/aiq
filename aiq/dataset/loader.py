@@ -16,18 +16,28 @@ class DataLoader:
         end: str = "",
         columns: List[str] = None,
     ) -> Optional[pd.DataFrame]:
+
         if not os.path.exists(file_path):
             return None
 
         df = pd.read_csv(file_path, usecols=columns)
 
-        # 根据start和end日期过滤数据
-        if start:
-            df = df[df[timestamp_col] >= start]
-        if end:
-            df = df[df[timestamp_col] <= end]
+        if timestamp_col not in df.columns:
+            return df
 
-        return df
+        ts = pd.to_datetime(df[timestamp_col], errors="coerce")
+
+        mask = pd.Series(True, index=df.index)
+
+        if start:
+            start_date = pd.to_datetime(start).date()
+            mask &= ts.dt.date >= start_date
+
+        if end:
+            end_date = pd.to_datetime(end).date()
+            mask &= ts.dt.date <= end_date
+
+        return df[mask]
 
     @staticmethod
     def _query_db(
@@ -57,7 +67,7 @@ class DataLoader:
         data_dir: str, market_name: str, start_time: str = "", end_time: str = ""
     ) -> Optional[pd.DataFrame]:
         if data_dir:
-            path = os.path.join(data_dir, "instruments", f"{market_name}.csv")
+            path = os.path.join(data_dir, "universes", f"{market_name}.csv")
             df = DataLoader._read_csv(path, "Date", start_time, end_time)
         else:
             query = (
@@ -81,7 +91,7 @@ class DataLoader:
         end_time: str = "",
     ) -> List[str]:
         if data_dir:
-            path = os.path.join(data_dir, "calendars", "day.csv")
+            path = os.path.join(data_dir, "calendars", "trade_days.csv")
             df = DataLoader._read_csv(path, timestamp_col, start_time, end_time)
         else:
             query = (
@@ -101,13 +111,16 @@ class DataLoader:
     def load_instrument_features(
         data_dir: str,
         instrument: str,
+        freq: str = "daily",
         timestamp_col: str = "Date",
         start_time: str = "",
         end_time: str = "",
         column_names: List[str] = None,
     ) -> Optional[pd.DataFrame]:
         if data_dir:
-            path = os.path.join(data_dir, "features", f"{instrument}.csv")
+            path = os.path.join(
+                data_dir, "features", "stock", freq, f"{instrument}.csv"
+            )
             df = DataLoader._read_csv(
                 path, timestamp_col, start_time, end_time, column_names
             )
@@ -158,13 +171,16 @@ class DataLoader:
     def load_market_features(
         data_dir: str,
         market_name: str,
+        freq: str = "daily",
         timestamp_col: str = "Date",
         start_time: str = "",
         end_time: str = "",
         column_names: List[str] = None,
     ) -> Optional[pd.DataFrame]:
         if data_dir:
-            path = os.path.join(data_dir, "features", f"{market_name}.csv")
+            path = os.path.join(
+                data_dir, "features", "index", freq, f"{market_name}.csv"
+            )
             df = DataLoader._read_csv(
                 path, timestamp_col, start_time, end_time, column_names
             )
