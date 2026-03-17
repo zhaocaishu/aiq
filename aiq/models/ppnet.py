@@ -277,7 +277,6 @@ class PPNetModel(BaseModel):
 
         total_loss = np.mean(total_losses)
 
-        self.model.train()
         return total_loss
 
     def predict(self, test_dataset: Dataset) -> object:
