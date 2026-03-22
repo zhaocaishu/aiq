@@ -156,11 +156,15 @@ class DataLoader:
 
     @staticmethod
     def load_instruments_features(
-        data_dir: str, instruments: List[str], start_time: str = "", end_time: str = ""
+        data_dir: str,
+        instruments: List[str],
+        freq: str = "daily",
+        start_time: str = "",
+        end_time: str = "",
     ) -> pd.DataFrame:
         dfs = [
             DataLoader.load_instrument_features(
-                data_dir, inst, start_time=start_time, end_time=end_time
+                data_dir, inst, freq=freq, start_time=start_time, end_time=end_time
             )
             for inst in instruments
         ]
@@ -205,11 +209,19 @@ class DataLoader:
 
     @staticmethod
     def load_markets_features(
-        data_dir: str, market_names: List[str], start_time: str = "", end_time: str = ""
+        data_dir: str,
+        market_names: List[str],
+        freq: str = "daily",
+        start_time: str = "",
+        end_time: str = "",
     ) -> pd.DataFrame:
         dfs = [
             DataLoader.load_market_features(
-                data_dir, market_name, start_time=start_time, end_time=end_time
+                data_dir,
+                market_name,
+                freq=freq,
+                start_time=start_time,
+                end_time=end_time,
             )
             for market_name in market_names
         ]
