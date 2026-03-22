@@ -111,11 +111,11 @@ class DataLoader:
     def load_instrument_features(
         data_dir: str,
         instrument: str,
-        freq: str = "daily",
         timestamp_col: str = "Date",
         start_time: str = "",
         end_time: str = "",
         column_names: List[str] = None,
+        freq: str = "daily",
     ) -> Optional[pd.DataFrame]:
         if data_dir:
             path = os.path.join(
@@ -158,9 +158,9 @@ class DataLoader:
     def load_instruments_features(
         data_dir: str,
         instruments: List[str],
-        freq: str = "daily",
         start_time: str = "",
         end_time: str = "",
+        freq: str = "daily",
     ) -> pd.DataFrame:
         dfs = [
             DataLoader.load_instrument_features(
@@ -175,11 +175,11 @@ class DataLoader:
     def load_market_features(
         data_dir: str,
         market_name: str,
-        freq: str = "daily",
         timestamp_col: str = "Date",
         start_time: str = "",
         end_time: str = "",
         column_names: List[str] = None,
+        freq: str = "daily",
     ) -> Optional[pd.DataFrame]:
         if data_dir:
             path = os.path.join(
@@ -211,9 +211,9 @@ class DataLoader:
     def load_markets_features(
         data_dir: str,
         market_names: List[str],
-        freq: str = "daily",
         start_time: str = "",
         end_time: str = "",
+        freq: str = "daily",
     ) -> pd.DataFrame:
         dfs = [
             DataLoader.load_market_features(
