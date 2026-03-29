@@ -292,3 +292,162 @@ class TSDataset(Dataset):
     def __len__(self) -> int:
         """Return the number of dates (batches) in the dataset."""
         return len(self._daily_dates)
+
+
+class MultiscaleTSDataset(TSDataset):
+    """
+    Multi-scale time series dataset that extends TSDataset by incorporating
+    minute-level features (e.g., 5-minute bars) for each sample.
+
+    This class preloads all required intraday data into memory during initialization
+    to ensure high performance during training and inference.
+    """
+
+    def __init__(
+        self,
+        *args,
+        minute_bar: int = 5,
+        minute_feature_names: List[str] = [
+            "Open",
+            "High",
+            "Low",
+            "Close",
+            "Volume",
+            "AMount",
+        ],
+        **kwargs,
+    ):
+        """
+        Initialize the multi-scale dataset and preload intraday data.
+
+        Args:
+            minute_bar (int, optional): Minute interval for intraday data (e.g., 5 for 5-min bars).
+            minute_feature_names (List[str], optional): List of minute-level feature columns.
+        """
+        super().__init__(*args, **kwargs)
+
+        self.minute_bar = minute_bar
+        self.minute_feature_names = minute_feature_names
+        self.minutes_per_day = int(240 / self.minute_bar)
+
+        # In-memory storage for preloaded minute data: {instrument: {date: np.ndarray}}
+        self._minute_data_store: Dict[str, Dict[pd.Timestamp.date, np.ndarray]] = {}
+
+        # Preload all minute-level data to avoid disk I/O during training
+        self._preload_minute_data()
+
+    def _preload_minute_data(self):
+        """
+        Load, process, and cache all relevant minute-level data into memory.
+        This optimizes the training loop by moving I/O and grouping to initialization.
+        """
+        all_instruments = self.data.index.get_level_values(0).unique()
+
+        for instrument in all_instruments:
+            try:
+                # Load raw minute data for the entire period
+                df = DataLoader.load_instrument_features(
+                    self.data_dir,
+                    instrument,
+                    timestamp_col="Trade_time",
+                    start_time=self.start_time,
+                    end_time=self.end_time,
+                    freq=f"{self.minute_bar}min",
+                )
+                if df.empty:
+                    continue
+
+                df["Trade_time"] = pd.to_datetime(df["Trade_time"])
+                df["Date"] = df["Trade_time"].dt.date
+
+                # Apply adjustment factor to OHLC prices
+                if "Adj_factor" in df.columns:
+                    for col in ["Open", "High", "Low", "Close"]:
+                        df[col] = df[col] * df["Adj_factor"]
+
+                # Group by date and convert to NumPy for O(1) access during training
+                inst_data = {}
+                for d, group in df.groupby("Date"):
+                    vals = group[self.minute_feature_names].to_numpy(dtype=np.float32)
+                    # Only store complete intraday sequences
+                    if len(vals) == self.minutes_per_day:
+                        inst_data[d] = vals
+
+                self._minute_data_store[instrument] = inst_data
+
+            except Exception as e:
+                # Handle or log potential loading errors for specific instruments
+                continue
+
+    def _get_minute_sequence(
+        self, instrument: str, dates: List[pd.Timestamp]
+    ) -> np.ndarray:
+        """
+        Construct minute-level sequence from preloaded memory store.
+
+        Args:
+            instrument (str): Stock instrument code.
+            dates (List[pd.Timestamp]): List of dates corresponding to seq_len.
+
+        Returns:
+            np.ndarray: Minute-level feature array with shape [seq_len * 48, D].
+        """
+        inst_store = self._minute_data_store.get(instrument, {})
+        minute_seq = []
+
+        for d in dates:
+            d_date = pd.Timestamp(d).date()
+            day_data = inst_store.get(d_date)
+
+            # Ensure full intraday coverage; otherwise pad with zeros
+            if day_data is None:
+                pad = np.zeros(
+                    (self.minutes_per_day, len(self.minute_feature_names)),
+                    dtype=np.float32,
+                )
+                minute_seq.append(pad)
+            else:
+                minute_seq.append(day_data)
+
+        return np.concatenate(minute_seq, axis=0)
+
+    def __getitem__(self, index: int) -> Dict[str, np.ndarray]:
+        """
+        Retrieve a batch of multi-scale data for the given index (date-level batch).
+
+        Args:
+            index (int): Index of the date in the dataset.
+
+        Returns:
+            Dict[str, np.ndarray]: Dictionary containing:
+                - original daily features (from TSDataset)
+                - minute-level features (multi-scale)
+        """
+        # Get base daily data (features, labels, sample_indices)
+        data_dict = super().__getitem__(index)
+
+        # Sync with filtered samples (handling potential extreme label dropping)
+        sample_indices = data_dict["sample_indices"]
+        minute_features_list = []
+
+        for idx in sample_indices:
+            # Retrieve instrument and the sequence of dates for the window
+            instrument, _ = self._index[idx]
+
+            # Reconstruct the sequence of dates for the current sample
+            seq_start = idx - self.seq_len + 1
+            seq_dates = [self._index[i][1] for i in range(seq_start, idx + 1)]
+
+            # Fetch aligned minute sequences from memory
+            minute_seq = self._get_minute_sequence(instrument, seq_dates)
+            minute_features_list.append(minute_seq)
+
+        # Aggregate and normalize minute-level features
+        minute_features = np.stack(minute_features_list)
+        minute_features = zscore(minute_features)
+        minute_features = fillna(minute_features, fill_value=0.0)
+
+        # Add to output dict
+        data_dict["stock_intraday_ts_features"] = minute_features.astype(np.float32)
+
+        return data_dict
