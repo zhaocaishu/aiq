@@ -270,7 +270,8 @@ class FusionBlock(nn.Module):
 class PPNet(nn.Module):
     def __init__(
         self,
-        d_ts_feat,
+        d_ts_feat,  # 日频时序特征维度
+        d_intraday_ts_feat,  # 分钟级时序特征维度
         d_cs_feat,
         d_fund_feat,
         d_mkt_feat,
@@ -285,9 +286,11 @@ class PPNet(nn.Module):
 
         # Feature Dimensions
         self.d_temporal_hidden = d_model // 4
-        self.d_fusion_input = self.d_temporal_hidden + d_cs_feat
+        self.d_fusion_input = (
+            self.d_temporal_hidden * 2 + d_cs_feat
+        )  # 日频 + 分钟级 + 截面
 
-        # Temporal Encoder (Intra-stock)
+        # Temporal Encoder (Intra-stock) for daily data
         self.data_embedding = DataEmbedding(
             c_in=d_ts_feat,
             d_model=self.d_temporal_hidden,
@@ -302,6 +305,24 @@ class PPNet(nn.Module):
             ]
         )
         self.temporal_aggregator = TemporalAttention(
+            d_model=self.d_temporal_hidden,
+        )
+
+        # Temporal Encoder (Intra-stock) for intraday data
+        self.data_embedding_intraday = DataEmbedding(
+            c_in=d_intraday_ts_feat,
+            d_model=self.d_temporal_hidden,
+            dropout=dropout,
+        )
+        self.temporal_layers_intraday = nn.Sequential(
+            *[
+                TAttention(
+                    d_model=self.d_temporal_hidden, nhead=t_nhead, dropout=dropout
+                )
+                for _ in range(2)
+            ]
+        )
+        self.temporal_aggregator_intraday = TemporalAttention(
             d_model=self.d_temporal_hidden,
         )
 
@@ -329,7 +350,8 @@ class PPNet(nn.Module):
     def forward(
         self,
         industry_indices,
-        stock_ts_features,
+        stock_ts_features,  # (N, T_daily, d_ts_feat)
+        stock_intraday_ts_features,  # (N, T_intraday, d_intraday_ts_feat)
         stock_cs_features,
         stock_fund_features,
         market_features,
@@ -337,25 +359,32 @@ class PPNet(nn.Module):
         """
         Args:
             industry_indices: (N, 2) l1 and l2 industry index for each stock
-            stock_ts_features: (N, T, d_ts_feat) temporal features of stocks
-            stock_cs_features: (N, d_cs_feat) cross-sectional features of stocks
-            stock_fund_features: (N, d_fund_feat) fundamental features of stocks
+            stock_ts_features: (N, T_daily, d_ts_feat) daily temporal features
+            stock_intraday_ts_features: (N, T_intraday, d_intraday_ts_feat) intraday temporal features
+            stock_cs_features: (N, d_cs_feat) cross-sectional features
+            stock_fund_features: (N, d_fund_feat) fundamental features (currently unused)
             market_features: (N, d_market) market features
         Returns:
             predictions: (N, 1) prediction for each stock
         """
-        # Intra-Stock Temporal Modeling
+        # Intra-Stock Temporal Modeling (Daily)
         stock_temporal_embeds = self.data_embedding(stock_ts_features)
         stock_temporal_states = self.temporal_layers(stock_temporal_embeds)
         stock_temporal_features = self.temporal_aggregator(stock_temporal_states)
+
+        # Intra-Stock Temporal Modeling (Intraday)
+        stock_intraday_embeds = self.data_embedding_intraday(stock_intraday_ts_features)
+        stock_intraday_states = self.temporal_layers_intraday(stock_intraday_embeds)
+        stock_intraday_features = self.temporal_aggregator_intraday(stock_intraday_states)
 
         # Market-Conditioned Feature Gating
         gate_weights = self.market_gate(market_features)
         gated_stock_cs_features = stock_cs_features * gate_weights
 
-        # Feature Fusion: Nonlinear Enhancement + Dimension Alignment
+        # Feature Fusion: Concatenate daily, intraday and gated cross-sectional features
         stock_features = torch.cat(
-            [stock_temporal_features, gated_stock_cs_features], dim=-1
+            [stock_temporal_features, stock_intraday_features, gated_stock_cs_features],
+            dim=-1,
         )
         fused_states = self.fusion_block(stock_features)
 

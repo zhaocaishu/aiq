@@ -76,8 +76,6 @@ def train_and_save_model(
     logger: Any,
     seed: int,
 ) -> None:
-    logger.info(f"Start training with seed={seed}")
-
     model = init_instance_by_config(
         cfg.model,
         feature_names=train_dataset.feature_names,
@@ -123,10 +121,11 @@ def main():
     # Multiple seeds training
     for seed in args.seeds:
         logger.info("-" * 30)
-        logger.info(f"Starting training with SEED: {seed}")
+        logger.info(f"Start training with SEED: {seed}")
         logger.info("-" * 30)
 
         set_random_seed(seed)
+        
         train_and_save_model(
             train_dataset=train_dataset,
             val_dataset=val_dataset,

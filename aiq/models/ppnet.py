@@ -19,7 +19,8 @@ class PPNetModel(BaseModel):
         self,
         feature_names=None,
         label_names=None,
-        d_ts_feat=14,
+        d_ts_feat=6,
+        d_intraday_ts_feat=6,
         d_cs_feat=125,
         d_fund_feat=3,
         d_mkt_feat=63,
@@ -55,6 +56,7 @@ class PPNetModel(BaseModel):
         # model
         self.model = PPNet(
             d_ts_feat=d_ts_feat,
+            d_intraday_ts_feat=d_intraday_ts_feat,
             d_cs_feat=d_cs_feat,
             d_fund_feat=d_fund_feat,
             d_mkt_feat=d_mkt_feat,
@@ -145,6 +147,7 @@ class PPNetModel(BaseModel):
 
                 batch_industry_ids = self.to_device(batch_dict["industry_ids"])
                 batch_ts_features = self.to_device(batch_dict["stock_ts_features"])
+                batch_intraday_ts_features = self.to_device(batch_dict["stock_intraday_ts_features"])
                 batch_cs_features = self.to_device(batch_dict["stock_cs_features"])
                 batch_fund_features = self.to_device(batch_dict["stock_fund_features"])
                 batch_market_features = self.to_device(batch_dict["market_features"])
@@ -171,6 +174,7 @@ class PPNetModel(BaseModel):
                 outputs = self.model(
                     batch_industry_ids,
                     batch_ts_features,
+                    batch_intraday_ts_features,
                     batch_cs_features,
                     batch_fund_features,
                     batch_market_features,
@@ -257,6 +261,7 @@ class PPNetModel(BaseModel):
         for i, batch_dict in enumerate(val_loader):
             batch_industry_ids = self.to_device(batch_dict["industry_ids"])
             batch_ts_features = self.to_device(batch_dict["stock_ts_features"])
+            batch_intraday_ts_features = self.to_device(batch_dict["stock_intraday_ts_features"])
             batch_cs_features = self.to_device(batch_dict["stock_cs_features"])
             batch_fund_features = self.to_device(batch_dict["stock_fund_features"])
             batch_market_features = self.to_device(batch_dict["market_features"])
@@ -266,6 +271,7 @@ class PPNetModel(BaseModel):
                 outputs = self.model(
                     batch_industry_ids,
                     batch_ts_features,
+                    batch_intraday_ts_features,
                     batch_cs_features,
                     batch_fund_features,
                     batch_market_features,
@@ -292,6 +298,7 @@ class PPNetModel(BaseModel):
             batch_sample_indices = batch_dict["sample_indices"]
             batch_industry_ids = self.to_device(batch_dict["industry_ids"])
             batch_ts_features = self.to_device(batch_dict["stock_ts_features"])
+            batch_intraday_ts_features = self.to_device(batch_dict["stock_intraday_ts_features"])
             batch_cs_features = self.to_device(batch_dict["stock_cs_features"])
             batch_fund_features = self.to_device(batch_dict["stock_fund_features"])
             batch_market_features = self.to_device(batch_dict["market_features"])
@@ -300,6 +307,7 @@ class PPNetModel(BaseModel):
                 outputs = self.model(
                     batch_industry_ids,
                     batch_ts_features,
+                    batch_intraday_ts_features,
                     batch_cs_features,
                     batch_fund_features,
                     batch_market_features,

@@ -46,7 +46,7 @@ data_handler:
         kwargs:
           fields_group: "feature"
 dataset:
-  class: TSDataset
+  class: MultiscaleTSDataset
   module_path: aiq.dataset.dataset
   kwargs:
     universe: *market
