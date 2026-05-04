@@ -76,7 +76,7 @@ class TAttention(nn.Module):
             attn_weights = self.attn_dropout[i](attn_weights)
             attn_outputs.append(torch.matmul(attn_weights, vh))  # (N, T, head_dim)
 
-        hidden_states = torch.concat(attn_outputs, dim=-1)
+        hidden_states = torch.cat(attn_outputs, dim=-1)
         hidden_states = self.o_proj(hidden_states)
         hidden_states = residual + hidden_states
 
@@ -223,21 +223,6 @@ class MarketGate(nn.Module):
         x_scale = self.d_output * x_scale
         return x_scale
 
-
-class TemporalAttention(nn.Module):
-    def __init__(self, d_model):
-        super().__init__()
-        self.trans = nn.Linear(d_model, d_model, bias=False)
-
-    def forward(self, z):
-        h = self.trans(z)  # [N, T, D]
-        query = h[:, -1, :].unsqueeze(-1)
-        lam = torch.matmul(h, query).squeeze(-1)  # [N, T, D] --> [N, T]
-        lam = torch.softmax(lam, dim=1).unsqueeze(1)
-        output = torch.matmul(lam, z).squeeze(1)  # [N, 1, T], [N, T, D] --> [N, D]
-        return output
-
-
 class FusionBlock(nn.Module):
     def __init__(self, d_in, d_model, dropout=0.1):
         super().__init__()
@@ -286,9 +271,10 @@ class PPNet(nn.Module):
 
         # Feature Dimensions
         self.d_temporal_hidden = d_model // 4
-        self.d_fusion_input = (
-            self.d_temporal_hidden * 2 + d_cs_feat
-        )  # 日频 + 分钟级 + 截面
+        # self.d_fusion_input = (
+        #     self.d_temporal_hidden * 2 + d_cs_feat
+        # )  # 日频 + 分钟级 + 截面
+        self.d_fusion_input = self.d_temporal_hidden + d_cs_feat
 
         # Temporal Encoder (Intra-stock) for daily data
         self.data_embedding = DataEmbedding(
@@ -304,26 +290,20 @@ class PPNet(nn.Module):
                 for _ in range(2)
             ]
         )
-        self.temporal_aggregator = TemporalAttention(
-            d_model=self.d_temporal_hidden,
-        )
 
         # Temporal Encoder (Intra-stock) for intraday data
-        self.data_embedding_intraday = DataEmbedding(
+        self.intraday_data_embedding = DataEmbedding(
             c_in=d_intraday_ts_feat,
             d_model=self.d_temporal_hidden,
             dropout=dropout,
         )
-        self.temporal_layers_intraday = nn.Sequential(
+        self.intraday_temporal_layers = nn.Sequential(
             *[
                 TAttention(
                     d_model=self.d_temporal_hidden, nhead=t_nhead, dropout=dropout
                 )
                 for _ in range(2)
             ]
-        )
-        self.temporal_aggregator_intraday = TemporalAttention(
-            d_model=self.d_temporal_hidden,
         )
 
         # Market-Conditioned Feature Gating
@@ -370,12 +350,16 @@ class PPNet(nn.Module):
         # Intra-Stock Temporal Modeling (Daily)
         stock_temporal_embeds = self.data_embedding(stock_ts_features)
         stock_temporal_states = self.temporal_layers(stock_temporal_embeds)
-        stock_temporal_features = self.temporal_aggregator(stock_temporal_states)
+        stock_temporal_features = stock_temporal_states[:, -1, :]
 
-        # Intra-Stock Temporal Modeling (Intraday)
-        stock_intraday_embeds = self.data_embedding_intraday(stock_intraday_ts_features)
-        stock_intraday_states = self.temporal_layers_intraday(stock_intraday_embeds)
-        stock_intraday_features = self.temporal_aggregator_intraday(stock_intraday_states)
+        # # Intra-Stock Temporal Modeling (Intraday)
+        # stock_intraday_temporal_embeds = self.intraday_data_embedding(
+        #     stock_intraday_ts_features
+        # )
+        # stock_intraday_temporal_states = self.intraday_temporal_layers(
+        #     stock_intraday_temporal_embeds
+        # )
+        # stock_intraday_temporal_features = stock_intraday_temporal_states[:, -1, :]
 
         # Market-Conditioned Feature Gating
         gate_weights = self.market_gate(market_features)
@@ -383,7 +367,11 @@ class PPNet(nn.Module):
 
         # Feature Fusion: Concatenate daily, intraday and gated cross-sectional features
         stock_features = torch.cat(
-            [stock_temporal_features, stock_intraday_features, gated_stock_cs_features],
+            [
+                stock_temporal_features,
+                # stock_intraday_temporal_features,
+                gated_stock_cs_features,
+            ],
             dim=-1,
         )
         fused_states = self.fusion_block(stock_features)
