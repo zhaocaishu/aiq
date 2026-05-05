@@ -6,9 +6,52 @@ from torch import nn
 from .embed import DataEmbedding
 
 
+class AttnPooling(nn.Module):
+    def __init__(self, d_model):
+        super().__init__()
+        self.score = nn.Linear(d_model, 1)
+
+    def forward(self, x):
+        w = torch.softmax(self.score(x), dim=1)
+        return torch.sum(w * x, dim=1)
+
+
+class CrossAttention(nn.Module):
+    def __init__(self, d_model, nhead):
+        super().__init__()
+        self.nhead = nhead
+        self.head_dim = d_model // nhead
+        self.scale = math.sqrt(self.head_dim)
+
+        self.q_proj = nn.Linear(d_model, d_model, bias=False)
+        self.k_proj = nn.Linear(d_model, d_model, bias=False)
+        self.v_proj = nn.Linear(d_model, d_model, bias=False)
+        self.o_proj = nn.Linear(d_model, d_model)
+
+    def forward(self, q, k, v):
+        N, T, D = k.shape
+
+        q = self.q_proj(q).view(N, self.nhead, self.head_dim)
+        k = self.k_proj(k).view(N, T, self.nhead, self.head_dim)
+        v = self.v_proj(v).view(N, T, self.nhead, self.head_dim)
+
+        k = k.permute(0, 2, 1, 3)
+        v = v.permute(0, 2, 1, 3)
+
+        q = q.unsqueeze(2)
+
+        attn = torch.matmul(q, k.transpose(-2, -1)) / self.scale
+        attn = torch.softmax(attn, dim=-1)
+
+        out = torch.matmul(attn, v)
+        out = out.squeeze(2).reshape(N, D)
+
+        return self.o_proj(out)
+
+
 class MLP(nn.Module):
     def __init__(self, hidden_size, intermediate_size):
-        super(MLP, self).__init__()
+        super().__init__()
 
         self.hidden_size = hidden_size
         self.intermediate_size = intermediate_size
@@ -18,192 +61,7 @@ class MLP(nn.Module):
         self.act_fn = nn.SiLU()
 
     def forward(self, x):
-        down_proj = self.down_proj(self.act_fn(self.gate_proj(x)) * self.up_proj(x))
-        return down_proj
-
-
-class TAttention(nn.Module):
-    def __init__(self, d_model, nhead, dropout):
-        super().__init__()
-
-        self.d_model = d_model
-        self.nhead = nhead
-        self.head_dim = d_model // nhead
-
-        self.q_proj = nn.Linear(d_model, d_model, bias=False)
-        self.k_proj = nn.Linear(d_model, d_model, bias=False)
-        self.v_proj = nn.Linear(d_model, d_model, bias=False)
-
-        self.attn_dropout = nn.ModuleList([nn.Dropout(p=dropout) for _ in range(nhead)])
-
-        self.o_proj = nn.Linear(d_model, d_model)
-
-        self.mlp = MLP(d_model, 2 * d_model)
-        self.input_layernorm = nn.LayerNorm(d_model, eps=1e-5)
-        self.post_attention_layernorm = nn.LayerNorm(d_model, eps=1e-5)
-
-    def forward(self, x):
-        # Self Attention
-        residual = x
-        hidden_states = self.input_layernorm(x)
-
-        N, T, _ = hidden_states.shape
-        mask = torch.triu(torch.ones(T, T, device=x.device), diagonal=1).bool()
-
-        q = self.q_proj(hidden_states)
-        k = self.k_proj(hidden_states)
-        v = self.v_proj(hidden_states)
-
-        attn_outputs = []
-        for i in range(self.nhead):
-            if i == self.nhead - 1:
-                qh = q[:, :, i * self.head_dim :]
-                kh = k[:, :, i * self.head_dim :]
-                vh = v[:, :, i * self.head_dim :]
-            else:
-                qh = q[:, :, i * self.head_dim : (i + 1) * self.head_dim]
-                kh = k[:, :, i * self.head_dim : (i + 1) * self.head_dim]
-                vh = v[:, :, i * self.head_dim : (i + 1) * self.head_dim]
-
-            # (N, T, head_dim) @ (N, head_dim, T) -> (N, T, T)
-            attn_logits = torch.matmul(qh, kh.transpose(1, 2)) / math.sqrt(
-                self.head_dim
-            )
-
-            attn_logits = attn_logits.masked_fill(mask, float("-inf"))
-
-            attn_weights = torch.softmax(attn_logits, dim=-1)
-            attn_weights = self.attn_dropout[i](attn_weights)
-            attn_outputs.append(torch.matmul(attn_weights, vh))  # (N, T, head_dim)
-
-        hidden_states = torch.cat(attn_outputs, dim=-1)
-        hidden_states = self.o_proj(hidden_states)
-        hidden_states = residual + hidden_states
-
-        # Fully Connected
-        residual = hidden_states
-        hidden_states = self.post_attention_layernorm(hidden_states)
-        hidden_states = self.mlp(hidden_states)
-        hidden_states = residual + hidden_states
-        return hidden_states
-
-
-class SAttention(nn.Module):
-    def __init__(self, d_model, d_emb, nhead, dropout):
-        super().__init__()
-        assert d_model % nhead == 0, "d_model 必须能被 nhead 整除"
-
-        self.d_model = d_model
-        self.nhead = nhead
-        self.head_dim = d_model // nhead
-        self.temperature = math.sqrt(self.head_dim)
-
-        # Q, K, V projection
-        self.q_proj = nn.Linear(d_model, d_model, bias=False)
-        self.k_proj = nn.Linear(d_model, d_model, bias=False)
-        self.v_proj = nn.Linear(d_model, d_model, bias=False)
-
-        self.attn_dropout = nn.ModuleList([nn.Dropout(p=dropout) for _ in range(nhead)])
-
-        self.o_proj = nn.Linear(d_model, d_model)
-
-        self.mlp = MLP(d_model, 2 * d_model)
-        self.input_layernorm = nn.LayerNorm(d_model, eps=1e-5)
-        self.post_attention_layernorm = nn.LayerNorm(d_model, eps=1e-5)
-
-    def _build_industry_decay(
-        self, industry_indices: torch.Tensor, delta1: float = 0.65, delta2: float = 0.2
-    ) -> torch.Tensor:
-        """
-        Build Industry Decay Matrix as described in the paper.
-
-        Args:
-            industry_indices: (N, 2) tensor where each row contains [l1_i, l2_i],
-                            l1 = primary industry index, l2 = secondary industry index (integer encoded)
-            delta1: Decay factor for same primary industry but different secondary industry (1 > delta1 > delta2 ≥ 0)
-            delta2: Decay factor for different primary industries
-
-        Returns:
-            D: (N, N) Industry Decay Matrix where D[i,j] represents industry association weight between stock i and j
-        """
-        # Input validation
-        N = industry_indices.shape[0]
-        assert industry_indices.shape[1] == 2, "industry_indices must have shape (N, 2)"
-        assert (
-            1 > delta1 > delta2 >= 0
-        ), "Decay factors must satisfy 1 > delta1 > delta2 ≥ 0"
-
-        # Extract industry indices
-        l1 = industry_indices[:, 0]  # (N,) primary industry indices
-        l2 = industry_indices[:, 1]  # (N,) secondary industry indices
-
-        # Create comparison matrices using broadcasting for vectorized operations
-        # This replaces the nested loops for better performance
-        l2_eq = l2.unsqueeze(1) == l2.unsqueeze(
-            0
-        )  # (N, N) boolean matrix for same secondary industry
-        l1_eq = l1.unsqueeze(1) == l1.unsqueeze(
-            0
-        )  # (N, N) boolean matrix for same primary industry
-
-        # Initialize matrix with delta2 (different primary industry case)
-        D = torch.full(
-            (N, N), delta2, dtype=torch.float32, device=industry_indices.device
-        )
-
-        # Update to delta1 for same primary but different secondary industry
-        D[(l1_eq & ~l2_eq)] = delta1
-
-        # Update to 1.0 for same secondary industry
-        D[l2_eq] = 1.0
-
-        # Set diagonal to 1.0 (self-connection)
-        D.fill_diagonal_(1.0)
-
-        return D
-
-    def forward(self, x, industry_indices):
-        # industry_decay: (N, N) — 行业衰减矩阵
-        industry_decay = self._build_industry_decay(industry_indices).detach()
-
-        # x: (N, D)  — 股票特征
-        residual = x
-        x_states = self.input_layernorm(x)
-
-        # Self Attention
-        q = self.q_proj(x_states)
-        k = self.k_proj(x_states)
-        v = self.v_proj(x_states)
-
-        # 多头拆分
-        q = q.view(-1, self.nhead, self.head_dim)
-        k = k.view(-1, self.nhead, self.head_dim)
-        v = v.view(-1, self.nhead, self.head_dim)
-
-        attn_outputs = []
-        for i in range(self.nhead):
-            qh = q[:, i, :]  # (N, head_dim)
-            kh = k[:, i, :]  # (N, head_dim)
-            vh = v[:, i, :]  # (N, head_dim)
-
-            attn_logits = torch.matmul(qh, kh.transpose(0, 1)) / self.temperature
-            attn_logits = attn_logits + torch.log(industry_decay + 1e-8)
-            attn_weights = torch.softmax(attn_logits, dim=-1)
-            attn_weights = self.attn_dropout[i](attn_weights)
-
-            attn_out = torch.matmul(attn_weights, vh)
-            attn_outputs.append(attn_out)
-
-        hidden_states = torch.cat(attn_outputs, dim=-1)  # (N, D)
-        hidden_states = self.o_proj(hidden_states)
-        hidden_states = residual + hidden_states
-
-        # Fully Connected
-        residual = hidden_states
-        hidden_states = self.post_attention_layernorm(hidden_states)
-        hidden_states = self.mlp(hidden_states)
-        hidden_states = residual + hidden_states
-        return hidden_states
+        return self.down_proj(self.act_fn(self.gate_proj(x)) * self.up_proj(x))
 
 
 class MarketGate(nn.Module):
@@ -222,6 +80,7 @@ class MarketGate(nn.Module):
         x_scale = torch.softmax(x_enc / self.t, dim=-1)
         x_scale = self.d_output * x_scale
         return x_scale
+
 
 class FusionBlock(nn.Module):
     def __init__(self, d_in, d_model, dropout=0.1):
@@ -252,11 +111,160 @@ class FusionBlock(nn.Module):
         return x + self.dropout(gate * feat)
 
 
+class TAttention(nn.Module):
+    def __init__(self, d_model, nhead, dropout):
+        super().__init__()
+
+        self.d_model = d_model
+        self.nhead = nhead
+        self.head_dim = d_model // nhead
+
+        self.q_proj = nn.Linear(d_model, d_model, bias=False)
+        self.k_proj = nn.Linear(d_model, d_model, bias=False)
+        self.v_proj = nn.Linear(d_model, d_model, bias=False)
+
+        self.attn_dropout = nn.ModuleList([nn.Dropout(p=dropout) for _ in range(nhead)])
+
+        self.o_proj = nn.Linear(d_model, d_model)
+
+        self.mlp = MLP(d_model, 2 * d_model)
+        self.input_layernorm = nn.LayerNorm(d_model, eps=1e-5)
+        self.post_attention_layernorm = nn.LayerNorm(d_model, eps=1e-5)
+
+    def forward(self, x):
+        # Self Attention
+        residual = x
+        hidden_states = self.input_layernorm(x)
+
+        q = self.q_proj(hidden_states)
+        k = self.k_proj(hidden_states)
+        v = self.v_proj(hidden_states)
+
+        attn_outputs = []
+        for i in range(self.nhead):
+            start = i * self.head_dim
+            end = (i + 1) * self.head_dim
+            qh = q[:, :, start:end]
+            kh = k[:, :, start:end]
+            vh = v[:, :, start:end]
+
+            attn_logits = torch.matmul(qh, kh.transpose(1, 2)) / math.sqrt(
+                self.head_dim
+            )
+
+            attn_weights = torch.softmax(attn_logits, dim=-1)
+            attn_weights = self.attn_dropout[i](attn_weights)
+            attn_outputs.append(torch.matmul(attn_weights, vh))
+
+        hidden_states = torch.cat(attn_outputs, dim=-1)
+        hidden_states = self.o_proj(hidden_states)
+        hidden_states = residual + hidden_states
+
+        # Fully Connected
+        residual = hidden_states
+        hidden_states = self.post_attention_layernorm(hidden_states)
+        hidden_states = self.mlp(hidden_states)
+        hidden_states = residual + hidden_states
+        return hidden_states
+
+
+class SAttention(nn.Module):
+    def __init__(self, d_model, d_emb, nhead, dropout):
+        super().__init__()
+        assert d_model % nhead == 0, "d_model must be divisible by nhead"
+
+        self.d_model = d_model
+        self.nhead = nhead
+        self.head_dim = d_model // nhead
+        self.temperature = math.sqrt(self.head_dim)
+
+        self.q_proj = nn.Linear(d_model, d_model, bias=False)
+        self.k_proj = nn.Linear(d_model, d_model, bias=False)
+        self.v_proj = nn.Linear(d_model, d_model, bias=False)
+
+        self.attn_dropout = nn.ModuleList([nn.Dropout(p=dropout) for _ in range(nhead)])
+
+        self.o_proj = nn.Linear(d_model, d_model)
+
+        self.mlp = MLP(d_model, 2 * d_model)
+        self.input_layernorm = nn.LayerNorm(d_model, eps=1e-5)
+        self.post_attention_layernorm = nn.LayerNorm(d_model, eps=1e-5)
+
+        # Learnable scale
+        self.alpha = nn.Parameter(torch.tensor(1.0))
+
+    def _build_industry_bias(
+        self, industry_ids: torch.Tensor, delta1: float = 0.65, delta2: float = 0.2
+    ) -> torch.Tensor:
+        N = industry_ids.shape[0]
+        assert industry_ids.shape[1] == 2, "industry_ids must have shape (N, 2)"
+        assert (
+            1 > delta1 > delta2 >= 0
+        ), "Bias factors must satisfy 1 > delta1 > delta2 >= 0"
+
+        l1 = industry_ids[:, 0]
+        l2 = industry_ids[:, 1]
+
+        l2_eq = l2.unsqueeze(1) == l2.unsqueeze(0)
+        l1_eq = l1.unsqueeze(1) == l1.unsqueeze(0)
+
+        D = torch.full((N, N), delta2, dtype=torch.float32, device=industry_ids.device)
+
+        D[l1_eq & ~l2_eq] = delta1
+        D[l2_eq] = 1.0
+        D.fill_diagonal_(1.0)
+
+        return D
+
+    def forward(self, x, industry_ids):
+        # Industry bias: (N, N) — 行业偏差矩阵
+        industry_bias = self._build_industry_bias(industry_ids).detach()
+
+        # x: (N, D)  — 股票特征
+        residual = x
+        x_states = self.input_layernorm(x)
+
+        # Self Attention
+        q = self.q_proj(x_states)
+        k = self.k_proj(x_states)
+        v = self.v_proj(x_states)
+
+        q = q.view(-1, self.nhead, self.head_dim)
+        k = k.view(-1, self.nhead, self.head_dim)
+        v = v.view(-1, self.nhead, self.head_dim)
+
+        attn_outputs = []
+        for i in range(self.nhead):
+            qh = q[:, i, :]
+            kh = k[:, i, :]
+            vh = v[:, i, :]
+
+            attn_logits = torch.matmul(qh, kh.transpose(0, 1)) / self.temperature
+            attn_logits += self.alpha * industry_bias
+
+            attn_weights = torch.softmax(attn_logits, dim=-1)
+            attn_weights = self.attn_dropout[i](attn_weights)
+
+            attn_out = torch.matmul(attn_weights, vh)
+            attn_outputs.append(attn_out)
+
+        hidden_states = torch.cat(attn_outputs, dim=-1)
+        hidden_states = self.o_proj(hidden_states)
+        hidden_states = residual + hidden_states
+
+        # Fully Connected
+        residual = hidden_states
+        hidden_states = self.post_attention_layernorm(hidden_states)
+        hidden_states = self.mlp(hidden_states)
+        hidden_states = residual + hidden_states
+        return hidden_states
+
+
 class PPNet(nn.Module):
     def __init__(
         self,
-        d_ts_feat,  # 日频时序特征维度
-        d_intraday_ts_feat,  # 分钟级时序特征维度
+        d_ts_feat,
+        d_intraday_ts_feat,
         d_cs_feat,
         d_fund_feat,
         d_mkt_feat,
@@ -266,15 +274,17 @@ class PPNet(nn.Module):
         s_nhead,
         dropout,
         beta,
+        use_intraday=False,
     ):
-        super(PPNet, self).__init__()
+        super().__init__()
+
+        self.use_intraday = use_intraday
 
         # Feature Dimensions
         self.d_temporal_hidden = d_model // 4
-        # self.d_fusion_input = (
-        #     self.d_temporal_hidden * 2 + d_cs_feat
-        # )  # 日频 + 分钟级 + 截面
         self.d_fusion_input = self.d_temporal_hidden + d_cs_feat
+        if self.use_intraday:
+            self.d_fusion_input += self.d_temporal_hidden
 
         # Temporal Encoder (Intra-stock) for daily data
         self.data_embedding = DataEmbedding(
@@ -290,21 +300,26 @@ class PPNet(nn.Module):
                 for _ in range(2)
             ]
         )
-
+        self.temporal_pool = AttnPooling(self.d_temporal_hidden)
+        
         # Temporal Encoder (Intra-stock) for intraday data
-        self.intraday_data_embedding = DataEmbedding(
-            c_in=d_intraday_ts_feat,
-            d_model=self.d_temporal_hidden,
-            dropout=dropout,
-        )
-        self.intraday_temporal_layers = nn.Sequential(
-            *[
-                TAttention(
-                    d_model=self.d_temporal_hidden, nhead=t_nhead, dropout=dropout
-                )
-                for _ in range(2)
-            ]
-        )
+        if self.use_intraday:
+            self.intraday_data_embedding = DataEmbedding(
+                c_in=d_intraday_ts_feat,
+                d_model=self.d_temporal_hidden,
+                dropout=dropout,
+            )
+            self.intraday_temporal_layers = nn.Sequential(
+                *[
+                    TAttention(
+                        d_model=self.d_temporal_hidden, nhead=t_nhead, dropout=dropout
+                    )
+                    for _ in range(2)
+                ]
+            )
+
+            # Cross attention
+            self.cross_attn = CrossAttention(self.d_temporal_hidden, t_nhead)
 
         # Market-Conditioned Feature Gating
         self.market_gate = MarketGate(d_input=d_mkt_feat, d_output=d_cs_feat, beta=beta)
@@ -329,58 +344,62 @@ class PPNet(nn.Module):
 
     def forward(
         self,
-        industry_indices,
-        stock_ts_features,  # (N, T_daily, d_ts_feat)
-        stock_intraday_ts_features,  # (N, T_intraday, d_intraday_ts_feat)
-        stock_cs_features,
-        stock_fund_features,
-        market_features,
+        stock_industry_ids,
+        stock_ts_features,
+        stock_intraday_ts_features=None,
+        stock_cs_features=None,
+        stock_fund_features=None,
+        market_state_features=None,
     ):
-        """
-        Args:
-            industry_indices: (N, 2) l1 and l2 industry index for each stock
-            stock_ts_features: (N, T_daily, d_ts_feat) daily temporal features
-            stock_intraday_ts_features: (N, T_intraday, d_intraday_ts_feat) intraday temporal features
-            stock_cs_features: (N, d_cs_feat) cross-sectional features
-            stock_fund_features: (N, d_fund_feat) fundamental features (currently unused)
-            market_features: (N, d_market) market features
-        Returns:
-            predictions: (N, 1) prediction for each stock
-        """
         # Intra-Stock Temporal Modeling (Daily)
         stock_temporal_embeds = self.data_embedding(stock_ts_features)
         stock_temporal_states = self.temporal_layers(stock_temporal_embeds)
-        stock_temporal_features = stock_temporal_states[:, -1, :]
+        stock_temporal_features = self.temporal_pool(stock_temporal_states)
 
-        # # Intra-Stock Temporal Modeling (Intraday)
-        # stock_intraday_temporal_embeds = self.intraday_data_embedding(
-        #     stock_intraday_ts_features
-        # )
-        # stock_intraday_temporal_states = self.intraday_temporal_layers(
-        #     stock_intraday_temporal_embeds
-        # )
-        # stock_intraday_temporal_features = stock_intraday_temporal_states[:, -1, :]
+        # Intra-Stock Temporal Modeling (Intraday)
+        if self.use_intraday:
+            assert stock_intraday_ts_features is not None
+            stock_intraday_temporal_embeds = self.intraday_data_embedding(
+                stock_intraday_ts_features
+            )
+            stock_intraday_temporal_states = self.intraday_temporal_layers(
+                stock_intraday_temporal_embeds
+            )
+
+            stock_intraday_temporal_features = self.cross_attn(
+                stock_temporal_features,
+                stock_intraday_temporal_states,
+                stock_intraday_temporal_states,
+            )
 
         # Market-Conditioned Feature Gating
-        gate_weights = self.market_gate(market_features)
+        gate_weights = self.market_gate(market_state_features)
         gated_stock_cs_features = stock_cs_features * gate_weights
 
-        # Feature Fusion: Concatenate daily, intraday and gated cross-sectional features
-        stock_features = torch.cat(
-            [
-                stock_temporal_features,
-                # stock_intraday_temporal_features,
-                gated_stock_cs_features,
-            ],
-            dim=-1,
-        )
+        # Feature Fusion
+        if self.use_intraday:
+            stock_features = torch.cat(
+                [
+                    stock_temporal_features,
+                    stock_intraday_temporal_features,
+                    gated_stock_cs_features,
+                ],
+                dim=-1,
+            )
+        else:
+            stock_features = torch.cat(
+                [
+                    stock_temporal_features,
+                    gated_stock_cs_features,
+                ],
+                dim=-1,
+            )
+
         fused_states = self.fusion_block(stock_features)
 
         # Industry-aware Inter-Stock Attention
-        spatial_states = self.spatial_encoder(
-            fused_states, industry_indices=industry_indices
-        )
+        spatial_states = self.spatial_encoder(fused_states, stock_industry_ids)
 
         # Final Prediction on Spatial Representations
-        predictions = self.prediction_head(spatial_states)  # (N, 1)
+        predictions = self.prediction_head(spatial_states)
         return predictions

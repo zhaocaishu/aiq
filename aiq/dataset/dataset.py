@@ -141,7 +141,7 @@ class TSDataset(Dataset):
 
     def _setup_time_series(self):
         """Prepare the time series data: sort index, extract features/labels, create slices, and group by date."""
-        # Ensure index is (instrument, date) and sorted
+        # Ensure index is (Instrument, Date) and sorted
         self.data.index = self.data.index.swaplevel()
         self.data.sort_index(inplace=True)
 
@@ -201,8 +201,9 @@ class TSDataset(Dataset):
             np.ndarray: Array of slice objects for each data point.
         """
         assert isinstance(index, pd.MultiIndex), "Unsupported index type"
-        assert seq_len > 0, "Sequence length must be greater than 0"
+        assert index.nlevels == 2, "Index must have 2 levels (Instrument, Date)"
         assert index.is_monotonic_increasing, "Index must be sorted in increasing order"
+        assert seq_len > 0, "Sequence length must be greater than 0"
 
         # Count samples per instrument
         sample_count_by_insts = index.to_series().groupby(level=0).size().values
@@ -256,7 +257,7 @@ class TSDataset(Dataset):
         stock_ts_features = features[:, :, self.stock_ts_feature_indices]
         stock_cs_features = features[:, -1, self.stock_cs_feature_indices]
         stock_fund_features = features[:, -1, self.stock_fund_feature_indices]
-        market_features = features[:, -1, self.market_feature_indices]
+        market_state_features = features[:, -1, self.market_feature_indices]
 
         # Data Normalization Pipeline
         stock_ts_features = zscore(ts_ohlcv_normalize(stock_ts_features))
@@ -271,7 +272,7 @@ class TSDataset(Dataset):
         # Construct the finalized data payload for model input
         data_dict = {
             "sample_indices": sample_indices.astype(np.int64),
-            "industry_ids": np.stack(
+            "stock_industry_ids": np.stack(
                 [
                     features[:, -1, self.industry_index_l1].astype(np.int64),
                     features[:, -1, self.industry_index_l2].astype(np.int64),
@@ -281,7 +282,7 @@ class TSDataset(Dataset):
             "stock_ts_features": stock_ts_features,
             "stock_cs_features": stock_cs_features,
             "stock_fund_features": stock_fund_features,
-            "market_features": market_features,
+            "market_state_features": market_state_features,
         }
 
         if labels is not None:
@@ -430,13 +431,14 @@ class MultiscaleTSDataset(TSDataset):
         sample_indices = data_dict["sample_indices"]
         minute_features_list = []
 
-        for idx in sample_indices:
+        slices = self._daily_slices[index]
+
+        for idx, sl in zip(sample_indices, slices):
             # Retrieve instrument and the sequence of dates for the window
             instrument, _ = self._index[idx]
 
             # Reconstruct the sequence of dates for the current sample
-            seq_start = idx - self.seq_len + 1
-            seq_dates = [self._index[i][1] for i in range(seq_start, idx + 1)]
+            seq_dates = [self._index[i][1] for i in range(sl.start, sl.stop)]
 
             # Fetch aligned minute sequences from memory
             minute_seq = self._get_minute_sequence(instrument, seq_dates)

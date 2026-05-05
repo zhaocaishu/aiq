@@ -27,11 +27,11 @@ if __name__ == "__main__":
     data_dict = train_dataset[0]
     print(
         data_dict["sample_indices"].shape,
-        data_dict["industry_ids"].shape,
+        data_dict["stock_industry_ids"].shape,
         data_dict["stock_ts_features"].shape,
         data_dict["stock_intraday_ts_features"].shape,
         data_dict["stock_cs_features"].shape,
         data_dict["stock_fund_features"].shape,
-        data_dict["market_features"].shape,
+        data_dict["market_state_features"].shape,
         data_dict["labels"].shape,
     )

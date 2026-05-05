@@ -130,6 +130,9 @@ class PPNetModel(BaseModel):
         val_check_interval = 500
         stop_training = False
 
+        # Warmup-safe + early-stop protection
+        min_train_steps_before_stop = int(0.1 * num_training_steps)
+
         for epoch in range(self.epochs):
             self.model.train()
             train_losses = []
@@ -145,12 +148,16 @@ class PPNetModel(BaseModel):
                 iter_count += 1
                 global_step += 1
 
-                batch_industry_ids = self.to_device(batch_dict["industry_ids"])
+                batch_industry_ids = self.to_device(batch_dict["stock_industry_ids"])
                 batch_ts_features = self.to_device(batch_dict["stock_ts_features"])
-                batch_intraday_ts_features = self.to_device(batch_dict["stock_intraday_ts_features"])
+                batch_intraday_ts_features = self.to_device(
+                    batch_dict["stock_intraday_ts_features"]
+                )
                 batch_cs_features = self.to_device(batch_dict["stock_cs_features"])
                 batch_fund_features = self.to_device(batch_dict["stock_fund_features"])
-                batch_market_features = self.to_device(batch_dict["market_features"])
+                batch_market_state_features = self.to_device(
+                    batch_dict["market_state_features"]
+                )
                 batch_labels = self.to_device(batch_dict["labels"])
 
                 assert not torch.isnan(
@@ -166,8 +173,8 @@ class PPNetModel(BaseModel):
                     batch_fund_features
                 ).any(), "NaN at batch_fund_features"
                 assert not torch.isnan(
-                    batch_market_features
-                ).any(), "NaN at batch_market_features"
+                    batch_market_state_features
+                ).any(), "NaN at batch_market_state_features"
                 assert not torch.isnan(batch_labels).any(), "NaN at batch_labels"
 
                 optimizer.zero_grad()
@@ -177,7 +184,7 @@ class PPNetModel(BaseModel):
                     batch_intraday_ts_features,
                     batch_cs_features,
                     batch_fund_features,
-                    batch_market_features,
+                    batch_market_state_features,
                 )
                 loss = self.criterion(outputs, batch_labels)
                 loss.backward()
@@ -204,14 +211,10 @@ class PPNetModel(BaseModel):
                     time_now = time.time()
 
                 # Step-based validation check
-                if (
-                    val_dataset is not None
-                    and (
-                        global_step % val_check_interval == 0
-                        or i == train_steps_epoch - 1
-                    )
-                    and global_step > num_warmup_steps
+                if val_dataset is not None and (
+                    global_step % val_check_interval == 0 or i == train_steps_epoch - 1
                 ):
+
                     val_loss = self.eval(val_dataset)
                     steps_since_best = global_step - best_step
                     msg = f"[Step {global_step}] Validation Loss: {val_loss:.8f}"
@@ -223,7 +226,12 @@ class PPNetModel(BaseModel):
                         msg += f" | 🔥 New Best at Step {best_step}"
                     else:
                         msg += f" | 😐 No improvement, {steps_since_best}/{patience_steps} steps"
-                        if steps_since_best >= patience_steps:
+
+                        # Warmup-safe early stop
+                        if (
+                            global_step > min_train_steps_before_stop
+                            and steps_since_best >= patience_steps
+                        ):
                             msg += " | ⏹ Early stopping triggered"
                             stop_training = True
 
@@ -259,12 +267,16 @@ class PPNetModel(BaseModel):
         self.model.eval()
 
         for i, batch_dict in enumerate(val_loader):
-            batch_industry_ids = self.to_device(batch_dict["industry_ids"])
+            batch_industry_ids = self.to_device(batch_dict["stock_industry_ids"])
             batch_ts_features = self.to_device(batch_dict["stock_ts_features"])
-            batch_intraday_ts_features = self.to_device(batch_dict["stock_intraday_ts_features"])
+            batch_intraday_ts_features = self.to_device(
+                batch_dict["stock_intraday_ts_features"]
+            )
             batch_cs_features = self.to_device(batch_dict["stock_cs_features"])
             batch_fund_features = self.to_device(batch_dict["stock_fund_features"])
-            batch_market_features = self.to_device(batch_dict["market_features"])
+            batch_market_state_features = self.to_device(
+                batch_dict["market_state_features"]
+            )
             batch_labels = self.to_device(batch_dict["labels"])
 
             with torch.no_grad():
@@ -274,7 +286,7 @@ class PPNetModel(BaseModel):
                     batch_intraday_ts_features,
                     batch_cs_features,
                     batch_fund_features,
-                    batch_market_features,
+                    batch_market_state_features,
                 )
 
                 loss = self.criterion(outputs, batch_labels)
@@ -284,63 +296,3 @@ class PPNetModel(BaseModel):
         total_loss = np.mean(total_losses)
 
         return total_loss
-
-    def predict(self, test_dataset: Dataset) -> object:
-        self.model.eval()
-
-        test_loader = DataLoader(
-            test_dataset, batch_size=self.batch_size, shuffle=False
-        )
-
-        indices = []
-        preds = []
-        for i, batch_dict in enumerate(test_loader):
-            batch_sample_indices = batch_dict["sample_indices"]
-            batch_industry_ids = self.to_device(batch_dict["industry_ids"])
-            batch_ts_features = self.to_device(batch_dict["stock_ts_features"])
-            batch_intraday_ts_features = self.to_device(batch_dict["stock_intraday_ts_features"])
-            batch_cs_features = self.to_device(batch_dict["stock_cs_features"])
-            batch_fund_features = self.to_device(batch_dict["stock_fund_features"])
-            batch_market_features = self.to_device(batch_dict["market_features"])
-
-            with torch.no_grad():
-                outputs = self.model(
-                    batch_industry_ids,
-                    batch_ts_features,
-                    batch_intraday_ts_features,
-                    batch_cs_features,
-                    batch_fund_features,
-                    batch_market_features,
-                )
-
-            indices.append(batch_sample_indices.squeeze(0).numpy())
-            preds.append(outputs.cpu().numpy())
-
-        indices = np.concatenate(indices, axis=0)
-        preds = np.concatenate(preds, axis=0)
-
-        label_names = test_dataset.label_names
-        pred_df = test_dataset.data.iloc[indices].copy()
-        pred_df[[f"PRED_{name}" for name in label_names]] = preds
-        return pred_df
-
-    def load(self, model_name=None):
-        model_name = "model.pth" if model_name is None else model_name
-        model_file = os.path.join(self.save_dir, model_name)
-        if not os.path.exists(model_file):
-            raise FileNotFoundError(f"Model file not found: {model_file}")
-
-        self.model.load_state_dict(
-            torch.load(model_file, map_location=self.device, weights_only=True)
-        )
-        self.logger.info(f"Successfully loaded model from {model_file}")
-
-    def save(self, model_name=None):
-        if not os.path.exists(self.save_dir):
-            os.makedirs(self.save_dir)
-
-        model_name = "model.pth" if model_name is None else model_name
-        model_file = os.path.join(self.save_dir, model_name)
-
-        torch.save(self.model.state_dict(), model_file)
-        self.logger.info(f"Model saved to {model_file}")
