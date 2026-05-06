@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import logging
 
 from aiq.dataset.loader import DataLoader
 from aiq.ops import Ref
@@ -29,6 +30,7 @@ class Evaluator:
         pred_col: str = "PRED_RET_5D",
         label_col: str = "RET_5D",
         top_k: int = 30,
+        logger: logging.Logger = None,
     ):
         self.data_dir = data_dir
         self.start_time = start_time
@@ -42,6 +44,9 @@ class Evaluator:
         self.pred_col = pred_col
         self.label_col = label_col
         self.top_k = top_k
+
+        # 统一日志句柄：外部传入优先，否则新建
+        self.logger = logger or logging.getLogger(__name__)
 
     def _compute_forward_returns(self, df: pd.DataFrame) -> pd.DataFrame:
         """Compute forward 1D / 5D returns."""
@@ -143,6 +148,48 @@ class Evaluator:
 
         return {f"Precision@{k}": precision}
 
+    # ═══════════════════════════════════════════════════════════════════════════════
+    # 日志格式化工具（全部通过 self.logger.info 输出）
+    # ═══════════════════════════════════════════════════════════════════════════════
+    def _print_header(self, title: str, width: int = 72):
+        """打印带标题的分隔线"""
+        self.logger.info(f"{'═' * width}")
+        self.logger.info(f"  {title}")
+        self.logger.info(f"{'═' * width}")
+
+    def _print_sub_header(self, title: str, width: int = 72):
+        """打印子标题"""
+        self.logger.info(f"  ┌{'─' * (width - 4)}┐")
+        self.logger.info(f"  │ {title:<{width - 6}}│")
+        self.logger.info(f"  └{'─' * (width - 4)}┘")
+
+    def _print_kv(self, key: str, value, indent: int = 2, width: int = 20):
+        """打印键值对，自动对齐"""
+        self.logger.info(f"{' ' * indent}▸ {key:<{width}} {value}")
+
+    def _print_table_header(self, *cols, widths=None, aligns=None, indent: int = 4):
+        """
+        打印表格表头。
+        aligns: 每列的对齐方式，'<' 左对齐，'>' 右对齐，'^' 居中。
+                默认第一列左对齐（文本），其余右对齐（数值）。
+        """
+        if widths is None:
+            widths = [max(len(str(c)) + 4, 12) for c in cols]
+        if aligns is None:
+            aligns = ["<"] + [">"] * (len(cols) - 1)
+        line = " ".join(f"{c:{a}{w}}" for c, a, w in zip(cols, aligns, widths))
+        sep = " ".join("─" * w for w in widths)
+        self.logger.info(f"{' ' * indent}{line}")
+        self.logger.info(f"{' ' * indent}{sep}")
+        return widths, aligns
+
+    def _print_table_row(self, *vals, widths, aligns, indent: int = 4):
+        """打印表格行，对齐方式与表头保持一致"""
+        line = " ".join(f"{v:{a}{w}}" for v, a, w in zip(vals, aligns, widths))
+        self.logger.info(f"{' ' * indent}{line}")
+
+    # ═══════════════════════════════════════════════════════════════════════════════
+
     def _run_topk_dropout_portfolio(
         self,
         df: pd.DataFrame,
@@ -151,7 +198,7 @@ class Evaluator:
         n_drop: int = 5,
         commission: float = 0.0003,
         stamp_tax: float = 0.001,
-        min_commission: float = 5
+        min_commission: float = 5,
     ) -> dict:
         cash = initial_capital
         positions = {}
@@ -161,10 +208,16 @@ class Evaluator:
 
         prev_total_value = initial_capital
 
-        # Print initial parameters
-        print(
-            f"[策略启动] 初始资金: {initial_capital:,.2f}, TopK: {self.top_k}, 每期调出: {n_drop}, 佣金: {commission:.4%}, 印花税: {stamp_tax:.4%}"
-        )
+        # ═══════════════════════════════════════════════════════════════════════════
+        # 策略启动横幅
+        # ═══════════════════════════════════════════════════════════════════════════
+        self._print_header("【策略启动】", width=72)
+        self._print_kv("初始资金", f"{initial_capital:>15,.2f}", width=18)
+        self._print_kv("持仓上限", f"{self.top_k:>15} 只", width=18)
+        self._print_kv("每期调出", f"{n_drop:>15} 只", width=18)
+        self._print_kv("佣金费率", f"{commission:>15.4%}", width=18)
+        self._print_kv("印花税率", f"{stamp_tax:>15.4%}", width=18)
+        self.logger.info(f"{'═' * 72}")
 
         df = df.sort_values([self.instrument_col, self.date_col])
         df["Score"] = df.groupby(self.instrument_col)[self.pred_col].shift(1)
@@ -179,7 +232,9 @@ class Evaluator:
 
             daily_dict = daily.set_index(self.instrument_col).to_dict(orient="index")
 
-            # ---------- 1. Calculate daily return based on previous holdings ----------
+            # ═══════════════════════════════════════════════════════════════════════
+            # 1. 盘前状态（市值重估）
+            # ═══════════════════════════════════════════════════════════════════════
             if positions:
                 total_value = cash
                 new_positions = {}
@@ -199,28 +254,33 @@ class Evaluator:
                 prev_total_value = total_value
                 positions = new_positions
 
-                # Print pre‑trading state after marking to market
-                print(f"\n{date} 盘前状态:")
-                print(f"  现金: {cash:>15,.2f}")
-                total_hold = sum(positions.values())
-                print(f"  持仓市值: {total_hold:>12,.2f} ({len(positions)} 只)")
-                print(f"  总资产: {total_value:>14,.2f}")
-                print(f"  日收益率: {daily_ret:>8.4%}")
+                # ── 盘前状态面板 ──
+                self._print_sub_header(f"{date}  盘前状态", width=72)
+                self._print_kv("现金", f"{cash:>14,.2f}", width=12)
+                self._print_kv(
+                    "持仓市值",
+                    f"{sum(positions.values()):>14,.2f}  ({len(positions)} 只)",
+                    width=12,
+                )
+                self._print_kv("总资产", f"{total_value:>14,.2f}", width=12)
+                self._print_kv("日收益率", f"{daily_ret:>+14.4%}", width=12)
             else:
                 daily_returns.append(0.0)
                 nav_series.append(prev_total_value)
-                print(
-                    f"\n{date} 无持仓，现金: {cash:,.2f}, 总资产: {prev_total_value:,.2f}"
-                )
+                self._print_sub_header(f"{date}  盘前状态（空仓）", width=72)
+                self._print_kv("现金", f"{cash:>14,.2f}", width=12)
+                self._print_kv("总资产", f"{prev_total_value:>14,.2f}", width=12)
 
-            # ---------- 2. Rebalance decision ----------
+            # ═══════════════════════════════════════════════════════════════════════
+            # 2. 调仓决策
+            # ═══════════════════════════════════════════════════════════════════════
             if len(daily) < self.top_k:
-                print(f"  可交易股票不足 {self.top_k} 只，跳过调仓")
+                self.logger.info(f"  ⚠  可交易股票不足 {self.top_k} 只，跳过调仓")
                 continue
 
             current_holdings = set(positions.keys())
 
-            # 2.1 Initial build
+            # ── 2.1 初始建仓 ──
             if not current_holdings:
                 buy_candidates = []
                 for inst, row in daily_dict.items():
@@ -232,25 +292,43 @@ class Evaluator:
 
                 if buy_candidates:
                     cash_per_stock = cash / len(buy_candidates)
-                    print(f"  初始建仓，买入 {len(buy_candidates)} 只股票:")
+
+                    self.logger.info(f"  ▶ 初始建仓  买入 {len(buy_candidates)} 只")
+                    w, a = self._print_table_header(
+                        "代码",
+                        "价格",
+                        "分配现金",
+                        "佣金",
+                        "净买入市值",
+                        widths=[14, 10, 14, 10, 14],
+                        indent=4,
+                    )
                     for inst in buy_candidates:
                         cost = max(cash_per_stock * commission, min_commission)
                         invest = cash_per_stock - cost
                         positions[inst] = invest
                         cash -= cash_per_stock
                         price = daily_dict[inst]["Price"]
-                        print(
-                            f"    {inst}: 价格 {price:.2f}, 分配现金 {cash_per_stock:,.2f}, 佣金 {cost:,.2f}, 净买入市值 {invest:,.2f}"
+                        self._print_table_row(
+                            inst,
+                            f"{price:.2f}",
+                            f"{cash_per_stock:,.2f}",
+                            f"{cost:,.2f}",
+                            f"{invest:,.2f}",
+                            widths=w,
+                            aligns=a,
+                            indent=4,
                         )
                     turnover_series.append(1.0)
-                    # Print state after initial build
+
+                    # 建仓后汇总
                     total_after = cash + sum(positions.values())
-                    print(
-                        f"  建仓后现金: {cash:,.2f}, 持仓市值: {sum(positions.values()):,.2f}, 总资产: {total_after:,.2f}"
+                    self.logger.info(
+                        f"  ▸ 建仓后  现金 {cash:>12,.2f}  |  持仓 {sum(positions.values()):>12,.2f}  |  总资产 {total_after:>12,.2f}"
                     )
                 continue
 
-            # 2.2 Rebalance (sell + buy)
+            # ── 2.2 再平衡：卖出 ──
             hold_preds = [
                 (inst, daily_dict[inst]["Score"])
                 for inst in current_holdings
@@ -278,13 +356,27 @@ class Evaluator:
                     sell_count += 1
 
             if sold_list:
-                print(f"  卖出 {sell_count} 只股票:")
+                self.logger.info(f"  ▶ 卖出 {sell_count} 只")
+                w, a = self._print_table_header(
+                    "代码",
+                    "卖出前市值",
+                    "费用合计",
+                    "净回笼",
+                    widths=[14, 14, 12, 14],
+                    indent=4,
+                )
                 for inst, val, cost, net in sold_list:
-                    print(
-                        f"    {inst}: 卖出前市值 {val:,.2f}, 费用 {cost:,.2f}, 净回笼 {net:,.2f}"
+                    self._print_table_row(
+                        inst,
+                        f"{val:,.2f}",
+                        f"{cost:,.2f}",
+                        f"{net:,.2f}",
+                        widths=w,
+                        aligns=a,
+                        indent=4,
                     )
 
-            # Buy phase
+            # ── 2.3 再平衡：买入 ──
             not_hold = [inst for inst in daily_dict if inst not in positions]
             not_hold.sort(key=lambda x: daily_dict[x]["Score"], reverse=True)
 
@@ -299,27 +391,45 @@ class Evaluator:
 
             if buy_list:
                 cash_per_stock = cash / len(buy_list)
-                print(f"  买入 {len(buy_list)} 只股票:")
+                self.logger.info(f"  ▶ 买入 {len(buy_list)} 只")
+                w, a = self._print_table_header(
+                    "代码",
+                    "价格",
+                    "分配现金",
+                    "佣金",
+                    "净买入市值",
+                    widths=[14, 10, 14, 10, 14],
+                    indent=4,
+                )
                 for inst in buy_list:
                     cost = max(cash_per_stock * commission, min_commission)
                     invest = cash_per_stock - cost
                     positions[inst] = invest
                     cash -= cash_per_stock
                     price = daily_dict[inst]["Price"]
-                    print(
-                        f"    {inst}: 价格 {price:.2f}, 分配现金 {cash_per_stock:,.2f}, 佣金 {cost:,.2f}, 净买入市值 {invest:,.2f}"
+                    self._print_table_row(
+                        inst,
+                        f"{price:.2f}",
+                        f"{cash_per_stock:,.2f}",
+                        f"{cost:,.2f}",
+                        f"{invest:,.2f}",
+                        widths=w,
+                        aligns=a,
+                        indent=4,
                     )
 
-            # State after rebalance
+            # ── 调仓后汇总 ──
             total_after = cash + sum(positions.values())
-            print(
-                f"  调仓后现金: {cash:,.2f}, 持仓市值: {sum(positions.values()):,.2f}, 总资产: {total_after:,.2f}"
+            self.logger.info(
+                f"  ▸ 调仓后  现金 {cash:>12,.2f}  |  持仓 {sum(positions.values()):>12,.2f}  |  总资产 {total_after:>12,.2f}"
             )
 
             turnover = (sell_count + len(buy_list)) / self.top_k
             turnover_series.append(turnover)
 
-        # ---------- 3. Final performance metrics ----------
+        # ═══════════════════════════════════════════════════════════════════════════
+        # 3. 策略结束汇总
+        # ═══════════════════════════════════════════════════════════════════════════
         rets = np.array(daily_returns)
         nav = np.array(nav_series)
 
@@ -334,9 +444,14 @@ class Evaluator:
         ann_vol = rets.std() * np.sqrt(trading_days)
         avg_turnover = np.mean(turnover_series) if turnover_series else 0.0
 
-        print(
-            f"\n[策略结束] 最终总资产: {nav[-1]:,.2f}, 年化收益: {ann_ret:.4%}, 夏普: {sharpe:.4f}, 最大回撤: {mdd:.4%}"
-        )
+        self._print_header("【策略结束】", width=72)
+        self._print_kv("最终总资产", f"{nav[-1]:>15,.2f}", width=16)
+        self._print_kv("年化收益", f"{ann_ret:>+15.4%}", width=16)
+        self._print_kv("夏普比率", f"{sharpe:>15.4f}", width=16)
+        self._print_kv("最大回撤", f"{mdd:>+15.4%}", width=16)
+        self._print_kv("年化波动", f"{ann_vol:>15.4%}", width=16)
+        self._print_kv("平均换手", f"{avg_turnover:>15.4%}", width=16)
+        self.logger.info(f"{'═' * 72}")
 
         return {
             "ARR": ann_ret,
@@ -369,6 +484,9 @@ class Evaluator:
 
         # Portfolio
         portfolio_stats = self._run_topk_dropout_portfolio(df)
+
+        self.logger.info(f"{'═' * 72}")
+        # ═══════════════════════════════════════════════════════════════════════════
 
         results = {
             "IC": ic,

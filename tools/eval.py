@@ -1,6 +1,5 @@
 import os
 import argparse
-import pickle
 
 from aiq.utils.config import config as cfg
 from aiq.utils.module import init_instance_by_config
@@ -13,11 +12,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--cfg_file",
         type=str,
-        default=None,
+        required=True,
         help="Path to the configuration file for evaluation.",
     )
     parser.add_argument(
-        "--data_dir", type=str, required=True, help="Directory path of evaluation data."
+        "--data_dir",
+        type=str,
+        required=True,
+        help="Directory path of evaluation data.",
     )
     parser.add_argument(
         "--save_dir",
@@ -40,17 +42,6 @@ def parse_args() -> argparse.Namespace:
     )
 
     return parser.parse_args()
-
-
-def load_data_handler(save_dir: str, logger) -> object:
-    handler_path = os.path.join(save_dir, "data_handler.pkl")
-    if not os.path.exists(handler_path):
-        logger.error(f"Data handler file not found: {handler_path}")
-        raise FileNotFoundError(f"Missing file: {handler_path}")
-
-    with open(handler_path, "rb") as f:
-        logger.info(f"Loading data handler from {handler_path}")
-        return pickle.load(f)
 
 
 def load_models(cfg, val_dataset, save_dir: str, model_names, logger) -> list:
@@ -119,7 +110,7 @@ def main():
     )
     logger.info("Evaluation dataset loaded: %d samples", len(eval_dataset))
 
-    # Load and predict
+    # Load models
     models = load_models(
         cfg,
         eval_dataset,
@@ -128,13 +119,13 @@ def main():
         logger,
     )
 
+    # Prediction
     pred_df = ensemble_predict(models, eval_dataset, logger)
     logger.info("Ensemble prediction completed. Shape: %s", pred_df.shape)
 
-    # Evaluate
+    # Evaluation
     evaluator = init_instance_by_config(
-        cfg.evaluator,
-        data_dir=args.data_dir,
+        cfg.evaluator, data_dir=args.data_dir, logger=logger
     )
     metrics = evaluator.evaluate(pred_df)
     logger.info("Evaluation metrics:\n%s", metrics)
