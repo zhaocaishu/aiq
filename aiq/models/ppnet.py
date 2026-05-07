@@ -32,7 +32,7 @@ class PPNetModel(BaseModel):
         beta=5.0,
         epochs=50,
         batch_size=1,
-        warmup_ratio=0.02,
+        warmup_steps=500,
         lr_scheduler_type="cosine",
         learning_rate=0.001,
         criterion_name="MSE",
@@ -46,7 +46,7 @@ class PPNetModel(BaseModel):
         self.label_names = label_names
         self.epochs = epochs
         self.batch_size = batch_size
-        self.warmup_ratio = warmup_ratio
+        self.warmup_steps = warmup_steps
         self.lr_scheduler_type = lr_scheduler_type
         self.learning_rate = float(learning_rate)
         self.criterion_name = criterion_name
@@ -104,7 +104,6 @@ class PPNetModel(BaseModel):
 
         train_steps_epoch = len(train_loader)
         num_training_steps = self.epochs * train_steps_epoch
-        num_warmup_steps = int(self.warmup_ratio * num_training_steps)
 
         # Adam optimizer
         optimizer = optim.AdamW(
@@ -118,7 +117,7 @@ class PPNetModel(BaseModel):
         lr_scheduler = get_scheduler(
             name=self.lr_scheduler_type,
             optimizer=optimizer,
-            num_warmup_steps=num_warmup_steps,
+            num_warmup_steps=self.warmup_steps,
             num_training_steps=num_training_steps,
         )
 
