@@ -130,11 +130,10 @@ class PPNetModel(BaseModel):
         if self.use_muon:
             muon_params, adamw_params = self.get_muon_adamw_params(self.model)
             optimizer = Muon(
+                lr=self.learning_rate,
+                wd=0.05,
                 muon_params=muon_params,
                 adamw_params=adamw_params,
-                lr=self.learning_rate,
-                weight_decay=0.05,
-                betas=(0.9, 0.95),
             )
         else:
             optimizer = optim.AdamW(
