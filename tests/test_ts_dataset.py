@@ -1,6 +1,6 @@
 from aiq.utils.config import config as cfg
 from aiq.utils.module import init_instance_by_config
-from aiq.dataset.dataset import TSDataset, MultiscaleTSDataset
+from aiq.dataset.dataset import MultiscaleTSDataset
 
 
 if __name__ == "__main__":

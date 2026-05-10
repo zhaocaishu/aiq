@@ -78,6 +78,7 @@ class TSDataset(Dataset):
             use_augmentation (bool, optional): Whether to apply data augmentation. Defaults to False.
             mode (str, optional): Dataset mode ('train', 'val', 'test'). Defaults to "train".
         """
+        self.data_dir = data_dir
         self.data = data.copy(deep=False)
         self.seq_len = seq_len
         self.feature_names = feature_names
@@ -87,8 +88,8 @@ class TSDataset(Dataset):
 
         self.start_time, self.end_time = segments[mode]
 
-        # Precompute feature index positions for efficiency
-        self._precompute_feature_indices()
+        # Build feature index positions for efficiency
+        self._build_feature_indices()
 
         # Load and set instrument filter if provided
         self.instruments_set = self._load_instruments(data_dir, universe)
@@ -96,8 +97,8 @@ class TSDataset(Dataset):
         # Setup the time series data
         self._setup_time_series()
 
-    def _precompute_feature_indices(self):
-        """Precompute indices for different feature categories to avoid repeated lookups."""
+    def _build_feature_indices(self):
+        """Build indices for different feature categories to avoid repeated lookups."""
         self.industry_index_l1 = next(
             (i for i, name in enumerate(self.feature_names) if name == "IND_CLS_L1"),
             None,
@@ -139,6 +140,21 @@ class TSDataset(Dataset):
             return set(zip(df["Instrument"], df["Date"]))
         return None
 
+    def _is_valid_sample(self, instrument: str, date: str) -> bool:
+        """
+        Validate whether current sample should be included.
+        """
+        if date < self.start_time or date > self.end_time:
+            return False
+
+        if (
+            self.instruments_set is not None
+            and (instrument, date) not in self.instruments_set
+        ):
+            return False
+
+        return True
+
     def _setup_time_series(self):
         """Prepare the time series data: sort index, extract features/labels, create slices, and group by date."""
         # Ensure index is (Instrument, Date) and sorted
@@ -155,24 +171,16 @@ class TSDataset(Dataset):
         self._index = self.data.index
 
         # Create time series slices for each data point
-        slices = self._create_ts_slices(self._index, self.seq_len)
+        ts_slices = self._create_ts_slices(self._index, self.seq_len)
 
         # Group valid slices by date
         daily_slices = defaultdict(list)
-        for i, (code, date) in enumerate(self._index):
-            # Filter by time window
-            if date < self.start_time or date > self.end_time:
-                continue
-
-            # Filter by instruments if set
-            if (
-                self.instruments_set is not None
-                and (code, date) not in self.instruments_set
-            ):
+        for i, (instrument, date) in enumerate(self._index):
+            if not self._is_valid_sample(instrument, date):
                 continue
 
             # Ensure slice has exact sequence length
-            current_slice = slices[i]
+            current_slice = ts_slices[i]
             if current_slice.stop - current_slice.start != self.seq_len:
                 continue
 
@@ -225,17 +233,17 @@ class TSDataset(Dataset):
             Dict[str, np.ndarray]: Dictionary containing sample indices, features, and optionally labels.
         """
         # Retrieve data slices corresponding to the current query date
-        slices = self._daily_slices[index]
+        ts_slices = self._daily_slices[index]
 
         # Extract the terminal index for each slice (last time step)
-        sample_indices = np.array([sl.stop - 1 for sl in slices])
+        sample_indices = np.array([sl.stop - 1 for sl in ts_slices])
 
         # Aggregate feature sequences into a 3D tensor: [Batch, Seq_Len, Features]
-        features = np.stack([self._features[sl] for sl in slices])
+        features = np.stack([self._features[sl] for sl in ts_slices])
 
         # Append ground truth labels if in training/validation mode
         if self._labels is not None:
-            labels = np.array([self._labels[sl.stop - 1] for sl in slices])
+            labels = np.array([self._labels[sl.stop - 1] for sl in ts_slices])
 
             if self.mode == "train":
                 mask, filtered_labels = drop_extreme_label(labels)
@@ -243,6 +251,7 @@ class TSDataset(Dataset):
                 labels = filtered_labels
                 features = features[mask]
                 sample_indices = sample_indices[mask]
+                ts_slices = [s for s, m in zip(ts_slices, mask) if m]
         else:
             labels = None
 
@@ -265,6 +274,7 @@ class TSDataset(Dataset):
         # Construct the finalized data payload for model input
         data_dict = {
             "sample_indices": sample_indices.astype(np.int64),
+            "ts_slices": ts_slices,
             "stock_industry_ids": np.stack(
                 [
                     features[:, -1, self.industry_index_l1].astype(np.int64),
@@ -321,8 +331,8 @@ class MultiscaleTSDataset(TSDataset):
         super().__init__(*args, **kwargs)
 
         self.minute_bar = minute_bar
-        self.minute_feature_names = minute_feature_names
         self.minutes_per_day = int(240 / self.minute_bar)
+        self.minute_feature_names = minute_feature_names
 
         # In-memory storage for preloaded minute data: {instrument: {date: np.ndarray}}
         self._minute_data_store: Dict[str, Dict[pd.Timestamp.date, np.ndarray]] = {}
@@ -338,40 +348,35 @@ class MultiscaleTSDataset(TSDataset):
         all_instruments = self.data.index.get_level_values(0).unique()
 
         for instrument in all_instruments:
-            try:
-                # Load raw minute data for the entire period
-                df = DataLoader.load_instrument_features(
-                    self.data_dir,
-                    instrument,
-                    timestamp_col="Trade_time",
-                    start_time=self.start_time,
-                    end_time=self.end_time,
-                    freq=f"{self.minute_bar}min",
-                )
-                if df.empty:
-                    continue
-
-                df["Trade_time"] = pd.to_datetime(df["Trade_time"])
-                df["Date"] = df["Trade_time"].dt.date
-
-                # Apply adjustment factor to OHLC prices
-                if "Adj_factor" in df.columns:
-                    for col in ["Open", "High", "Low", "Close"]:
-                        df[col] = df[col] * df["Adj_factor"]
-
-                # Group by date and convert to NumPy for O(1) access during training
-                inst_data = {}
-                for d, group in df.groupby("Date"):
-                    vals = group[self.minute_feature_names].to_numpy(dtype=np.float32)
-                    # Only store complete intraday sequences
-                    if len(vals) == self.minutes_per_day:
-                        inst_data[d] = vals
-
-                self._minute_data_store[instrument] = inst_data
-
-            except Exception as e:
-                # Handle or log potential loading errors for specific instruments
+            # Load raw minute data for the entire period
+            df = DataLoader.load_instrument_features(
+                self.data_dir,
+                instrument,
+                timestamp_col="Trade_time",
+                start_time=self.start_time,
+                end_time=self.end_time,
+                freq=f"{self.minute_bar}min",
+            )
+            if df.empty:
                 continue
+
+            df["Trade_time"] = pd.to_datetime(df["Trade_time"])
+            df["Date"] = df["Trade_time"].dt.date
+
+            # Apply adjustment factor to OHLC prices
+            if "Adj_factor" in df.columns:
+                for col in ["Open", "High", "Low", "Close"]:
+                    df[col] = df[col] * df["Adj_factor"]
+
+            # Group by date and convert to NumPy for O(1) access during training
+            inst_data = {}
+            for d, group in df.groupby("Date"):
+                vals = group[self.minute_feature_names].to_numpy(dtype=np.float32)
+                # Only store complete intraday sequences
+                if len(vals) == self.minutes_per_day:
+                    inst_data[d] = vals
+
+            self._minute_data_store[instrument] = inst_data
 
     def _get_minute_sequence(
         self, instrument: str, dates: List[pd.Timestamp]
@@ -392,7 +397,6 @@ class MultiscaleTSDataset(TSDataset):
         for d in dates:
             d_date = pd.Timestamp(d).date()
             day_data = inst_store.get(d_date)
-
             # Ensure full intraday coverage; otherwise pad with zeros
             if day_data is None:
                 pad = np.zeros(
@@ -422,13 +426,12 @@ class MultiscaleTSDataset(TSDataset):
 
         # Sync with filtered samples (handling potential extreme label dropping)
         sample_indices = data_dict["sample_indices"]
+        ts_slices = data_dict["ts_slices"]
         minute_features_list = []
 
-        slices = self._daily_slices[index]
-
-        for idx, sl in zip(sample_indices, slices):
+        for idx, sl in zip(sample_indices, ts_slices):
             # Retrieve instrument and the sequence of dates for the window
-            instrument, _ = self._index[idx]
+            instrument, date = self._index[idx]
 
             # Reconstruct the sequence of dates for the current sample
             seq_dates = [self._index[i][1] for i in range(sl.start, sl.stop)]
@@ -439,7 +442,7 @@ class MultiscaleTSDataset(TSDataset):
 
         # Aggregate and normalize minute-level features
         minute_features = np.stack(minute_features_list)
-        minute_features = zscore(minute_features)
+        minute_features = zscore(ts_ohlcv_normalize(minute_features))
         minute_features = fillna(minute_features, fill_value=0.0)
 
         # Add to output dict
