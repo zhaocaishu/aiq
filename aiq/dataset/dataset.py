@@ -182,13 +182,6 @@ class TSDataset(Dataset):
         self._daily_dates = sorted(list(daily_slices.keys()))  # Sort for consistency
         self._daily_slices = [daily_slices[date] for date in self._daily_dates]
 
-        # Log daily counts for debugging
-        daily_counts = {
-            date: len(slices)
-            for date, slices in zip(self._daily_dates, self._daily_slices)
-        }
-        print(f"Mode: {self.mode}. Sampled daily counts: {daily_counts}")
-
     def _create_ts_slices(self, index: pd.MultiIndex, seq_len: int) -> np.ndarray:
         """
         Create sliding window slices for time series data grouped by instrument.
