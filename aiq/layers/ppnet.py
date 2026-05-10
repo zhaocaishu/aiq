@@ -301,7 +301,7 @@ class PPNet(nn.Module):
             ]
         )
         self.temporal_pool = AttnPooling(self.d_temporal_hidden)
-        
+
         # Temporal Encoder (Intra-stock) for intraday data
         if self.use_intraday:
             self.intraday_data_embedding = DataEmbedding(

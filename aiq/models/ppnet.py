@@ -8,7 +8,7 @@ from torch import nn, optim
 from torch.utils.data import Dataset, DataLoader
 from transformers import get_scheduler
 
-from aiq.layers import PPNet
+from aiq.layers import PPNet, Muon
 from aiq.losses import TopKLoss, HybridLoss
 
 from .base import BaseModel
@@ -33,6 +33,7 @@ class PPNetModel(BaseModel):
         epochs=50,
         batch_size=1,
         warmup_steps=500,
+        use_muon=False,
         lr_scheduler_type="cosine",
         learning_rate=0.001,
         criterion_name="MSE",
@@ -47,6 +48,7 @@ class PPNetModel(BaseModel):
         self.epochs = epochs
         self.batch_size = batch_size
         self.warmup_steps = warmup_steps
+        self.use_muon = use_muon
         self.lr_scheduler_type = lr_scheduler_type
         self.learning_rate = float(learning_rate)
         self.criterion_name = criterion_name
@@ -97,6 +99,25 @@ class PPNetModel(BaseModel):
         """统一设备转换方法"""
         return tensor.squeeze(0).to(device=self.device)
 
+    def get_muon_adamw_params(self, model):
+        muon_params = []
+        adamw_params = []
+        for name, p in model.named_parameters():
+            if not p.requires_grad:
+                continue
+            # ===== 1️⃣ Muon：只给核心2D权重 =====
+            if (
+                p.ndim >= 2
+                and "embedding" not in name
+                and "norm" not in name
+                and "prediction_head" not in name
+            ):
+                muon_params.append(p)
+            # ===== 2️⃣ AdamW：其他全部 =====
+            else:
+                adamw_params.append(p)
+        return muon_params, adamw_params
+
     def fit(self, train_dataset: Dataset, val_dataset: Dataset = None):
         train_loader = DataLoader(
             train_dataset, batch_size=self.batch_size, shuffle=True
@@ -105,13 +126,23 @@ class PPNetModel(BaseModel):
         train_steps_epoch = len(train_loader)
         num_training_steps = self.epochs * train_steps_epoch
 
-        # Adam optimizer
-        optimizer = optim.AdamW(
-            self.model.parameters(),
-            lr=self.learning_rate,
-            betas=(0.9, 0.999),
-            weight_decay=0.05,
-        )
+        # Optimizer
+        if self.use_muon:
+            muon_params, adamw_params = self.get_muon_adamw_params(self.model)
+            optimizer = Muon(
+                muon_params=muon_params,
+                adamw_params=adamw_params,
+                lr=self.learning_rate,
+                weight_decay=0.05,
+                betas=(0.9, 0.95),
+            )
+        else:
+            optimizer = optim.AdamW(
+                self.model.parameters(),
+                lr=self.learning_rate,
+                betas=(0.9, 0.999),
+                weight_decay=0.05,
+            )
 
         # Cosine scheduler
         lr_scheduler = get_scheduler(
