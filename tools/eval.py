@@ -40,6 +40,12 @@ def parse_args() -> argparse.Namespace:
         default=["model.pth"],
         help="Model checkpoint names for ensemble, e.g. model1.pth model2.pth",
     )
+    parser.add_argument(
+        "--save_predictions",
+        action="store_true",
+        default=False,
+        help="Save prediction columns (Instrument, Date, PRED_RET_5D, RET_5D) to save_dir/predictions.csv.",
+    )
 
     return parser.parse_args()
 
@@ -122,6 +128,17 @@ def main():
     # Prediction
     pred_df = ensemble_predict(models, eval_dataset, logger)
     logger.info("Ensemble prediction completed. Shape: %s", pred_df.shape)
+
+    # Optionally save predictions
+    if args.save_predictions:
+        required_cols = ["Instrument", "Date", "PRED_RET_5D", "RET_5D"]
+        missing = [c for c in required_cols if c not in pred_df.columns]
+        if missing:
+            logger.error("Missing columns for saving predictions: %s", missing)
+            raise KeyError(f"Missing columns in prediction: {missing}")
+        save_path = os.path.join(args.save_dir, "predictions.csv")
+        pred_df[required_cols].to_csv(save_path, index=False)
+        logger.info("Predictions saved to %s", save_path)
 
     # Evaluation
     evaluator = init_instance_by_config(

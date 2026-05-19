@@ -274,7 +274,7 @@ class TSDataset(Dataset):
         # Construct the finalized data payload for model input
         data_dict = {
             "sample_indices": sample_indices.astype(np.int64),
-            "ts_slices": ts_slices,
+            "ts_slices": [(s.start, s.stop) for s in ts_slices],
             "stock_industry_ids": np.stack(
                 [
                     features[:, -1, self.industry_index_l1].astype(np.int64),
@@ -425,8 +425,8 @@ class MultiscaleTSDataset(TSDataset):
         data_dict = super().__getitem__(index)
 
         # Sync with filtered samples (handling potential extreme label dropping)
+        ts_slices = [slice(start, stop) for start, stop in data_dict.pop("ts_slices")]
         sample_indices = data_dict["sample_indices"]
-        ts_slices = data_dict["ts_slices"]
         minute_features_list = []
 
         for idx, sl in zip(sample_indices, ts_slices):
