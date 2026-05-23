@@ -19,6 +19,7 @@ if __name__ == "__main__":
         data_dir="./data",
         universe=cfg.dataset.kwargs.universe,
         seq_len=8,
+        minute_seq_len_days=4,
         feature_names=data_handler.feature_names,
         label_names=["RET_5D"],
         mode="train",
