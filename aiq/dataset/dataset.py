@@ -319,7 +319,7 @@ class MultiscaleTSDataset(TSDataset):
             "Volume",
             "AMount",
         ],
-        minute_seq_len_days: Optional[int] = None,
+        minute_seq_len: Optional[int] = None,
         **kwargs,
     ):
         """
@@ -328,7 +328,7 @@ class MultiscaleTSDataset(TSDataset):
         Args:
             minute_bar (int, optional): Minute interval for intraday data (e.g., 5 for 5-min bars).
             minute_feature_names (List[str], optional): List of minute-level feature columns.
-            minute_seq_len_days (Optional[int], optional): Number of days to fetch for minute-level sequence.
+            minute_seq_len (Optional[int], optional): Number of days to fetch for minute-level sequence.
                 If None, defaults to the daily seq_len from TSDataset. Must be <= seq_len.
         """
         super().__init__(*args, **kwargs)
@@ -336,11 +336,11 @@ class MultiscaleTSDataset(TSDataset):
         self.minute_bar = minute_bar
         self.minutes_per_day = int(240 / self.minute_bar)
         self.minute_feature_names = minute_feature_names
-        self.minute_seq_len_days = minute_seq_len_days or self.seq_len
+        self.minute_seq_len = minute_seq_len or self.seq_len
 
-        if self.minute_seq_len_days > self.seq_len:
+        if self.minute_seq_len > self.seq_len:
             raise ValueError(
-                f"minute_seq_len_days ({self.minute_seq_len_days}) cannot exceed "
+                f"minute_seq_len ({self.minute_seq_len}) cannot exceed "
                 f"daily seq_len ({self.seq_len}) under current data loading scope."
             )
 
@@ -445,11 +445,11 @@ class MultiscaleTSDataset(TSDataset):
 
             # Slice the trailing N days from the daily window for minute-level features
             window_len = sl.stop - sl.start
-            if window_len < self.minute_seq_len_days:
+            if window_len < self.minute_seq_len:
                 # Fallback to full window if insufficient history is available
                 fetch_start = sl.start
             else:
-                fetch_start = sl.stop - self.minute_seq_len_days
+                fetch_start = sl.stop - self.minute_seq_len
 
             seq_dates = [self._index[i][1] for i in range(fetch_start, sl.stop)]
 
