@@ -271,7 +271,7 @@ class PPNet(nn.Module):
         s_nhead,
         dropout,
         beta,
-        use_intraday=False,
+        use_intraday=True,
     ):
         super().__init__()
 
