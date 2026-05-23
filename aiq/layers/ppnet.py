@@ -114,7 +114,6 @@ class FusionBlock(nn.Module):
 class TAttention(nn.Module):
     def __init__(self, d_model, nhead, dropout):
         super().__init__()
-
         self.d_model = d_model
         self.nhead = nhead
         self.head_dim = d_model // nhead
@@ -123,44 +122,36 @@ class TAttention(nn.Module):
         self.k_proj = nn.Linear(d_model, d_model, bias=False)
         self.v_proj = nn.Linear(d_model, d_model, bias=False)
 
-        self.attn_dropout = nn.ModuleList([nn.Dropout(p=dropout) for _ in range(nhead)])
+        self.attn_dropout = nn.Dropout(p=dropout)
 
         self.o_proj = nn.Linear(d_model, d_model)
-
         self.mlp = MLP(d_model, 2 * d_model)
         self.input_layernorm = nn.LayerNorm(d_model, eps=1e-5)
         self.post_attention_layernorm = nn.LayerNorm(d_model, eps=1e-5)
 
     def forward(self, x):
-        # Self Attention
         residual = x
         hidden_states = self.input_layernorm(x)
+        B, S, D = hidden_states.shape
 
         q = self.q_proj(hidden_states)
         k = self.k_proj(hidden_states)
         v = self.v_proj(hidden_states)
 
-        attn_outputs = []
-        for i in range(self.nhead):
-            start = i * self.head_dim
-            end = (i + 1) * self.head_dim
-            qh = q[:, :, start:end]
-            kh = k[:, :, start:end]
-            vh = v[:, :, start:end]
+        q = q.view(B, S, self.nhead, self.head_dim).transpose(1, 2)
+        k = k.view(B, S, self.nhead, self.head_dim).transpose(1, 2)
+        v = v.view(B, S, self.nhead, self.head_dim).transpose(1, 2)
 
-            attn_logits = torch.matmul(qh, kh.transpose(1, 2)) / math.sqrt(
-                self.head_dim
-            )
+        attn_logits = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.head_dim)
+        attn_weights = torch.softmax(attn_logits, dim=-1)
+        attn_weights = self.attn_dropout(attn_weights)
 
-            attn_weights = torch.softmax(attn_logits, dim=-1)
-            attn_weights = self.attn_dropout[i](attn_weights)
-            attn_outputs.append(torch.matmul(attn_weights, vh))
+        out = torch.matmul(attn_weights, v)
+        out = out.transpose(1, 2).contiguous().view(B, S, D)
 
-        hidden_states = torch.cat(attn_outputs, dim=-1)
-        hidden_states = self.o_proj(hidden_states)
+        hidden_states = self.o_proj(out)
         hidden_states = residual + hidden_states
 
-        # Fully Connected
         residual = hidden_states
         hidden_states = self.post_attention_layernorm(hidden_states)
         hidden_states = self.mlp(hidden_states)
@@ -171,93 +162,99 @@ class TAttention(nn.Module):
 class SAttention(nn.Module):
     def __init__(self, d_model, d_emb, nhead, dropout):
         super().__init__()
-        assert d_model % nhead == 0, "d_model must be divisible by nhead"
+        assert d_model % nhead == 0
 
         self.d_model = d_model
         self.nhead = nhead
         self.head_dim = d_model // nhead
-        self.temperature = math.sqrt(self.head_dim)
+        self.scale = self.head_dim**-0.5
 
         self.q_proj = nn.Linear(d_model, d_model, bias=False)
         self.k_proj = nn.Linear(d_model, d_model, bias=False)
         self.v_proj = nn.Linear(d_model, d_model, bias=False)
 
-        self.attn_dropout = nn.ModuleList([nn.Dropout(p=dropout) for _ in range(nhead)])
-
+        self.attn_dropout = nn.Dropout(dropout)
         self.o_proj = nn.Linear(d_model, d_model)
 
         self.mlp = MLP(d_model, 2 * d_model)
+
         self.input_layernorm = nn.LayerNorm(d_model, eps=1e-5)
         self.post_attention_layernorm = nn.LayerNorm(d_model, eps=1e-5)
 
-        # Learnable scale
         self.alpha = nn.Parameter(torch.tensor(1.0))
 
+    @staticmethod
     def _build_industry_bias(
-        self, industry_ids: torch.Tensor, delta1: float = 0.65, delta2: float = 0.2
+        industry_ids: torch.Tensor,
+        delta1: float = 0.65,
+        delta2: float = 0.2,
     ) -> torch.Tensor:
-        N = industry_ids.shape[0]
-        assert industry_ids.shape[1] == 2, "industry_ids must have shape (N, 2)"
-        assert (
-            1 > delta1 > delta2 >= 0
-        ), "Bias factors must satisfy 1 > delta1 > delta2 >= 0"
+        """
+        Faster vectorized version.
 
+        industry_ids: (N, 2)
+        return: (N, N)
+        """
         l1 = industry_ids[:, 0]
         l2 = industry_ids[:, 1]
 
-        l2_eq = l2.unsqueeze(1) == l2.unsqueeze(0)
-        l1_eq = l1.unsqueeze(1) == l1.unsqueeze(0)
+        l2_eq = l2[:, None] == l2[None, :]
+        l1_eq = l1[:, None] == l1[None, :]
 
-        D = torch.full((N, N), delta2, dtype=torch.float32, device=industry_ids.device)
+        # 直接 where，避免 scatter assignment
+        bias = torch.where(
+            l2_eq,
+            1.0,
+            torch.where(l1_eq, delta1, delta2),
+        )
 
-        D[l1_eq & ~l2_eq] = delta1
-        D[l2_eq] = 1.0
-        D.fill_diagonal_(1.0)
-
-        return D
+        return bias.float()
 
     def forward(self, x, industry_ids):
-        # Industry bias: (N, N) — 行业偏差矩阵
-        industry_bias = self._build_industry_bias(industry_ids).detach()
+        """
+        x: (N, D)
+        """
 
-        # x: (N, D)  — 股票特征
         residual = x
-        x_states = self.input_layernorm(x)
+        x = self.input_layernorm(x)
 
-        # Self Attention
-        q = self.q_proj(x_states)
-        k = self.k_proj(x_states)
-        v = self.v_proj(x_states)
+        # (N, D)
+        q = self.q_proj(x)
+        k = self.k_proj(x)
+        v = self.v_proj(x)
 
-        q = q.view(-1, self.nhead, self.head_dim)
-        k = k.view(-1, self.nhead, self.head_dim)
-        v = v.view(-1, self.nhead, self.head_dim)
+        # -> (H, N, Dh)
+        q = q.view(-1, self.nhead, self.head_dim).transpose(0, 1)
+        k = k.view(-1, self.nhead, self.head_dim).transpose(0, 1)
+        v = v.view(-1, self.nhead, self.head_dim).transpose(0, 1)
 
-        attn_outputs = []
-        for i in range(self.nhead):
-            qh = q[:, i, :]
-            kh = k[:, i, :]
-            vh = v[:, i, :]
+        # (N, N)
+        industry_bias = self._build_industry_bias(industry_ids)
 
-            attn_logits = torch.matmul(qh, kh.transpose(0, 1)) / self.temperature
-            attn_logits += self.alpha * industry_bias
+        # (H, N, N)
+        attn_logits = torch.matmul(q, k.transpose(-1, -2))
+        attn_logits *= self.scale
 
-            attn_weights = torch.softmax(attn_logits, dim=-1)
-            attn_weights = self.attn_dropout[i](attn_weights)
+        # broadcast
+        attn_logits += self.alpha * industry_bias.unsqueeze(0)
 
-            attn_out = torch.matmul(attn_weights, vh)
-            attn_outputs.append(attn_out)
+        attn_weights = torch.softmax(attn_logits, dim=-1)
+        attn_weights = self.attn_dropout(attn_weights)
 
-        hidden_states = torch.cat(attn_outputs, dim=-1)
+        # (H, N, Dh)
+        attn_out = torch.matmul(attn_weights, v)
+
+        # -> (N, D)
+        hidden_states = attn_out.transpose(0, 1).contiguous().view(-1, self.d_model)
+
         hidden_states = self.o_proj(hidden_states)
         hidden_states = residual + hidden_states
 
-        # Fully Connected
         residual = hidden_states
         hidden_states = self.post_attention_layernorm(hidden_states)
         hidden_states = self.mlp(hidden_states)
-        hidden_states = residual + hidden_states
-        return hidden_states
+
+        return residual + hidden_states
 
 
 class PPNet(nn.Module):
