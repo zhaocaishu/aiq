@@ -83,32 +83,14 @@ class MarketGate(nn.Module):
 
 
 class FusionBlock(nn.Module):
-    def __init__(self, d_in, d_model, dropout=0.1):
+    def __init__(self, d_model, dropout=0.1):
         super().__init__()
-
-        self.proj = nn.Linear(d_in, d_model)
         self.norm = nn.LayerNorm(d_model)
-
-        self.mlp = MLP(
-            hidden_size=d_model,
-            intermediate_size=d_model * 2,
-        )
-
-        self.gate = nn.Sequential(
-            nn.Linear(d_model, d_model),
-            nn.Sigmoid(),
-        )
-
+        self.mlp = MLP(hidden_size=d_model, intermediate_size=d_model * 2)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
-        x = self.proj(x)
-        h = self.norm(x)
-
-        feat = self.mlp(h)
-        gate = self.gate(h)
-
-        return x + self.dropout(gate * feat)
+        return x + self.dropout(self.mlp(self.norm(x)))
 
 
 class TAttention(nn.Module):
@@ -181,7 +163,7 @@ class SAttention(nn.Module):
         self.input_layernorm = nn.LayerNorm(d_model, eps=1e-5)
         self.post_attention_layernorm = nn.LayerNorm(d_model, eps=1e-5)
 
-        self.alpha = nn.Parameter(torch.tensor(1.0))
+        self.alpha = nn.Parameter(torch.tensor(0.1))
 
     @staticmethod
     def _build_industry_bias(
