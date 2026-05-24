@@ -163,7 +163,7 @@ class SAttention(nn.Module):
         self.input_layernorm = nn.LayerNorm(d_model, eps=1e-5)
         self.post_attention_layernorm = nn.LayerNorm(d_model, eps=1e-5)
 
-        self.alpha = nn.Parameter(torch.tensor(0.1))
+        self.alpha = nn.Parameter(torch.tensor(1.0))
 
     @staticmethod
     def _build_industry_bias(
