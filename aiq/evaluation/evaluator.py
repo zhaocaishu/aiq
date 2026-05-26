@@ -264,7 +264,7 @@ class Evaluator:
                 f"{shares_str:>{col_widths['shares']}}   "
                 f"{price_str:>{col_widths['price']}}   "
                 f"{mv_str:>{col_widths['mv']}}   "
-                f"{weight:.2f}:>{col_widths['wt']}   "
+                f"{weight:>{col_widths['wt']}.2f}   "
                 f"{note:<{col_widths['note']}}"
             )
             self.logger.info(line)
