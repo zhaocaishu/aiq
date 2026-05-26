@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import logging
+from typing import Any, Dict, List, Optional, Tuple
 
 from aiq.dataset.loader import DataLoader
 from aiq.ops import Ref
@@ -151,70 +152,82 @@ class Evaluator:
     # ═══════════════════════════════════════════════════════════════════════════════
     # 日志格式化工具（全部通过 self.logger.info 输出）
     # ═══════════════════════════════════════════════════════════════════════════════
-    def _print_header(self, title: str, width: int = 72):
-        """打印带标题的分隔线"""
-        self.logger.info(f"{'═' * width}")
-        self.logger.info(f"  {title}")
-        self.logger.info(f"{'═' * width}")
 
-    def _print_sub_header(self, title: str, width: int = 72):
-        """打印子标题"""
+    def _print_header(self, title: str, width: int = 72) -> None:
+        """打印带标题的粗分隔线"""
+        self.logger.info("═" * width)
+        self.logger.info(f"  {title}")
+        self.logger.info("═" * width)
+
+    def _print_sub_header(self, title: str, width: int = 72) -> None:
+        """打印子标题外框"""
         self.logger.info(f"  ┌{'─' * (width - 4)}┐")
         self.logger.info(f"  │ {title:<{width - 6}}│")
         self.logger.info(f"  └{'─' * (width - 4)}┘")
 
-    def _print_kv(self, key: str, value, indent: int = 2, width: int = 20):
-        """打印键值对，自动对齐"""
+    def _print_kv(self, key: str, value: Any, indent: int = 2, width: int = 20) -> None:
+        """打印对齐的键值对"""
         self.logger.info(f"{' ' * indent}▸ {key:<{width}} {value}")
 
-    def _print_table_header(self, *cols, widths=None, aligns=None, indent: int = 4):
-        """
-        打印表格表头。
-        aligns: 每列的对齐方式，'<' 左对齐，'>' 右对齐，'^' 居中。
-                默认第一列左对齐（文本），其余右对齐（数值）。
-        """
+    def _print_table_header(
+        self,
+        *cols: str,
+        widths: Optional[List[int]] = None,
+        aligns: Optional[List[str]] = None,
+        indent: int = 4,
+    ) -> Tuple[List[int], List[str]]:
+        """打印结构化表格的表头"""
         if widths is None:
             widths = [max(len(str(c)) + 4, 12) for c in cols]
         if aligns is None:
+            # 默认：第一列左对齐（文本），其余列右对齐（数值）
             aligns = ["<"] + [">"] * (len(cols) - 1)
+
         line = " ".join(f"{c:{a}{w}}" for c, a, w in zip(cols, aligns, widths))
         sep = " ".join("─" * w for w in widths)
+
         self.logger.info(f"{' ' * indent}{line}")
         self.logger.info(f"{' ' * indent}{sep}")
         return widths, aligns
 
-    def _print_table_row(self, *vals, widths, aligns, indent: int = 4):
-        """打印表格行，对齐方式与表头保持一致"""
+    def _print_table_row(
+        self, *vals: Any, widths: List[int], aligns: List[str], indent: int = 4
+    ) -> None:
+        """打印表格数据行，保持与表头严格对齐"""
         line = " ".join(f"{v:{a}{w}}" for v, a, w in zip(vals, aligns, widths))
         self.logger.info(f"{' ' * indent}{line}")
 
-    def _log_daily_holdings(self, date, positions, daily_dict, prev_prices=None):
-        """
-        输出每日持仓。
-        """
+    def _log_daily_holdings(
+        self,
+        date: Any,
+        positions: Dict[str, int],
+        daily_dict: Dict[str, Dict[str, Any]],
+        prev_prices: Optional[Dict[str, float]] = None,
+    ) -> None:
+        """输出每日持仓明细表"""
         self.logger.info(f"📅 交易日：{date}")
 
-        # 数据准备
+        # 1. 数据对齐与准备
         rows = []
         total_mv = 0.0
+        prev_prices = prev_prices or {}
+
         for inst, shares in positions.items():
             if inst in daily_dict:
                 price = daily_dict[inst]["Close"]
                 suspended = False
-            elif prev_prices and inst in prev_prices:
-                price = prev_prices[inst]
-                suspended = True
             else:
-                price = None
+                price = prev_prices.get(inst)
                 suspended = True
 
             mv = shares * price if price is not None else 0.0
             total_mv += mv
             rows.append((inst, shares, price, mv, suspended))
 
+        # 按市值降序排列
         rows.sort(key=lambda x: x[3], reverse=True)
 
-        # 列宽定义（可根据数据调整）
+        # 2. 布局宽度定义
         col_widths = {
             "code": 12,
             "shares": 10,
@@ -223,9 +236,10 @@ class Evaluator:
             "wt": 8,
             "note": 6,
         }
-        total_width = sum(col_widths.values()) + len(col_widths) * 3 - 1  # 用于分隔线
+        total_width = sum(col_widths.values()) + len(col_widths) * 3 - 1
+        sep = "  " + "─" * total_width
 
-        # 表头
+        # 3. 打印表头
         header = (
             f"  {'股票代码':<{col_widths['code']}}   "
             f"{'股数':>{col_widths['shares']}}   "
@@ -234,31 +248,28 @@ class Evaluator:
             f"{'权重%':>{col_widths['wt']}}   "
             f"{'备注':<{col_widths['note']}}"
         )
-        sep = "  " + "─" * total_width
         self.logger.info(header)
         self.logger.info(sep)
 
-        # 数据行
+        # 4. 打印数据行
         for inst, shares, price, mv, suspended in rows:
-            code = inst
             shares_str = f"{shares:,}"
             price_str = f"{price:.2f}" if price is not None else "—"
             mv_str = f"{mv:,.2f}" if mv > 0 else "0.00"
             weight = (mv / total_mv * 100) if total_mv > 0 else 0.0
-            wt_str = f"{weight:.2f}"
             note = "停牌" if suspended else ""
 
             line = (
-                f"  {code:<{col_widths['code']}}   "
+                f"  {inst:<{col_widths['code']}}   "
                 f"{shares_str:>{col_widths['shares']}}   "
                 f"{price_str:>{col_widths['price']}}   "
                 f"{mv_str:>{col_widths['mv']}}   "
-                f"{wt_str:>{col_widths['wt']}}   "
+                f"{weight:.2f}:>{col_widths['wt']}   "
                 f"{note:<{col_widths['note']}}"
             )
             self.logger.info(line)
 
-        # 分隔与合计
+        # 5. 打印总计栏
         self.logger.info(sep)
         sum_shares = f"{len(positions):,}"
         sum_mv = f"{total_mv:,.2f}"
@@ -273,6 +284,8 @@ class Evaluator:
         self.logger.info(total_line)
         self.logger.info("")
 
+    # ═══════════════════════════════════════════════════════════════════════════════
+    # 核心回测引擎
     # ═══════════════════════════════════════════════════════════════════════════════
 
     def _run_topk_dropout_portfolio(
@@ -289,23 +302,22 @@ class Evaluator:
         method_sell: str = "bottom",
         method_buy: str = "top",
         forbid_all_trade_at_limit: bool = False,
-    ) -> dict:
-        """
-        TopK-Dropout 回测引擎（A股适配版）
-        """
+    ) -> Dict[str, float]:
+        """TopK-Dropout 回测核心引擎（A股适配版）"""
+        # 状态记账变量初始化
         cash = initial_capital
-        positions = {}  # stock_id -> shares（股数记账）
-        hold_start = {}  # stock_id -> first_hold_date（用于 hold_thresh）
-        nav_series = []
-        daily_returns = []
-        turnover_series = []
-        prev_prices = {}  # 停牌股票沿用最近有效收盘价
+        positions: Dict[str, int] = {}  # stock_id -> 持仓股数
+        hold_start: Dict[str, Any] = {}  # stock_id -> 首次买入日期
+        prev_prices: Dict[str, float] = {}  # 记录上一次有效收盘价以处理停牌
 
-        exchange = Exchange()
+        # 绩效跟踪序列
+        nav_series: List[float] = []
+        daily_returns: List[float] = []
+        turnover_series: List[float] = []
 
-        # ═══════════════════════════════════════════════════════════════════════
-        # 策略启动横幅
-        # ═══════════════════════════════════════════════════════════════════════
+        exchange = Exchange()  # 外部映射的交易所状态判定实例
+
+        # ── 1. 策略启动横幅 ──
         self._print_header("【策略启动】", width=72)
         self._print_kv("初始资金", f"{initial_capital:>15,.2f}", width=18)
         self._print_kv("持仓上限", f"{self.top_k:>15} 只", width=18)
@@ -314,62 +326,59 @@ class Evaluator:
         self._print_kv("风险仓位", f"{risk_degree:>15.2%}", width=18)
         self._print_kv("佣金费率", f"{commission:>15.4%}", width=18)
         self._print_kv("印花税率", f"{stamp_tax:>15.4%}", width=18)
-        self._print_kv(
-            "涨跌停模式",
-            "禁止双向" if forbid_all_trade_at_limit else "允许卖涨停/买跌停",
-            width=18,
+        limit_mode = (
+            "禁止双向交易" if forbid_all_trade_at_limit else "允许卖涨停/买跌停"
         )
-        self.logger.info(f"{'═' * 72}")
+        self._print_kv("涨跌停模式", limit_mode, width=18)
+        self.logger.info("═" * 72)
 
-        # 预计算：Score 为前一日的 pred_score（避免未来信息）
+        # ── 2. 数据预处理（T-1日预测截面对齐） ──
         df = df.sort_values([self.instrument_col, self.date_col])
         df["Score"] = df.groupby(self.instrument_col)[self.pred_col].shift(1)
         df = df.dropna(subset=["Score"])
-
         trading_dates = sorted(df[self.date_col].unique())
 
-        # ═══════════════════════════════════════════════════════════════════════
-        # 主循环
-        # ═══════════════════════════════════════════════════════════════════════
+        # ── 3. 历史日历主循环 ──
         for i, date in enumerate(trading_dates):
             daily = df[df[self.date_col] == date]
             if daily.empty:
                 continue
 
             daily_dict = daily.set_index(self.instrument_col).to_dict(orient="index")
-            
-            # ── 可交易性判断辅助函数 ──
-            def _is_tradable(inst: str, direction=None) -> bool:
-                if inst not in daily_dict:
+
+            # 内置可交易性复用校验闭包
+            def _is_tradable(inst_id: str, direction: Optional[int] = None) -> bool:
+                if inst_id not in daily_dict:
                     return False
-                
-                row = daily_dict[inst]
+                row_data = daily_dict[inst_id]
                 return exchange.is_stock_tradable(
-                    stock_id=inst,
-                    price=row["Close"],
-                    up_limit=row[self.up_limit_col],
-                    down_limit=row[self.down_limit_col],
+                    stock_id=inst_id,
+                    price=row_data["Close"],
+                    up_limit=row_data[self.up_limit_col],
+                    down_limit=row_data[self.down_limit_col],
                     daily_dict=daily_dict,
                     direction=direction,
                 )
 
             current_holdings = list(positions.keys())
+            trade_direction_mask = None if forbid_all_trade_at_limit else Order.BUY
 
-            # ── 2.1 初始建仓 ──
+            # ── 3.1 初始无仓位建仓 ──
             if not current_holdings:
                 buy_candidates = [
                     inst
                     for inst in daily_dict
-                    if _is_tradable(
-                        inst, Order.BUY if not forbid_all_trade_at_limit else None
-                    )
+                    if _is_tradable(inst, trade_direction_mask)
                 ]
+
                 if method_buy == "top":
                     buy_candidates.sort(
                         key=lambda x: daily_dict[x]["Score"], reverse=True
                     )
                 else:
-                    raise NotImplementedError(f"method_buy={method_buy} not supported")
+                    raise NotImplementedError(
+                        f"不支持的建仓模式: method_buy={method_buy}"
+                    )
 
                 buy_candidates = buy_candidates[: self.top_k]
 
@@ -389,18 +398,17 @@ class Evaluator:
                     )
 
                     for inst in buy_candidates:
-                        row = daily_dict[inst]
-                        price = row["Close"]
-
-                        # A股：整手 100 股
-                        shares = int((cash_per_stock / price) / 100) * 100
+                        price = daily_dict[inst]["Close"]
+                        shares = (
+                            int((cash_per_stock / price) / 100) * 100
+                        )  # 整手国内限制
                         if shares < 100:
                             continue
 
                         invest = shares * price
                         comm = max(invest * commission, min_commission)
 
-                        # 资金不足保护：动态缩减至可承受股数
+                        # 现金流边界防透支保护
                         if cash < invest + comm:
                             max_shares = int(((cash - comm) / price) / 100) * 100
                             if max_shares < 100:
@@ -425,74 +433,78 @@ class Evaluator:
                         )
 
                     turnover_series.append(1.0)
-
-                    # 建仓后收盘 NAV 计算
                     pos_val = sum(
                         positions[s] * daily_dict[s]["Close"]
                         for s in positions
                         if s in daily_dict
                     )
-                    total_after = cash + pos_val
-                    nav_series.append(total_after)
-
+                    nav_series.append(cash + pos_val)
                     self._log_daily_holdings(date, positions, daily_dict)
                 else:
                     turnover_series.append(0.0)
                     nav_series.append(cash)
                 continue
 
-            # ── 2.2 再平衡：确定买卖列表（对齐 TopkDropoutStrategy comb 逻辑）──
+            # ── 3.2 动态再平衡信号计算（TopK-Dropout 核心算法） ──
+            sell_mask = None if forbid_all_trade_at_limit else Order.SELL
 
-            # last: 当前持仓按 Score 排序（停牌股 score = -inf，确保排在末尾）
-            last_scores = []
-            for inst in current_holdings:
-                if inst in daily_dict:
-                    last_scores.append((inst, daily_dict[inst]["Score"]))
-                else:
-                    last_scores.append((inst, float("-inf")))
-            last_scores.sort(key=lambda x: x[1], reverse=True)
-            last = [x[0] for x in last_scores]
+            # 1. 过滤当前持仓中今日可卖出的股票，按分数降序排序
+            tradable_last = [
+                inst for inst in current_holdings if _is_tradable(inst, sell_mask)
+            ]
+            last_scores = sorted(
+                [(inst, daily_dict[inst]["Score"]) for inst in tradable_last],
+                key=lambda x: x[1],
+                reverse=True,
+            )
+            last_pool = [x[0] for x in last_scores]
 
-            # today: 非持仓中可买入的候选，按 Score 排序
+            # 2. 筛选外部非持仓可买入的标的候选池
             not_hold = [inst for inst in daily_dict if inst not in positions]
             tradable_not_hold = [
-                inst
-                for inst in not_hold
-                if _is_tradable(
-                    inst, Order.BUY if not forbid_all_trade_at_limit else None
-                )
+                inst for inst in not_hold if _is_tradable(inst, trade_direction_mask)
             ]
+
             if method_buy == "top":
                 tradable_not_hold.sort(
                     key=lambda x: daily_dict[x]["Score"], reverse=True
                 )
             else:
-                raise NotImplementedError(f"method_buy={method_buy} not supported")
+                raise NotImplementedError(f"不支持的买入模式: method_buy={method_buy}")
 
-            n_today_need = n_drop + self.top_k - len(last)
-            today = tradable_not_hold[: max(0, n_today_need)]
+            n_today_need = n_drop + self.top_k - len(last_pool)
+            today_pool = tradable_not_hold[: max(0, n_today_need)]
 
-            # comb: 合并池，按 Score 降序（防止卖出高分、买入低分）
-            comb_pool = last + today
-            comb_scores = [
-                (
-                    inst,
-                    daily_dict[inst]["Score"] if inst in daily_dict else float("-inf"),
-                )
-                for inst in comb_pool
-            ]
-            comb_scores.sort(key=lambda x: x[1], reverse=True)
+            # 3. 合并新老池重新排序，防止出现卖出高分买入低分的反向交易
+            comb_pool = last_pool + today_pool
+            comb_scores = sorted(
+                [
+                    (
+                        inst,
+                        (
+                            daily_dict[inst]["Score"]
+                            if inst in daily_dict
+                            else float("-inf")
+                        ),
+                    )
+                    for inst in comb_pool
+                ],
+                key=lambda x: x[1],
+                reverse=True,
+            )
             comb = [x[0] for x in comb_scores]
 
-            # sell_candidates: last 中落在 comb 末尾 n_drop 位的股票
+            # 4. 判定掉队标的 (Dropout Candidates)
             if method_sell == "bottom":
                 bottom_n = comb[-n_drop:] if n_drop > 0 else []
-                sell_candidates = [inst for inst in last if inst in bottom_n]
+                sell_candidates = [inst for inst in last_pool if inst in bottom_n]
             else:
-                raise NotImplementedError(f"method_sell={method_sell} not supported")
+                raise NotImplementedError(
+                    f"不支持的卖出模式: method_sell={method_sell}"
+                )
 
-            # 实际可卖出：过滤 hold_thresh & 可交易性
-            sell = []
+            # 5. 锁定期 (Hold Threshold) 约束检查
+            sell_queue = []
             for inst in sell_candidates:
                 if inst not in hold_start:
                     continue
@@ -501,41 +513,38 @@ class Evaluator:
                 )
                 if hold_days < hold_thresh:
                     continue
-                if not _is_tradable(
-                    inst, Order.SELL if not forbid_all_trade_at_limit else None
-                ):
+                if not _is_tradable(inst, sell_mask):
                     continue
-                sell.append(inst)
+                sell_queue.append(inst)
 
-            # buy: today 前 len(sell) + topk - len(last) 只
-            n_buy_need = len(sell) + self.top_k - len(last)
-            buy_candidates = today[: max(0, n_buy_need)]
-            buy = [
+            # 6. 计算买入对冲队列
+            n_buy_need = len(sell_queue) + self.top_k - len(last_pool)
+            buy_candidates = today_pool[: max(0, n_buy_need)]
+            buy_queue = [
                 inst
                 for inst in buy_candidates
-                if inst not in positions
-                and _is_tradable(
-                    inst, Order.BUY if not forbid_all_trade_at_limit else None
-                )
+                if inst not in positions and _is_tradable(inst, trade_direction_mask)
             ]
 
-            # ── 2.3 执行卖出 ──
+            # ── 3.3 交易执行：卖出控制 ──
             sell_count = 0
             sold_list = []
-            for inst in sell:
+            for inst in sell_queue:
                 if inst not in positions:
                     continue
-                row = daily_dict[inst]
-                price = row["Close"]
+                price = daily_dict[inst]["Close"]
                 shares = positions.pop(inst)
                 sell_value = shares * price
 
                 comm = max(sell_value * commission, min_commission)
                 tax = sell_value * stamp_tax
-                cost = comm + tax
-                cash += sell_value - cost
+                total_cost = comm + tax
+
+                cash += sell_value - total_cost
                 sell_count += 1
-                sold_list.append((inst, sell_value, cost, sell_value - cost))
+                sold_list.append(
+                    (inst, sell_value, total_cost, sell_value - total_cost)
+                )
                 hold_start.pop(inst, None)
 
             if sold_list:
@@ -559,12 +568,27 @@ class Evaluator:
                         indent=4,
                     )
 
-            # ── 2.4 执行买入 ──
-            if buy:
-                invest_cash = cash * risk_degree
-                cash_per_stock = invest_cash / len(buy) if len(buy) > 0 else 0
+            # ── 3.4 交易执行：买入控制 ──
+            if buy_queue:
+                # 动态穿透估算当前包含停牌价的总资产
+                current_total_asset = cash + sum(
+                    (
+                        positions[s] * daily_dict[s]["Close"]
+                        if s in daily_dict
+                        else positions[s] * prev_prices.get(s, 0.0)
+                    )
+                    for s in positions
+                )
 
-                self.logger.info(f"  ▶ 买入 {len(buy)} 只")
+                # 依据目标风险模型分配单标的等权重额度
+                target_cash_per_stock = (current_total_asset * risk_degree) / self.top_k
+                cash_per_stock = (
+                    min(target_cash_per_stock, cash / len(buy_queue))
+                    if buy_queue
+                    else 0.0
+                )
+
+                self.logger.info(f"  ▶ 买入 {len(buy_queue)} 只")
                 w, a = self._print_table_header(
                     "代码",
                     "价格",
@@ -575,10 +599,8 @@ class Evaluator:
                     indent=4,
                 )
 
-                for inst in buy:
-                    row = daily_dict[inst]
-                    price = row["Close"]
-
+                for inst in buy_queue:
+                    price = daily_dict[inst]["Close"]
                     shares = int((cash_per_stock / price) / 100) * 100
                     if shares < 100:
                         continue
@@ -609,34 +631,28 @@ class Evaluator:
                         indent=4,
                     )
 
-            # ── 2.5 调仓后收盘 NAV 计算 ──
+            # ── 3.5 调仓结束日终资产清算 ──
             position_value_after = 0.0
             for inst, shares in positions.items():
                 if inst in daily_dict:
                     p = daily_dict[inst]["Close"]
                     position_value_after += shares * p
                     prev_prices[inst] = p
-                elif inst in prev_prices:
-                    # 停牌：沿用最近有效收盘价
-                    position_value_after += shares * prev_prices[inst]
+                else:
+                    # 遭遇停牌：沿用其历史最近一次可得的收盘价记账
+                    position_value_after += shares * prev_prices.get(inst, 0.0)
 
             total_after = cash + position_value_after
 
-            # 日收益率基于调仓后总资产 vs 昨日收盘 NAV
             if i > 0:
-                daily_ret = total_after / nav_series[-1] - 1.0
-                daily_returns.append(daily_ret)
+                daily_returns.append(total_after / nav_series[-1] - 1.0)
 
             nav_series.append(total_after)
+            turnover_series.append((sell_count + len(buy_queue)) / self.top_k)
 
-            turnover = (sell_count + len(buy)) / self.top_k
-            turnover_series.append(turnover)
+            self._log_daily_holdings(date, positions, daily_dict, prev_prices)
 
-            self._log_daily_holdings(date, positions, daily_dict)
-
-        # ═══════════════════════════════════════════════════════════════════════
-        # 3. 策略结束汇总
-        # ═══════════════════════════════════════════════════════════════════════
+        # ── 4. 回测绩效汇总与输出 ──
         rets = np.array(daily_returns)
         nav = np.array(nav_series)
 
@@ -660,7 +676,7 @@ class Evaluator:
         self._print_kv("最大回撤", f"{mdd:>+15.4%}", width=16)
         self._print_kv("年化波动", f"{ann_vol:>15.4%}", width=16)
         self._print_kv("平均换手", f"{avg_turnover:>15.4%}", width=16)
-        self.logger.info(f"{'═' * 72}")
+        self.logger.info("═" * 72)
 
         return {
             "ARR": ann_ret,
