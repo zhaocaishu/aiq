@@ -83,13 +83,15 @@ class MarketGate(nn.Module):
 
 
 class FusionBlock(nn.Module):
-    def __init__(self, d_model, dropout=0.1):
+    def __init__(self, d_in, d_model, dropout=0.1):
         super().__init__()
+        self.proj = nn.Linear(d_in, d_model) if d_in != d_model else nn.Identity()
         self.norm = nn.LayerNorm(d_model)
         self.mlp = MLP(hidden_size=d_model, intermediate_size=d_model * 2)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
+        x = self.proj(x)
         return x + self.dropout(self.mlp(self.norm(x)))
 
 
@@ -253,7 +255,7 @@ class PPNet(nn.Module):
         s_nhead,
         dropout,
         beta,
-        use_intraday=True,
+        use_intraday=False,
     ):
         super().__init__()
 
