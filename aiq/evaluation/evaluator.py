@@ -358,14 +358,19 @@ class Evaluator:
                 )
 
             current_holdings = list(positions.keys())
-            trade_direction_mask = None if forbid_all_trade_at_limit else Order.BUY
+
+            # ═════════════════════════════════════════════════════════════════
+            # 日交易市值统计（量化标准换手率计算基础）
+            # ═════════════════════════════════════════════════════════════════
+            daily_buy_value = 0.0
+            daily_sell_value = 0.0
 
             # ── 3.1 初始无仓位建仓 ──
             if not current_holdings:
                 buy_candidates = [
                     inst
                     for inst in daily_dict
-                    if _is_tradable(inst, trade_direction_mask)
+                    if _is_tradable(inst, None if forbid_all_trade_at_limit else Order.BUY)
                 ]
 
                 if method_buy == "top":
@@ -414,6 +419,9 @@ class Evaluator:
                             invest = shares * price
                             comm = max(invest * commission, min_commission)
 
+                        # ── 累计买入市值（换手率分子） ──
+                        daily_buy_value += invest
+
                         cash -= invest + comm
                         positions[inst] = shares
                         hold_start[inst] = date
@@ -429,13 +437,23 @@ class Evaluator:
                             indent=4,
                         )
 
-                    turnover_series.append(1.0)
-                    pos_val = sum(
-                        positions[s] * daily_dict[s]["Close"]
-                        for s in positions
-                        if s in daily_dict
+                    # ── 日终持仓市值与换手率（统一清算逻辑） ──
+                    position_value_after = 0.0
+                    for inst, shares in positions.items():
+                        if inst in daily_dict:
+                            p = daily_dict[inst]["Close"]
+                            position_value_after += shares * p
+                            prev_prices[inst] = p
+                        else:
+                            position_value_after += shares * prev_prices.get(inst, 0.0)
+
+                    turnover = (
+                        daily_buy_value / position_value_after
+                        if position_value_after > 0
+                        else 0.0
                     )
-                    nav_series.append(cash + pos_val)
+                    turnover_series.append(turnover)
+                    nav_series.append(cash + position_value_after)
                     self._log_daily_holdings(date, positions, daily_dict)
                 else:
                     turnover_series.append(0.0)
@@ -443,7 +461,6 @@ class Evaluator:
                 continue
 
             # ── 3.2 动态再平衡信号计算（TopK-Dropout 核心算法） ──
-            sell_mask = None if forbid_all_trade_at_limit else Order.SELL
 
             # 1. 当前持仓（含停牌）按分数降序排序，停牌股 Score 视为 -inf 排到末尾
             last_scores = sorted(
@@ -466,7 +483,7 @@ class Evaluator:
             # 2. 筛选外部非持仓可买入的标的候选池
             not_hold = [inst for inst in daily_dict if inst not in positions]
             tradable_not_hold = [
-                inst for inst in not_hold if _is_tradable(inst, trade_direction_mask)
+                inst for inst in not_hold if _is_tradable(inst, None if forbid_all_trade_at_limit else Order.BUY)
             ]
 
             if method_buy == "top":
@@ -517,7 +534,7 @@ class Evaluator:
                 )
                 if hold_days < hold_thresh:
                     continue
-                if not _is_tradable(inst, sell_mask):
+                if not _is_tradable(inst, None if forbid_all_trade_at_limit else Order.SELL):
                     continue
                 sell_queue.append(inst)
 
@@ -527,7 +544,7 @@ class Evaluator:
             buy_queue = [
                 inst
                 for inst in buy_candidates
-                if inst not in positions and _is_tradable(inst, trade_direction_mask)
+                if inst not in positions and _is_tradable(inst, None if forbid_all_trade_at_limit else Order.BUY)
             ]
 
             # ── 3.3 交易执行：卖出控制 ──
@@ -539,6 +556,9 @@ class Evaluator:
                 price = daily_dict[inst]["Close"]
                 shares = positions.pop(inst)
                 sell_value = shares * price
+
+                # ── 累计卖出市值（换手率分子） ──
+                daily_sell_value += sell_value
 
                 comm = max(sell_value * commission, min_commission)
                 tax = sell_value * stamp_tax
@@ -620,6 +640,9 @@ class Evaluator:
                         invest = shares * price
                         comm = max(invest * commission, min_commission)
 
+                    # ── 累计买入市值（换手率分子） ──
+                    daily_buy_value += invest
+
                     cash -= invest + comm
                     positions[inst] = shares
                     hold_start[inst] = date
@@ -652,7 +675,18 @@ class Evaluator:
                 daily_returns.append(total_after / nav_series[-1] - 1.0)
 
             nav_series.append(total_after)
-            turnover_series.append((sell_count + len(buy_queue)) / self.top_k)
+            
+            # ═════════════════════════════════════════════════════════════════
+            # 量化标准换手率：交易额 / 日终持仓总市值
+            # 完全换仓时 ≈ 2.0，初始建仓时 ≈ 1.0，无交易 = 0.0
+            # ═════════════════════════════════════════════════════════════════
+            total_trade_value = daily_buy_value + daily_sell_value
+            turnover = (
+                total_trade_value / position_value_after
+                if position_value_after > 0
+                else 0.0
+            )
+            turnover_series.append(turnover)
 
             self._log_daily_holdings(date, positions, daily_dict, prev_prices)
 
