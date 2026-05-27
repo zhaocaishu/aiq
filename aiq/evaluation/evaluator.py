@@ -51,36 +51,21 @@ class Evaluator:
         # 统一日志句柄：外部传入优先，否则新建
         self.logger = logger or logging.getLogger(__name__)
 
-    def _compute_forward_returns(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Compute forward 1D / 5D returns."""
-
-        adj_close = (
-            df["Close"] * df["Adj_factor"]
-            if "Adj_factor" in df.columns
-            else df["Close"]
-        )
-
-        ret_5d = Ref(adj_close, -5) / Ref(adj_close, -1) - 1
-
-        # Build core data dictionary
+    def _compute_bench_returns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Compute benchmark 5D returns."""
+        ret_5d = Ref(df["Close"], -5) / Ref(df["Close"], -1) - 1
         data = {
             self.date_col: df[self.date_col],
             self.instrument_col: df[self.instrument_col],
             self.label_col: ret_5d,
-            "Close": df["Close"],
         }
-
-        # Optional add trading limits if available
-        for col in [self.up_limit_col, self.down_limit_col]:
-            if col in df.columns:
-                data[col] = df[col]
 
         return pd.DataFrame(data)
 
     def _prepare_dataset(self, pred_df: pd.DataFrame) -> pd.DataFrame:
         """Align prediction / label / benchmark returns."""
 
-        # Load instruments
+        # Instruments
         instruments = (
             DataLoader.load_instruments(
                 self.data_dir, self.benchmark, self.start_time, self.end_time
@@ -92,33 +77,45 @@ class Evaluator:
         inst_features = DataLoader.load_instruments_features(
             self.data_dir, instruments, self.start_time, self.end_time
         )
-
-        inst_ret = (
-            inst_features.groupby(self.instrument_col, group_keys=False)
-            .apply(self._compute_forward_returns)
-            .dropna()
-        )
+        inst_features = inst_features[
+            [
+                self.date_col,
+                self.instrument_col,
+                self.up_limit_col,
+                self.down_limit_col,
+                "Close",
+            ]
+        ]
 
         # Benchmark
+        extended_end_time = (
+            pd.to_datetime(self.end_time) + pd.Timedelta(days=10)
+        ).strftime("%Y-%m-%d")
         bench_features = DataLoader.load_markets_features(
-            self.data_dir, [self.benchmark], self.start_time, self.end_time
+            self.data_dir, [self.benchmark], self.start_time, extended_end_time
         )
 
-        bench_ret = self._compute_forward_returns(bench_features).rename(
+        bench_ret = self._compute_bench_returns(bench_features).rename(
             columns={
                 self.label_col: "BENCH_RET_5D",
             }
         )[[self.date_col, "BENCH_RET_5D"]]
 
-        df = (
-            inst_ret.merge(
-                pred_df[[self.date_col, self.instrument_col, self.pred_col]],
-                on=[self.date_col, self.instrument_col],
-                how="inner",
-            )
-            .merge(bench_ret, on=self.date_col, how="inner")
-            .dropna()
-        )
+        df = inst_features.merge(
+            pred_df[
+                [self.date_col, self.instrument_col, self.pred_col, self.label_col]
+            ],
+            on=[self.date_col, self.instrument_col],
+            how="inner",
+        ).merge(bench_ret, on=self.date_col, how="inner")
+
+        assert set(df[self.date_col]) == set(
+            pred_df[self.date_col]
+        ), f"{self.date_col} mismatch"
+        assert set(df[self.instrument_col]) == set(
+            pred_df[self.instrument_col]
+        ), f"{self.instrument_col} mismatch"
+        assert not pred_df[self.pred_col].isna().any(), f"{self.pred_col} contains NaN"
 
         return df
 
@@ -448,12 +445,19 @@ class Evaluator:
             # ── 3.2 动态再平衡信号计算（TopK-Dropout 核心算法） ──
             sell_mask = None if forbid_all_trade_at_limit else Order.SELL
 
-            # 1. 过滤当前持仓中今日可卖出的股票，按分数降序排序
-            tradable_last = [
-                inst for inst in current_holdings if _is_tradable(inst, sell_mask)
-            ]
+            # 1. 当前持仓（含停牌）按分数降序排序，停牌股 Score 视为 -inf 排到末尾
             last_scores = sorted(
-                [(inst, daily_dict[inst]["Score"]) for inst in tradable_last],
+                [
+                    (
+                        inst,
+                        (
+                            daily_dict[inst]["Score"]
+                            if inst in daily_dict
+                            else float("-inf")
+                        ),
+                    )
+                    for inst in current_holdings
+                ],
                 key=lambda x: x[1],
                 reverse=True,
             )
