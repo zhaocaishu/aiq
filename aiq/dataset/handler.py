@@ -564,10 +564,6 @@ class MarketAlpha158(Alpha158):
         for window in windows:
             features.extend(
                 [
-                    close / Mean(close, window),
-                    close / Max(close, window) - 1,
-                    Slope(close, window) / close,
-                    Rsquare(close, window),
                     Mean(returns, window),
                     Std(returns, window),
                     amount / Mean(amount, window),
@@ -576,33 +572,12 @@ class MarketAlpha158(Alpha158):
             )
             feature_names.extend(
                 [
-                    f"CLOSE_MEAN_{window}D",
-                    f"CLOSE_MAX_{window}D",
-                    f"CLOSE_SLOPE_{window}D",
-                    f"CLOSE_RSQR_{window}D",
                     f"RETURN_MEAN_{window}D",
                     f"RETURN_STD_{window}D",
                     f"AMOUNT_MEAN_{window}D",
                     f"AMOUNT_STD_{window}D",
                 ]
             )
-
-        features.extend(
-            [
-                # Volatility regime
-                Std(returns, 5) / Std(returns, 20),
-                Std(returns, 10) / Std(returns, 60),
-                # Liquidity regime
-                EMA(amount, 5) / EMA(amount, 20),
-            ]
-        )
-        feature_names.extend(
-            [
-                "RETURN_STD_RATIO_5D_20D",
-                "RETURN_STD_RATIO_10D_60D",
-                "AMOUNT_EMA_RATIO_5D_20D",
-            ]
-        )
 
         # Concat features
         feature_df = pd.concat(
