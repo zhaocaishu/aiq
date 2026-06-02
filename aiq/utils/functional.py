@@ -144,8 +144,8 @@ def robust_zscore(
 
 
 def zscore(x, clip_min=-3.0, clip_max=3.0):
-    mean = x.mean(axis=0)
-    std = x.std(axis=0)
+    mean = np.nanmean(x, axis=0)
+    std  = np.nanstd(x, axis=0)
     return np.clip((x - mean) / (std + 1e-8), clip_min, clip_max)
 
 
