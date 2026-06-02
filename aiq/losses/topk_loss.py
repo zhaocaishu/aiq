@@ -43,6 +43,10 @@ class TopKLoss(nn.Module):
         logits = self._dftopk(preds, self.top_k, self.tau)
         labels = self._topk_label(targets.float(), self.top_k)
 
-        pos_weight = torch.tensor([(N - self.top_k) / self.top_k], device=preds.device)
-        loss = F.binary_cross_entropy_with_logits(logits, labels, pos_weight=pos_weight, reduction="mean")
+        pos_weight = torch.sqrt(
+            torch.tensor([(N - self.top_k) / self.top_k], device=preds.device)
+        )
+        loss = F.binary_cross_entropy_with_logits(
+            logits, labels, pos_weight=pos_weight, reduction="mean"
+        )
         return loss

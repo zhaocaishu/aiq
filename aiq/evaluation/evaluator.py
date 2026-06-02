@@ -370,7 +370,9 @@ class Evaluator:
                 buy_candidates = [
                     inst
                     for inst in daily_dict
-                    if _is_tradable(inst, None if forbid_all_trade_at_limit else Order.BUY)
+                    if _is_tradable(
+                        inst, None if forbid_all_trade_at_limit else Order.BUY
+                    )
                 ]
 
                 if method_buy == "top":
@@ -448,7 +450,7 @@ class Evaluator:
                             position_value_after += shares * prev_prices.get(inst, 0.0)
 
                     turnover = (
-                        daily_buy_value / position_value_after
+                        (daily_buy_value / 2) / position_value_after
                         if position_value_after > 0
                         else 0.0
                     )
@@ -483,7 +485,9 @@ class Evaluator:
             # 2. 筛选外部非持仓可买入的标的候选池
             not_hold = [inst for inst in daily_dict if inst not in positions]
             tradable_not_hold = [
-                inst for inst in not_hold if _is_tradable(inst, None if forbid_all_trade_at_limit else Order.BUY)
+                inst
+                for inst in not_hold
+                if _is_tradable(inst, None if forbid_all_trade_at_limit else Order.BUY)
             ]
 
             if method_buy == "top":
@@ -534,7 +538,9 @@ class Evaluator:
                 )
                 if hold_days < hold_thresh:
                     continue
-                if not _is_tradable(inst, None if forbid_all_trade_at_limit else Order.SELL):
+                if not _is_tradable(
+                    inst, None if forbid_all_trade_at_limit else Order.SELL
+                ):
                     continue
                 sell_queue.append(inst)
 
@@ -544,7 +550,8 @@ class Evaluator:
             buy_queue = [
                 inst
                 for inst in buy_candidates
-                if inst not in positions and _is_tradable(inst, None if forbid_all_trade_at_limit else Order.BUY)
+                if inst not in positions
+                and _is_tradable(inst, None if forbid_all_trade_at_limit else Order.BUY)
             ]
 
             # ── 3.3 交易执行：卖出控制 ──
@@ -675,14 +682,13 @@ class Evaluator:
                 daily_returns.append(total_after / nav_series[-1] - 1.0)
 
             nav_series.append(total_after)
-            
+
             # ═════════════════════════════════════════════════════════════════
-            # 量化标准换手率：交易额 / 日终持仓总市值
-            # 完全换仓时 ≈ 2.0，初始建仓时 ≈ 1.0，无交易 = 0.0
+            # 单边换手率
             # ═════════════════════════════════════════════════════════════════
             total_trade_value = daily_buy_value + daily_sell_value
             turnover = (
-                total_trade_value / position_value_after
+                (total_trade_value / 2) / position_value_after
                 if position_value_after > 0
                 else 0.0
             )
@@ -713,7 +719,7 @@ class Evaluator:
         self._print_kv("夏普比率", f"{sharpe:>15.4f}", width=16)
         self._print_kv("最大回撤", f"{mdd:>+15.4%}", width=16)
         self._print_kv("年化波动", f"{ann_vol:>15.4%}", width=16)
-        self._print_kv("平均换手", f"{avg_turnover:>15.4%}", width=16)
+        self._print_kv("平均换手(单边)", f"{avg_turnover:>15.4%}", width=16)
         self.logger.info("═" * 72)
 
         return {
@@ -731,7 +737,7 @@ class Evaluator:
         # IC
         daily_ic = self._compute_daily_ic(df).dropna()
         ic = daily_ic.mean()
-        icir = ic / daily_ic.std() if daily_ic.std() != 0 else np.nan
+        icir = (ic / daily_ic.std()) * np.sqrt(252 / 5) if daily_ic.std() != 0 else np.nan
 
         # Hit Rate
         daily_hr = pd.DataFrame(
