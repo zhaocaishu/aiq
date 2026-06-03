@@ -130,21 +130,15 @@ class Evaluator:
         top_pred = set(group.nlargest(k, self.pred_col)[self.instrument_col])
         top_true = set(group.nlargest(k, self.label_col)[self.instrument_col])
 
-        bottom_pred = set(group.nsmallest(k, self.pred_col)[self.instrument_col])
-        bottom_true = set(group.nsmallest(k, self.label_col)[self.instrument_col])
+        return {f"HitRate@Top{k}": len(top_pred & top_true) / k}
 
-        return {
-            f"HR@Top{k}": len(top_pred & top_true) / k,
-            f"HR@Bottom{k}": len(bottom_pred & bottom_true) / k,
-        }
-
-    def _compute_precision_at_k(self, group: pd.DataFrame) -> dict:
+    def _compute_win_rate(self, group: pd.DataFrame) -> dict:
         k = self.top_k
         top_pred = group.nlargest(k, self.pred_col)
 
-        precision = (top_pred[self.label_col] > top_pred["BENCH_RET_5D"]).mean()
+        win_rate = (top_pred[self.label_col] > top_pred["BENCH_RET_5D"]).mean()
 
-        return {f"Precision@{k}": precision}
+        return {f"WinRate@Top{k}": win_rate}
 
     # ═══════════════════════════════════════════════════════════════════════════════
     # 日志格式化工具（全部通过 self.logger.info 输出）
@@ -734,10 +728,12 @@ class Evaluator:
 
         df = self._prepare_dataset(pred_df)
 
-        # IC
+        # IC & ICIR
         daily_ic = self._compute_daily_ic(df).dropna()
         ic = daily_ic.mean()
-        icir = (ic / daily_ic.std()) * np.sqrt(252 / 5) if daily_ic.std() != 0 else np.nan
+        icir = (
+            (ic / daily_ic.std()) * np.sqrt(252 / 5) if daily_ic.std() != 0 else np.nan
+        )
 
         # Hit Rate
         daily_hr = pd.DataFrame(
@@ -745,11 +741,11 @@ class Evaluator:
         )
         hr_stats = daily_hr.mean().to_dict()
 
-        # Precision
-        daily_prec = pd.DataFrame(
-            df.groupby(self.date_col).apply(self._compute_precision_at_k).tolist()
+        # Win Rate
+        daily_wr = pd.DataFrame(
+            df.groupby(self.date_col).apply(self._compute_win_rate).tolist()
         )
-        prec_stats = daily_prec.mean().to_dict()
+        wr_stats = daily_wr.mean().to_dict()
 
         # Portfolio
         portfolio_stats = self._run_topk_dropout_portfolio(df)
@@ -761,7 +757,7 @@ class Evaluator:
             "IC": ic,
             "ICIR": icir,
             **hr_stats,
-            **prec_stats,
+            **wr_stats,
             **portfolio_stats,
         }
 
