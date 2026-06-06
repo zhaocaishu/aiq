@@ -11,13 +11,10 @@ class MarginRankingLoss(nn.Module):
     than those with lower returns, maintaining at least a specified margin.
     """
 
-    def __init__(
-        self, margin: float = 0.1, epsilon: float = 1e-3, weighted: bool = False
-    ):
+    def __init__(self, margin: float = 0.1, epsilon: float = 1e-3):
         super().__init__()
         self.margin = margin
         self.epsilon = epsilon
-        self.weighted = weighted
 
     def forward(self, preds: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         """
@@ -47,24 +44,6 @@ class MarginRankingLoss(nn.Module):
         y = torch.where(diff_r > 0, 1.0, -1.0)
         diff_s = preds.unsqueeze(1) - preds.unsqueeze(0)
 
-        base_loss = torch.relu(self.margin - y * diff_s)
-
-        if self.weighted:
-            # rank-based weight (rank-based, non-linear)
-            _, order = targets.sort(descending=True)
-            ranks = torch.empty_like(order)
-            ranks[order] = torch.arange(1, N + 1, device=targets.device)
-
-            ri = ranks.unsqueeze(1).float()
-            rj = ranks.unsqueeze(0).float()
-
-            weight = torch.abs(
-                1.0 / torch.log2(ri + 1.0) - 1.0 / torch.log2(rj + 1.0)
-            )
-
-            # weighted loss
-            loss = base_loss * weight
-        else:
-            loss = base_loss
+        loss = torch.relu(self.margin - y * diff_s)
 
         return loss[mask].mean()
