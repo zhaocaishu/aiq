@@ -145,13 +145,13 @@ def robust_zscore(
 
 def zscore(x, clip_min=-3.0, clip_max=3.0):
     mean = np.nanmean(x, axis=0)
-    std  = np.nanstd(x, axis=0)
+    std = np.nanstd(x, axis=0)
     return np.clip((x - mean) / (std + 1e-8), clip_min, clip_max)
 
 
 def neutralize(
     df: pd.DataFrame,
-    industry_col: str,
+    industry_col: str = None,
     cap_col: str = None,
     factor_cols: List[str] = [],
 ) -> pd.DataFrame:
@@ -168,6 +168,13 @@ def neutralize(
     Returns:
     - The same DataFrame, but with each matched factor column replaced by its regression residuals.
     """
+    # If no factor columns are provided, return the original DataFrame
+    if not factor_cols:
+        return df.copy()
+
+    if industry_col is None and cap_col is None:
+        return df.copy()
+
     # Extract the “feature” sub‑DataFrame
     res_df = df.copy()
     feats = res_df["feature"]
@@ -179,14 +186,18 @@ def neutralize(
     ]
 
     # Create design matrix: industry dummies + cap + constant
-    industry_dummies = pd.get_dummies(
-        feats[industry_col].astype("category"), prefix="IND", drop_first=True
-    )
+    X_parts = []
+    if industry_col is not None:
+        industry_dummies = pd.get_dummies(
+            feats[industry_col].astype("category"), prefix="IND", drop_first=True
+        )
+        X_parts.append(industry_dummies)
+
     if cap_col is not None:
         cap_series = feats[[cap_col]].astype(float)
-        X = pd.concat([industry_dummies, cap_series], axis=1)
-    else:
-        X = industry_dummies
+        X_parts.append(cap_series)
+
+    X = pd.concat(X_parts, axis=1)
     X["CONST"] = 1.0
 
     # Initialize linear regression (no intercept, since CONST is included)

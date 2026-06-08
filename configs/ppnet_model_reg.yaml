@@ -19,23 +19,27 @@ data_handler:
         module_path: aiq.dataset.processor
         kwargs:
           industry_col: "IND_CLS_L1"
-          cap_col: "FUND_CAP"
           factor_cols:
             - "FUND_EP"
             - "FUND_BP"
             - "FUND_SP"
-            - "CS_ROC(?:5|10|20|30|60)$"
-            - "CS_MA(?:5|10|20|30|60)$"
-            - "CS_BETA(?:5|10|20|30|60)$"
-            - "CS_RESI(?:5|10|20|30|60)$"
-            - "CS_RSV(?:5|10|20|30|60)$"
+      - class: CSNeutralize
+        module_path: aiq.dataset.processor
+        kwargs:
+          cap_col: "FUND_CAP"
+          factor_cols:
+            - "CS_MFD_LARGE_AMT_RATIO"
+      - class: CSNeutralize
+        module_path: aiq.dataset.processor
+        kwargs:
+          industry_col: "IND_CLS_L1"
+          cap_col: "FUND_CAP"
+          factor_cols:
             - "CS_STD(?:5|10|20|30|60)$"
-            - "CS_VMA(?:5|10|20|30|60)$"
             - "CS_VSTD(?:5|10|20|30|60)$"
+            - "CS_VMA(?:5|10|20|30|60)$"
             - "CS_WVMA(?:5|10|20|30|60)$"
             - "CS_TURN_(?:MA|STD)(?:5|10|20|30|60)$"
-            - "CS_MFD_INFLOW_VOL_RATIO"
-            - "CS_MFD_LARGE_AMT_RATIO"
       - class: Dropna
         module_path: aiq.dataset.processor
         kwargs:
