@@ -78,29 +78,20 @@ class Dropna(Processor):
 
 
 class Fillna(Processor):
-    """Process NaN"""
+    """Process NaN values by filling with a constant."""
 
     def __init__(self, fields_group=None, fill_value=0):
         self.fields_group = fields_group
         self.fill_value = fill_value
 
     def __call__(self, df):
-        if self.fields_group is None:
-            df.fillna(self.fill_value, inplace=True)
-        else:
-            cols = get_group_columns(df, self.fields_group)
-
-            # So we use numpy to accelerate filling values
-            nan_select = np.isnan(df.values)
-            nan_select[:, ~df.columns.isin(cols)] = False
-
-            # FIXME: For pandas==2.0.3, the following code will not set the nan value to be self.fill_value
-            # df.values[nan_select] = self.fill_value
-
-            # lqa's method
-            value_tmp = df.values
-            value_tmp[nan_select] = self.fill_value
-            df = pd.DataFrame(value_tmp, columns=df.columns, index=df.index)
+        cols = (
+            get_group_columns(df, self.fields_group)
+            if self.fields_group
+            else df.columns
+        )
+        if len(cols) > 0:
+            df[cols] = df[cols].fillna(self.fill_value)
         return df
 
 
@@ -216,9 +207,11 @@ class DropExtremeLabel(Processor):
 
     def __call__(self, df: pd.DataFrame) -> pd.DataFrame:
         cols = get_group_columns(df, self.fields_group)
-        # Compute per-date lower and upper quantiles for each column
+
+        # Start with an all-True mask
+        mask = pd.Series(True, index=df.index)
         for col in cols:
-            # vectorized quantile computation via groupby-transform
+            # Compute per-date quantiles on the ORIGINAL data
             lower = (
                 df[col]
                 .groupby(level="Date", group_keys=False)
@@ -229,9 +222,11 @@ class DropExtremeLabel(Processor):
                 .groupby(level="Date", group_keys=False)
                 .transform(lambda x: x.quantile(1 - self.percent))
             )
-            # Keep only rows within [lower, upper]
-            df = df[df[col].between(lower, upper)]
-        return df
+            # Combine conditions: row must be within bounds for this column
+            mask &= df[col].between(lower, upper)
+
+        # Apply the final mask once
+        return df[mask]
 
     def is_for_infer(self) -> bool:
         return False

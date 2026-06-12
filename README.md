@@ -25,6 +25,7 @@ pip3 install .
     python3 tools/train.py \
         --cfg_file ./configs/xgboost_model_reg.yaml \
         --data_dir ./data \
+        --seeds 1234 2024 3407 \
         --save_dir ./output
     ```
 
@@ -33,5 +34,7 @@ pip3 install .
     python3 tools/eval.py \
         --cfg_file ./configs/xgboost_model_reg.yaml \
         --data_dir ./data \
+        --split test \
+        --model_names model_seed_1234.pth  model_seed_2024.pth  model_seed_3407.pth \
         --save_dir ./output
     ```

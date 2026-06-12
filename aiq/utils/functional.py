@@ -175,26 +175,27 @@ def neutralize(
     if industry_col is None and cap_col is None:
         return df.copy()
 
-    # Extract the “feature” sub‑DataFrame
     res_df = df.copy()
-    feats = res_df["feature"]
+
+    # Extract the “feature” sub‑DataFrame
+    features = res_df["feature"]
 
     # Build a combined regex to match all requested factor columns
     combined_pattern = "|".join(f"({pat})" for pat in factor_cols)
     actual_factors = [
-        col for col in feats.columns if re.search(combined_pattern, str(col))
+        col for col in features.columns if re.search(combined_pattern, str(col))
     ]
 
     # Create design matrix: industry dummies + cap + constant
     X_parts = []
     if industry_col is not None:
         industry_dummies = pd.get_dummies(
-            feats[industry_col].astype("category"), prefix="IND", drop_first=True
+            features[industry_col].astype("category"), prefix="IND", drop_first=True
         )
         X_parts.append(industry_dummies)
 
     if cap_col is not None:
-        cap_series = feats[[cap_col]].astype(float)
+        cap_series = features[[cap_col]].astype(float)
         X_parts.append(cap_series)
 
     X = pd.concat(X_parts, axis=1)
@@ -205,7 +206,7 @@ def neutralize(
 
     # Loop through each factor, fit on non‑missing rows, and store residuals
     for factor in actual_factors:
-        y = feats[factor].astype(float)
+        y = features[factor].astype(float)
 
         valid_mask = y.notna()
         if not valid_mask.any():
