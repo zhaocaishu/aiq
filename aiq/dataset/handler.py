@@ -111,16 +111,18 @@ class Alpha158(DataHandler):
         bp = (1.0 / df["Pb"].replace(0, np.nan)).fillna(0)
         sp = (1.0 / df["Ps_ttm"].replace(0, np.nan)).fillna(0)
 
+        # volume & amount
+        volume = df["Volume"] * 100  # 股
+        amount = df["AMount"] * 1000  # 元
+        vwap = amount / (volume + 1e-12)
+
         # adjusted prices
         adj_factor = df["Adj_factor"]
         open = df["Open"] * adj_factor
         close = df["Close"] * adj_factor
         high = df["High"] * adj_factor
         low = df["Low"] * adj_factor
-
-        # volume & amount
-        volume = df["Volume"]
-        amount = df["AMount"]
+        vwap = vwap * adj_factor
 
         # turnover rate
         turn = df["Turnover_rate_f"]
@@ -137,14 +139,8 @@ class Alpha158(DataHandler):
             ep,
             bp,
             sp,
-            open,
-            high,
-            low,
-            close,
-            volume,
-            amount,
+            Log(volume + 1.0),
             (high - low) / open,
-            (open - Ref(close, 1)) / Ref(close, 1),
             (close - open) / open,
             (close - open) / ((high - low) + 1e-12),
             (high - Greater(open, close)) / open,
@@ -153,8 +149,10 @@ class Alpha158(DataHandler):
             (Less(open, close) - low) / ((high - low) + 1e-12),
             (2 * close - high - low) / open,
             (2 * close - high - low) / ((high - low) + 1e-12),
-            (high - close) / close,
-            (low - close) / close,
+            open / close,
+            high / close,
+            low / close,
+            vwap / close,
             mfd_inflow_vol_ratio,
             mfd_large_amount_ratio,
         ]
@@ -165,26 +163,22 @@ class Alpha158(DataHandler):
             "FUND_EP",
             "FUND_BP",
             "FUND_SP",
-            "TS_OPEN",
-            "TS_HIGH",
-            "TS_LOW",
-            "TS_CLOSE",
             "TS_VOLUME",
-            "TS_AMOUNT",
-            "CS_KLEN",
-            "CS_KGAP",
-            "CS_KMID1",
-            "CS_KMID2",
-            "CS_KUP1",
-            "CS_KUP2",
-            "CS_KLOW1",
-            "CS_KLOW2",
-            "CS_KSFT1",
-            "CS_KSFT2",
-            "CS_HIGH0",
-            "CS_LOW0",
-            "CS_MFD_INFLOW_VOL_RATIO",
-            "CS_MFD_LARGE_AMT_RATIO",
+            "TS_KLEN",
+            "TS_KMID1",
+            "TS_KMID2",
+            "TS_KUP1",
+            "TS_KUP2",
+            "TS_KLOW1",
+            "TS_KLOW2",
+            "TS_KSFT1",
+            "TS_KSFT2",
+            "TS_OPEN0",
+            "TS_HIGH0",
+            "TS_LOW0",
+            "TS_VWAP0",
+            "TS_MFD_INFLOW_VOL_RATIO",
+            "TS_MFD_LARGE_AMT_RATIO",
         ]
 
         # rolling

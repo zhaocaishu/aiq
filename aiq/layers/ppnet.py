@@ -6,14 +6,33 @@ from torch import nn
 from .embed import DataEmbedding
 
 
-class AttnPooling(nn.Module):
+class TemporalAttention(nn.Module):
     def __init__(self, d_model):
         super().__init__()
-        self.score = nn.Linear(d_model, 1)
+        # 分离 Query 和 Key/Value 的映射空间
+        self.q_trans = nn.Linear(d_model, d_model, bias=False)
+        self.k_trans = nn.Linear(d_model, d_model, bias=False)
+        self.scale = math.sqrt(d_model)
 
-    def forward(self, x):
-        w = torch.softmax(self.score(x), dim=1)
-        return torch.sum(w * x, dim=1)
+    def forward(self, z):
+        # z shape: [N, T, D]
+
+        # 1. 提取最后一天作为 Query，并映射到 Q 空间
+        last_day_feat = z[:, -1, :]  # [N, D]
+        query = self.q_trans(last_day_feat).unsqueeze(-1)  # [N, D, 1]
+
+        # 2. 将整个历史序列映射到 K 空间
+        keys = self.k_trans(z)  # [N, T, D]
+
+        # 3. 计算注意力得分，并加入缩放因子防梯度消失
+        scores = torch.matmul(keys, query).squeeze(-1)  # [N, T]
+        scores = scores / self.scale  # 关键缩放！
+
+        # 4. 归一化并加权求和
+        lam = torch.softmax(scores, dim=1).unsqueeze(1)  # [N, 1, T]
+        output = torch.matmul(lam, z).squeeze(1)  # [N, D]
+
+        return output
 
 
 class CrossAttention(nn.Module):
@@ -165,36 +184,7 @@ class SAttention(nn.Module):
         self.input_layernorm = nn.LayerNorm(d_model, eps=1e-5)
         self.post_attention_layernorm = nn.LayerNorm(d_model, eps=1e-5)
 
-        self.alpha = nn.Parameter(torch.tensor(1.0))
-
-    @staticmethod
-    def _build_industry_bias(
-        industry_ids: torch.Tensor,
-        delta1: float = 0.65,
-        delta2: float = 0.2,
-    ) -> torch.Tensor:
-        """
-        Faster vectorized version.
-
-        industry_ids: (N, 2)
-        return: (N, N)
-        """
-        l1 = industry_ids[:, 0]
-        l2 = industry_ids[:, 1]
-
-        l2_eq = l2[:, None] == l2[None, :]
-        l1_eq = l1[:, None] == l1[None, :]
-
-        # 直接 where，避免 scatter assignment
-        bias = torch.where(
-            l2_eq,
-            1.0,
-            torch.where(l1_eq, delta1, delta2),
-        )
-
-        return bias.float()
-
-    def forward(self, x, industry_ids):
+    def forward(self, x):
         """
         x: (N, D)
         """
@@ -212,15 +202,9 @@ class SAttention(nn.Module):
         k = k.view(-1, self.nhead, self.head_dim).transpose(0, 1)
         v = v.view(-1, self.nhead, self.head_dim).transpose(0, 1)
 
-        # (N, N)
-        industry_bias = self._build_industry_bias(industry_ids)
-
         # (H, N, N)
         attn_logits = torch.matmul(q, k.transpose(-1, -2))
         attn_logits *= self.scale
-
-        # broadcast
-        attn_logits += self.alpha * industry_bias.unsqueeze(0)
 
         attn_weights = torch.softmax(attn_logits, dim=-1)
         attn_weights = self.attn_dropout(attn_weights)
@@ -281,7 +265,7 @@ class PPNet(nn.Module):
                 for _ in range(2)
             ]
         )
-        self.temporal_pool = AttnPooling(self.d_temporal_hidden)
+        self.temporal_attn = TemporalAttention(self.d_temporal_hidden)
 
         # Temporal Encoder (Intra-stock) for intraday data
         if self.use_intraday:
@@ -312,7 +296,7 @@ class PPNet(nn.Module):
             dropout=dropout,
         )
 
-        # Spatial Encoder (Inter-stock / Industry-aware)
+        # Spatial Encoder (Inter-stock)
         self.spatial_encoder = SAttention(
             d_model=d_model,
             d_emb=d_emb,
@@ -325,17 +309,17 @@ class PPNet(nn.Module):
 
     def forward(
         self,
-        stock_industry_ids,
         stock_ts_features,
-        stock_intraday_ts_features=None,
-        stock_cs_features=None,
+        stock_cs_features,
+        market_state_features,
+        stock_industry_ids=None,
         stock_fund_features=None,
-        market_state_features=None,
+        stock_intraday_ts_features=None,
     ):
         # Intra-Stock Temporal Modeling (Daily)
         stock_temporal_embeds = self.data_embedding(stock_ts_features)
         stock_temporal_states = self.temporal_layers(stock_temporal_embeds)
-        stock_temporal_features = self.temporal_pool(stock_temporal_states)
+        stock_temporal_features = self.temporal_attn(stock_temporal_states)
 
         # Intra-Stock Temporal Modeling (Intraday)
         if self.use_intraday:
@@ -379,7 +363,7 @@ class PPNet(nn.Module):
         fused_states = self.fusion_block(stock_features)
 
         # Industry-aware Inter-Stock Attention
-        spatial_states = self.spatial_encoder(fused_states, stock_industry_ids)
+        spatial_states = self.spatial_encoder(fused_states)
 
         # Final Prediction on Spatial Representations
         predictions = self.prediction_head(spatial_states)

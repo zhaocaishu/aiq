@@ -38,11 +38,11 @@ if __name__ == "__main__":
         "cuda" if torch.cuda.is_available() else "cpu"
     )
     output = model.model(
-        dummy_industry_ids,
         dummy_stock_ts_features,
-        dummy_stock_intraday_ts_features,
         dummy_stock_cs_features,
-        dummy_stock_fund_features,
         dummy_market_features,
+        dummy_industry_ids,
+        dummy_stock_fund_features,
+        dummy_stock_intraday_ts_features,
     )
     logger.info(output)

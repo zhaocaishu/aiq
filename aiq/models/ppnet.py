@@ -208,12 +208,12 @@ class PPNetModel(BaseModel):
 
                 optimizer.zero_grad()
                 outputs = self.model(
-                    batch_industry_ids,
                     batch_ts_features,
-                    batch_intraday_ts_features,
                     batch_cs_features,
-                    batch_fund_features,
                     batch_market_features,
+                    batch_industry_ids,
+                    batch_fund_features,
+                    batch_intraday_ts_features
                 )
                 loss = self.criterion(outputs, batch_labels)
                 loss.backward()
@@ -308,12 +308,12 @@ class PPNetModel(BaseModel):
 
             with torch.no_grad():
                 outputs = self.model(
-                    batch_industry_ids,
                     batch_ts_features,
-                    batch_intraday_ts_features,
                     batch_cs_features,
-                    batch_fund_features,
                     batch_market_features,
+                    batch_industry_ids,
+                    batch_fund_features,
+                    batch_intraday_ts_features,
                 )
 
                 loss = self.criterion(outputs, batch_labels)
@@ -346,12 +346,12 @@ class PPNetModel(BaseModel):
 
             with torch.no_grad():
                 outputs = self.model(
-                    batch_industry_ids,
                     batch_ts_features,
-                    batch_intraday_ts_features,
                     batch_cs_features,
-                    batch_fund_features,
                     batch_market_features,
+                    batch_industry_ids,
+                    batch_fund_features,
+                    batch_intraday_ts_features,
                 )
 
             indices.append(batch_sample_indices.squeeze(0).numpy())
