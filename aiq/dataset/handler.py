@@ -26,6 +26,7 @@ from aiq.ops import (
     EMA,
 )
 from aiq.utils.module import init_instance_by_config
+from aiq.utils.functional import neutralize
 
 from .loader import DataLoader
 from .processor import Processor
@@ -100,7 +101,7 @@ class Alpha158(DataHandler):
             processors,
         )
         self.feature_names = []
-        self.label_names = ["RET_5D"]
+        self.label_names = ["RET_5D", "RET_5D_NEU"]
 
     def extract_instrument_features(self, df):
         # fundamental data
@@ -112,8 +113,8 @@ class Alpha158(DataHandler):
         sp = (1.0 / df["Ps_ttm"].replace(0, np.nan)).fillna(0)
 
         # volume & amount
-        volume = df["Volume"] * 100  # 股
-        amount = df["AMount"] * 1000  # 元
+        volume = df["Volume"] * 100     # 股
+        amount = df["AMount"] * 1000    # 元
         vwap = amount / (volume + 1e-12)
 
         # adjusted prices
@@ -450,9 +451,13 @@ class Alpha158(DataHandler):
         return feature_df
 
     def extract_instrument_labels(self, df):
-        # 计算复权价格及目标收益率
+        # 1. 计算复权价格及原始目标收益率
         adj_close = df["Close"] * df["Adj_factor"]
-        labels = [Ref(adj_close, -5) / Ref(adj_close, -1) - 1]
+        ret_5d = Ref(adj_close, -5) / Ref(adj_close, -1) - 1
+
+        # 2. 构建标签基础表
+        label_df = df[["Instrument", "Date"]].copy()
+        label_df["RET_5D"] = ret_5d.astype("float32")
 
         return df[["Instrument", "Date"]].assign(
             **{

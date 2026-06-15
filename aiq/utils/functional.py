@@ -154,6 +154,7 @@ def neutralize(
     industry_col: str = None,
     cap_col: str = None,
     factor_cols: List[str] = [],
+    add_suffix: bool = False,
 ) -> pd.DataFrame:
     """
     Neutralize specified factor columns by regressing out industry and market cap effects.
@@ -164,9 +165,11 @@ def neutralize(
     - industry_col: Name of the column under “feature” that holds industry categories.
     - cap_col: Name of the column under “feature” that holds market capitalization values.
     - factor_cols: List of regex patterns (as strings) to select which factor columns to neutralize.
+    - add_suffix: If True, keep original columns and add new columns with "_NEU" suffix.
+                  If False, replace original columns with residuals (default).
 
     Returns:
-    - The same DataFrame, but with each matched factor column replaced by its regression residuals.
+    - The same DataFrame, but with each matched factor column replaced by its regression residuals, or with new "_NEU" columns added if add_suffix=True.
     """
     # If no factor columns are provided, return the original DataFrame
     if not factor_cols:
@@ -210,7 +213,7 @@ def neutralize(
 
         valid_mask = y.notna()
         if not valid_mask.any():
-            # skip if all values are missing
+            # Skip if all values are missing
             continue
 
         # Fit on rows where y is present
@@ -220,8 +223,14 @@ def neutralize(
         model.fit(X_sub, y_sub)
         residuals = y_sub - model.predict(X_sub)
 
-        # Write residuals back into the original DataFrame
-        res_df.loc[valid_mask, ("feature", factor)] = residuals.astype("float32")
+        # Write residuals back
+        if add_suffix:
+            # 保留原始列，新增 _NEU 后缀列
+            neu_col = f"{factor}_NEU"
+            res_df.loc[valid_mask, ("feature", neu_col)] = residuals.astype("float32")
+        else:
+            # 直接替换原始列
+            res_df.loc[valid_mask, ("feature", factor)] = residuals.astype("float32")
 
     return res_df
 
