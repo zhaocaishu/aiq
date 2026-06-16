@@ -21,7 +21,7 @@ if __name__ == "__main__":
         seq_len=8,
         minute_seq_len=4,
         feature_names=data_handler.feature_names,
-        label_names=["RET_5D"],
+        label_names=["RET_5D", "RET_5D_NEU"],
         mode="train",
     )
 
@@ -34,5 +34,5 @@ if __name__ == "__main__":
         data_dict["stock_cs_features"].shape,
         data_dict["stock_fund_features"].shape,
         data_dict["market_state_features"].shape,
-        data_dict["labels"].shape,
+        data_dict["labels"].shape
     )

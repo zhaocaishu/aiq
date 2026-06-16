@@ -31,6 +31,7 @@ data_handler:
             - "CS_TURN_(?:MA|STD)(?:5|10|20|30|60)$"
             - "CS_MFD_INFLOW_VOL_RATIO"
             - "CS_MFD_LARGE_AMT_RATIO"
+            - "RET_5D_NEU"
       - class: Dropna
         module_path: aiq.dataset.processor
         kwargs:
@@ -56,7 +57,7 @@ dataset:
       test: ["2023-01-01", "2023-06-30"]
     seq_len: 20
     minute_seq_len: 5
-    label_names: ["RET_5D"]
+    label_names: ["RET_5D", "RET_5D_NEU"]
     use_augmentation: false
 model:
   class: PPNetModel
@@ -72,6 +73,7 @@ model:
     s_nhead: 2
     dropout: 0.5
     beta: 3.0
+    num_labels: 2
     epochs: 100
     batch_size: 1
     warmup_steps: 500

@@ -239,6 +239,7 @@ class PPNet(nn.Module):
         s_nhead,
         dropout,
         beta,
+        num_labels,
         use_intraday=False,
     ):
         super().__init__()
@@ -305,7 +306,7 @@ class PPNet(nn.Module):
         )
 
         # Prediction head
-        self.prediction_head = nn.Linear(d_model, 1, bias=False)
+        self.prediction_head = nn.Linear(d_model, num_labels, bias=False)
 
     def forward(
         self,

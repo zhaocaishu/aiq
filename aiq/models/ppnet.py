@@ -30,6 +30,7 @@ class PPNetModel(BaseModel):
         s_nhead=2,
         dropout=0.5,
         beta=5.0,
+        num_labels=1,
         epochs=50,
         batch_size=1,
         warmup_steps=500,
@@ -38,11 +39,13 @@ class PPNetModel(BaseModel):
         learning_rate=0.001,
         criterion_name="MSE",
         early_stopping_patience=5,
+        label_weights=None,
         pretrained=None,
         save_dir=None,
         logger=None,
     ):
         # input args
+        self.num_labels = num_labels
         self.feature_names = feature_names
         self.label_names = label_names
         self.epochs = epochs
@@ -54,6 +57,17 @@ class PPNetModel(BaseModel):
         self.criterion_name = criterion_name
         self.early_stopping_patience = early_stopping_patience
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+        # label weights
+        if label_weights is None:
+            self.label_weights = torch.ones(num_labels, device=self.device)
+        else:
+            self.label_weights = torch.tensor(
+                label_weights, dtype=torch.float, device=self.device
+            )
+            assert (
+                len(self.label_weights) == num_labels
+            ), "label_weights 长度必须等于 num_labels"
 
         # model
         self.model = PPNet(
@@ -68,6 +82,7 @@ class PPNetModel(BaseModel):
             s_nhead=s_nhead,
             dropout=dropout,
             beta=beta,
+            num_labels=num_labels,
         )
 
         if pretrained is not None:
@@ -213,9 +228,13 @@ class PPNetModel(BaseModel):
                     batch_market_features,
                     batch_industry_ids,
                     batch_fund_features,
-                    batch_intraday_ts_features
+                    batch_intraday_ts_features,
                 )
-                loss = self.criterion(outputs, batch_labels)
+                loss = 0.0
+                for i in range(self.num_labels):
+                    loss += self.label_weights[i] * self.criterion(
+                        outputs[:, i], batch_labels[:, i]
+                    )
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), 3.0)
                 optimizer.step()

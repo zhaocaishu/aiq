@@ -12,7 +12,6 @@ from aiq.utils.functional import (
     robust_zscore,
     ts_robust_zscore,
     ts_ohlcv_normalize,
-    drop_extreme_label,
 )
 
 
@@ -245,14 +244,6 @@ class TSDataset(Dataset):
         # Append ground truth labels if in training/validation mode
         if self._labels is not None:
             labels = np.array([self._labels[sl.stop - 1] for sl in ts_slices])
-
-            if self.mode == "train":
-                mask, filtered_labels = drop_extreme_label(labels)
-
-                labels = filtered_labels
-                features = features[mask]
-                sample_indices = sample_indices[mask]
-                ts_slices = [s for s, m in zip(ts_slices, mask) if m]
         else:
             labels = None
 
