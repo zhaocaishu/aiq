@@ -87,7 +87,7 @@ class PPNetModel(BaseModel):
 
         if pretrained is not None:
             try:
-                state_dict = torch.load(pretrained)
+                state_dict = torch.load(pretrained, map_location=self.device)
                 self.model.load_state_dict(state_dict)
             except Exception as e:
                 print(f"Error loading pretrained weights from {pretrained}: {e}")
@@ -230,11 +230,13 @@ class PPNetModel(BaseModel):
                     batch_fund_features,
                     batch_intraday_ts_features,
                 )
+                
                 loss = 0.0
-                for i in range(self.num_labels):
-                    loss += self.label_weights[i] * self.criterion(
-                        outputs[:, i], batch_labels[:, i]
+                for label_idx in range(self.num_labels):
+                    loss += self.label_weights[label_idx] * self.criterion(
+                        outputs[:, label_idx], batch_labels[:, label_idx]
                     )
+                
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), 3.0)
                 optimizer.step()
@@ -335,7 +337,11 @@ class PPNetModel(BaseModel):
                     batch_intraday_ts_features,
                 )
 
-                loss = self.criterion(outputs, batch_labels)
+                loss = 0.0
+                for label_idx in range(self.num_labels):
+                    loss += self.label_weights[label_idx] * self.criterion(
+                        outputs[:, label_idx], batch_labels[:, label_idx]
+                    )
 
             total_losses.append(loss.item())
 
@@ -374,12 +380,12 @@ class PPNetModel(BaseModel):
                 )
 
             indices.append(batch_sample_indices.squeeze(0).numpy())
-            preds.append(outputs.cpu().numpy())
+            preds.append(outputs[:, :1].cpu().numpy())
 
         indices = np.concatenate(indices, axis=0)
         preds = np.concatenate(preds, axis=0)
 
-        label_names = test_dataset.label_names
+        label_names = test_dataset.label_names[:1]
         pred_df = test_dataset.data.iloc[indices].copy()
         pred_df[[f"PRED_{name}" for name in label_names]] = preds
         return pred_df

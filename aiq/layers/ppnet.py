@@ -306,7 +306,7 @@ class PPNet(nn.Module):
         )
 
         # Prediction head
-        self.prediction_head = nn.Linear(d_model, num_labels, bias=False)
+        self.prediction_head = nn.Linear(d_model, num_labels, bias=True)
 
     def forward(
         self,
