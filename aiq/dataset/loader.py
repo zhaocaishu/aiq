@@ -114,7 +114,7 @@ class DataLoader:
         timestamp_col: str = "Date",
         start_time: str = "",
         end_time: str = "",
-        column_names: List[str] = None,
+        columns: List[str] = None,
         freq: str = "daily",
     ) -> Optional[pd.DataFrame]:
         if data_dir:
@@ -122,7 +122,7 @@ class DataLoader:
                 data_dir, "features", "stock", freq, f"{instrument}.csv"
             )
             df = DataLoader._read_csv(
-                path, timestamp_col, start_time, end_time, column_names
+                path, timestamp_col, start_time, end_time, columns
             )
         else:
             query = (
@@ -147,7 +147,7 @@ class DataLoader:
                 query,
                 (instrument, start_time.replace("-", ""), end_time.replace("-", "")),
                 timestamp_col,
-                column_names,
+                columns,
             )
 
         if df is not None:
@@ -178,7 +178,7 @@ class DataLoader:
         timestamp_col: str = "Date",
         start_time: str = "",
         end_time: str = "",
-        column_names: List[str] = None,
+        columns: List[str] = None,
         freq: str = "daily",
     ) -> Optional[pd.DataFrame]:
         if data_dir:
@@ -186,7 +186,7 @@ class DataLoader:
                 data_dir, "features", "index", freq, f"{market_name}.csv"
             )
             df = DataLoader._read_csv(
-                path, timestamp_col, start_time, end_time, column_names
+                path, timestamp_col, start_time, end_time, columns
             )
         else:
             query = (
@@ -200,7 +200,7 @@ class DataLoader:
                 query,
                 (market_name, start_time.replace("-", ""), end_time.replace("-", "")),
                 timestamp_col,
-                column_names,
+                columns,
             )
 
         if df is not None:
