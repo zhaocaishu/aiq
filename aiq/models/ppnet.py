@@ -230,13 +230,16 @@ class PPNetModel(BaseModel):
                     batch_fund_features,
                     batch_intraday_ts_features,
                 )
-                
+
                 loss = 0.0
                 for label_idx in range(self.num_labels):
+                    preds_i = outputs[:, label_idx : label_idx + 1]
+                    labels_i = batch_labels[:, label_idx : label_idx + 1]
+
                     loss += self.label_weights[label_idx] * self.criterion(
-                        outputs[:, label_idx], batch_labels[:, label_idx]
+                        preds_i, labels_i
                     )
-                
+
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), 3.0)
                 optimizer.step()
@@ -339,8 +342,11 @@ class PPNetModel(BaseModel):
 
                 loss = 0.0
                 for label_idx in range(self.num_labels):
+                    preds_i = outputs[:, label_idx : label_idx + 1]
+                    labels_i = batch_labels[:, label_idx : label_idx + 1]
+
                     loss += self.label_weights[label_idx] * self.criterion(
-                        outputs[:, label_idx], batch_labels[:, label_idx]
+                        preds_i, labels_i
                     )
 
             total_losses.append(loss.item())
