@@ -305,8 +305,10 @@ class PPNet(nn.Module):
             dropout=dropout,
         )
 
-        # Prediction head
-        self.prediction_head = nn.Linear(d_model, num_labels, bias=True)
+        # Prediction heads
+        self.prediction_heads = nn.ModuleList(
+            [nn.Linear(d_model, 1, bias=False) for _ in range(num_labels)]
+        )
 
     def forward(
         self,
@@ -367,5 +369,7 @@ class PPNet(nn.Module):
         spatial_states = self.spatial_encoder(fused_states)
 
         # Final Prediction on Spatial Representations
-        predictions = self.prediction_head(spatial_states)
+        predictions = torch.cat(
+            [head(spatial_states) for head in self.prediction_heads], dim=-1
+        )
         return predictions
