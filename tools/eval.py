@@ -131,7 +131,11 @@ def main():
 
     # Optionally save predictions
     if args.save_predictions:
-        required_cols = ["Instrument", "Date", "PRED_RET_5D", "RET_5D"]
+        required_cols = (
+            ["Instrument", "Date"]
+            + data_handler.label_names
+            + [f"PRED_{col}" for col in data_handler.label_names]
+        )
         missing = [c for c in required_cols if c not in pred_df.columns]
         if missing:
             logger.error("Missing columns for saving predictions: %s", missing)

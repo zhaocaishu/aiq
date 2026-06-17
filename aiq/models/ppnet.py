@@ -386,12 +386,12 @@ class PPNetModel(BaseModel):
                 )
 
             indices.append(batch_sample_indices.squeeze(0).numpy())
-            preds.append(outputs[:, :1].cpu().numpy())
+            preds.append(outputs.cpu().numpy())
 
         indices = np.concatenate(indices, axis=0)
         preds = np.concatenate(preds, axis=0)
 
-        label_names = test_dataset.label_names[:1]
+        label_names = test_dataset.label_names
         pred_df = test_dataset.data.iloc[indices].copy()
         pred_df[[f"PRED_{name}" for name in label_names]] = preds
         return pred_df

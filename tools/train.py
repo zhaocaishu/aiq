@@ -125,7 +125,7 @@ def main():
         logger.info("-" * 30)
 
         set_random_seed(seed)
-        
+
         train_and_save_model(
             train_dataset=train_dataset,
             val_dataset=val_dataset,
