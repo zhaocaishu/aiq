@@ -77,6 +77,9 @@ class Evaluator:
         inst_features = DataLoader.load_instruments_features(
             self.data_dir, instruments, self.start_time, self.end_time
         )
+        inst_features["VWAP"] = (
+            inst_features["AMount"] / (inst_features["Volume"] + 1e-12) * 10
+        )
         inst_features = inst_features[
             [
                 self.date_col,
@@ -84,6 +87,9 @@ class Evaluator:
                 self.up_limit_col,
                 self.down_limit_col,
                 "Close",
+                "High",
+                "Low",
+                "VWAP",
             ]
         ]
 
@@ -342,9 +348,22 @@ class Evaluator:
                 if inst_id not in daily_dict:
                     return False
                 row_data = daily_dict[inst_id]
+
+                # 一字板绝对不可交易（无论买卖）
+                # 最高价 == 最低价，且等于涨停或跌停价
+                is_yizi_limit_up = (row_data["High"] == row_data["Low"]) and (
+                    row_data["Close"] >= row_data[self.up_limit_col] * 0.999
+                )
+                is_yizi_limit_down = (row_data["High"] == row_data["Low"]) and (
+                    row_data["Close"] <= row_data[self.down_limit_col] * 1.001
+                )
+
+                if is_yizi_limit_up or is_yizi_limit_down:
+                    return False
+
                 return exchange.is_stock_tradable(
                     stock_id=inst_id,
-                    price=row_data["Close"],
+                    price=row_data["VWAP"],
                     up_limit=row_data[self.up_limit_col],
                     down_limit=row_data[self.down_limit_col],
                     daily_dict=daily_dict,
@@ -396,7 +415,7 @@ class Evaluator:
                     )
 
                     for inst in buy_candidates:
-                        price = daily_dict[inst]["Close"]
+                        price = daily_dict[inst]["VWAP"]
                         shares = (
                             int((cash_per_stock / price) / 100) * 100
                         )  # 整手国内限制
@@ -554,7 +573,7 @@ class Evaluator:
             for inst in sell_queue:
                 if inst not in positions:
                     continue
-                price = daily_dict[inst]["Close"]
+                price = daily_dict[inst]["VWAP"]
                 shares = positions.pop(inst)
                 sell_value = shares * price
 

@@ -26,7 +26,6 @@ from aiq.ops import (
     EMA,
 )
 from aiq.utils.module import init_instance_by_config
-from aiq.utils.functional import neutralize
 
 from .loader import DataLoader
 from .processor import Processor
@@ -42,6 +41,7 @@ class DataHandler:
         fit_start_time: str = "",
         fit_end_time: str = "",
         processors: List[Processor] = [],
+        label_price: str = "close",
     ):
         self.data_dir = data_dir
         if isinstance(instruments, str):
@@ -90,6 +90,7 @@ class Alpha158(DataHandler):
         fit_start_time: str = "",
         fit_end_time: str = "",
         processors: List[Processor] = [],
+        label_price: str = "close",
     ):
         super().__init__(
             data_dir,
@@ -101,7 +102,7 @@ class Alpha158(DataHandler):
             processors,
         )
         self.feature_names = []
-        self.label_names = ["RET_5D", "RET_5D_NEU"]
+        self.label_names = ["RET_5D"]
 
     def extract_instrument_features(self, df):
         # fundamental data
@@ -451,12 +452,22 @@ class Alpha158(DataHandler):
         return feature_df
 
     def extract_instrument_labels(self, df):
-        adj_close = df["Close"] * df["Adj_factor"]
-        # Forward return from t+1 to t+5
-        ret_5d = Ref(adj_close, -5) / Ref(adj_close, -1) - 1
+        adj_factor = df["Adj_factor"]
 
-        # Placeholder for neutralization
-        labels = [ret_5d, ret_5d]
+        if self.label_price == "close":
+            price = df["Close"] * adj_factor
+        elif self.label_price == "vwap":
+            # Volume: 手 -> 股; AMount: 千元 -> 元，与特征侧 TS_VWAP0 保持一致
+            volume = df["Volume"] * 100
+            amount = df["AMount"] * 1000
+            vwap = amount / (volume + 1e-12)
+            price = vwap * adj_factor
+        else:
+            raise ValueError("label_price must be one of {'close', 'vwap'}")
+
+        # Forward return from t+1 to t+5
+        ret_5d = Ref(price, -5) / Ref(price, -1) - 1
+        labels = [ret_5d]
 
         return df[["Instrument", "Date"]].assign(
             **{
@@ -533,6 +544,7 @@ class MarketAlpha158(Alpha158):
         processors: List[Processor] = [],
         market_names: List[str] = [],
         market_processors: List[Processor] = [],
+        label_price: str = "close",
     ):
         super().__init__(
             data_dir,
