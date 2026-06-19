@@ -223,19 +223,9 @@ class TopKDropoutBacktester(BaseBacktester):
                     return False
                 row_data = daily_dict[inst_id]
 
-                is_yizi_limit_up = (row_data["High"] == row_data["Low"]) and (
-                    row_data["Close"] >= row_data[self.up_limit_col] * 0.999
-                )
-                is_yizi_limit_down = (row_data["High"] == row_data["Low"]) and (
-                    row_data["Close"] <= row_data[self.down_limit_col] * 1.001
-                )
-
-                if is_yizi_limit_up or is_yizi_limit_down:
-                    return False
-
                 return exchange.is_stock_tradable(
                     stock_id=inst_id,
-                    price=row_data["VWAP"],
+                    price=row_data["Close"],
                     up_limit=row_data[self.up_limit_col],
                     down_limit=row_data[self.down_limit_col],
                     daily_dict=daily_dict,
