@@ -131,18 +131,27 @@ def main():
 
     # Optionally save predictions
     if args.save_predictions:
-        required_cols = (
+        target_cols = (
             ["Instrument", "Date"]
             + data_handler.label_names
             + [f"PRED_{col}" for col in data_handler.label_names]
         )
-        missing = [c for c in required_cols if c not in pred_df.columns]
+
+        cols_to_save = [col for col in target_cols if col in pred_df.columns]
+        missing = [col for col in target_cols if col not in pred_df.columns]
+
         if missing:
-            logger.error("Missing columns for saving predictions: %s", missing)
-            raise KeyError(f"Missing columns in prediction: {missing}")
-        save_path = os.path.join(args.save_dir, "predictions.csv")
-        pred_df[required_cols].to_csv(save_path, index=False)
-        logger.info("Predictions saved to %s", save_path)
+            logger.warning(
+                "The following requested columns are missing and will be skipped: %s",
+                missing,
+            )
+
+        if cols_to_save:
+            save_path = os.path.join(args.save_dir, "predictions.csv")
+            pred_df[cols_to_save].to_csv(save_path, index=False)
+            logger.info("Predictions saved to %s", save_path)
+        else:
+            logger.error("No valid columns found to save.")
 
     # Evaluation
     evaluator = init_instance_by_config(
