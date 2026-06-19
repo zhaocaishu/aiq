@@ -355,7 +355,7 @@ class PPNetModel(BaseModel):
 
         return total_loss
 
-    def predict(self, test_dataset: Dataset) -> object:
+    def predict(self, test_dataset: Dataset, fuse_preds: bool = True) -> object:
         self.model.eval()
 
         test_loader = DataLoader(
@@ -391,9 +391,15 @@ class PPNetModel(BaseModel):
         indices = np.concatenate(indices, axis=0)
         preds = np.concatenate(preds, axis=0)
 
-        label_names = test_dataset.label_names
         pred_df = test_dataset.data.iloc[indices].copy()
-        pred_df[[f"PRED_{name}" for name in label_names]] = preds
+        if fuse_preds:
+            pred_weights = self.label_weights.detach().cpu().numpy().astype(np.float64)
+            pred_weights = pred_weights / pred_weights.sum()
+            fused_preds = np.sum(preds * pred_weights.reshape(1, -1), axis=1)
+            pred_df[f"PRED_{self.label_names[0]}"] = fused_preds
+        else:
+            pred_df[[f"PRED_{name}" for name in self.label_names]] = preds
+
         return pred_df
 
     def load(self, model_name=None):
