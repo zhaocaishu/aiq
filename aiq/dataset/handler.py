@@ -56,6 +56,7 @@ class DataHandler:
         self.fit_start_time = fit_start_time
         self.fit_end_time = fit_end_time
         self.processors = [init_instance_by_config(proc) for proc in processors]
+        self.label_price = label_price
 
     def setup_data(self, mode="train") -> pd.DataFrame:
         raise NotImplementedError
@@ -100,6 +101,7 @@ class Alpha158(DataHandler):
             fit_start_time,
             fit_end_time,
             processors,
+            label_price,
         )
         self.feature_names = []
         self.label_names = ["RET_5D"]
@@ -554,6 +556,7 @@ class MarketAlpha158(Alpha158):
             fit_start_time,
             fit_end_time,
             processors,
+            label_price,
         )
 
         self.market_names = market_names
