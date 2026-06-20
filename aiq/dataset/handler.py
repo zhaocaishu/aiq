@@ -104,7 +104,7 @@ class Alpha158(DataHandler):
             label_price,
         )
         self.feature_names = []
-        self.label_names = ["RET_5D"]
+        self.label_names = ["RET_5D", "RET_3D"]
 
     def extract_instrument_features(self, df):
         # fundamental data
@@ -469,7 +469,8 @@ class Alpha158(DataHandler):
 
         # Forward return from t+1 to t+5
         ret_5d = Ref(price, -5) / Ref(price, -1) - 1
-        labels = [ret_5d]
+        ret_3d = Ref(price, -3) / Ref(price, -1) - 1
+        labels = [ret_5d, ret_3d]
 
         return df[["Instrument", "Date"]].assign(
             **{

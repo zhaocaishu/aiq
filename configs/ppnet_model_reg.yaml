@@ -57,7 +57,7 @@ dataset:
       test: ["2023-01-01", "2023-06-30"]
     seq_len: 20
     minute_seq_len: 5
-    label_names: ["RET_5D"]
+    label_names: ["RET_5D", "RET_3D"]
     use_augmentation: false
 model:
   class: PPNetModel
@@ -73,7 +73,8 @@ model:
     s_nhead: 2
     dropout: 0.5
     beta: 3.0
-    num_labels: 1
+    num_labels: 2
+    label_weights: [0.7, 0.3]
     epochs: 100
     batch_size: 1
     warmup_steps: 500

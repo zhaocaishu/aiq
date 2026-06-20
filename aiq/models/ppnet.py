@@ -239,6 +239,7 @@ class PPNetModel(BaseModel):
                     loss += self.label_weights[label_idx] * self.criterion(
                         preds_i, labels_i
                     )
+                loss = loss / self.label_weights.sum()
 
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), 3.0)
@@ -348,6 +349,7 @@ class PPNetModel(BaseModel):
                     loss += self.label_weights[label_idx] * self.criterion(
                         preds_i, labels_i
                     )
+                loss = loss / self.label_weights.sum()
 
             total_losses.append(loss.item())
 
