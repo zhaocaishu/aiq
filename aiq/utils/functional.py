@@ -95,50 +95,25 @@ def ts_robust_zscore(x: np.ndarray, clip_outlier: bool = False) -> np.ndarray:
     return z
 
 
-def robust_zscore(
-    x: Union[pd.Series, np.ndarray], clip_outlier: bool = False
-) -> Union[pd.Series, np.ndarray]:
+def robust_zscore(x, clip_outlier: bool = False):
+    """Robust ZScore Normalization
+
+    Use robust statistics for Z-Score normalization:
+        mean(x) = median(x)
+        std(x) = MAD(x) * 1.4826
+
+    Reference:
+        https://en.wikipedia.org/wiki/Median_absolute_deviation.
     """
-    Robust Z-score normalization using median and MAD.
-
-    Computes:
-        z = (x - median(x)) / (MAD(x) * 1.4826)
-
-    NaNs are ignored in median/MAD computation but preserved in output.
-    Optionally clips z-scores to [-3, 3] to limit extreme outliers.
-
-    Parameters
-    ----------
-    x : pd.Series or np.ndarray
-        Input data
-    clip_outlier : bool, default False
-        Whether to clip z-scores to [-3, 3].
-
-    Returns
-    -------
-    pd.Series or np.ndarray
-        Normalized data of same type as input.
-
-    Reference
-    ---------
-    https://en.wikipedia.org/wiki/Median_absolute_deviation
-    """
-    if len(x) == 0:
-        return x
-
-    is_series = isinstance(x, pd.Series)
-    index, name = (x.index, x.name) if is_series else (None, None)
-
-    arr = np.asarray(x, dtype=np.float32).copy()
-    med = np.nanmedian(arr)
-    arr_centered = arr - med
-    mad = np.nanmedian(np.abs(arr_centered))
-    z = arr_centered / (mad * 1.4826 + 1e-12)
+    med = np.nanmedian(x, axis=0)
+    x_centered = x - med
+    mad = np.nanmedian(np.abs(x_centered), axis=0)
+    z = x_centered / (mad * 1.4826 + 1e-12)
 
     if clip_outlier:
         z = np.clip(z, -3.0, 3.0)
 
-    return pd.Series(z, index=index, name=name) if is_series else z
+    return z
 
 
 def zscore(x, clip_min=-3.0, clip_max=3.0):
