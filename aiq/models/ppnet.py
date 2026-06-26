@@ -112,7 +112,10 @@ class PPNetModel(BaseModel):
 
     def to_device(self, tensor):
         """统一设备转换方法"""
-        return tensor.squeeze(0).to(device=self.device)
+        if tensor is None:
+            return tensor
+        else:
+            return tensor.squeeze(0).to(device=self.device)
 
     def get_muon_adamw_params(self, model):
         muon_params = []
@@ -195,7 +198,7 @@ class PPNetModel(BaseModel):
                 batch_industry_ids = self.to_device(batch_dict["stock_industry_ids"])
                 batch_ts_features = self.to_device(batch_dict["stock_ts_features"])
                 batch_intraday_ts_features = self.to_device(
-                    batch_dict["stock_intraday_ts_features"]
+                    batch_dict.get("stock_intraday_ts_features")
                 )
                 batch_cs_features = self.to_device(batch_dict["stock_cs_features"])
                 batch_fund_features = self.to_device(batch_dict["stock_fund_features"])
@@ -291,6 +294,8 @@ class PPNetModel(BaseModel):
 
                     self.logger.info(msg)
 
+                    self.model.train()
+
             train_loss = np.mean(train_losses)
             if val_dataset is not None:
                 val_loss = self.eval(val_dataset)
@@ -324,7 +329,7 @@ class PPNetModel(BaseModel):
             batch_industry_ids = self.to_device(batch_dict["stock_industry_ids"])
             batch_ts_features = self.to_device(batch_dict["stock_ts_features"])
             batch_intraday_ts_features = self.to_device(
-                batch_dict["stock_intraday_ts_features"]
+                batch_dict.get("stock_intraday_ts_features")
             )
             batch_cs_features = self.to_device(batch_dict["stock_cs_features"])
             batch_fund_features = self.to_device(batch_dict["stock_fund_features"])
@@ -368,14 +373,14 @@ class PPNetModel(BaseModel):
         preds = []
         for i, batch_dict in enumerate(test_loader):
             batch_sample_indices = batch_dict["sample_indices"]
-            batch_industry_ids = self.to_device(batch_dict["stock_industry_ids"])
             batch_ts_features = self.to_device(batch_dict["stock_ts_features"])
-            batch_intraday_ts_features = self.to_device(
-                batch_dict["stock_intraday_ts_features"]
-            )
             batch_cs_features = self.to_device(batch_dict["stock_cs_features"])
-            batch_fund_features = self.to_device(batch_dict["stock_fund_features"])
             batch_market_features = self.to_device(batch_dict["market_state_features"])
+            batch_industry_ids = self.to_device(batch_dict["stock_industry_ids"])
+            batch_fund_features = self.to_device(batch_dict["stock_fund_features"])
+            batch_intraday_ts_features = self.to_device(
+                batch_dict.get("stock_intraday_ts_features")
+            )
 
             with torch.no_grad():
                 outputs = self.model(

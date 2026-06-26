@@ -47,16 +47,15 @@ data_handler:
         kwargs:
           fields_group: "feature"
 dataset:
-  class: MultiscaleTSDataset
+  class: TSDataset
   module_path: aiq.dataset.dataset
   kwargs:
     universe: *market
     segments:
       train: ["2017-01-01", "2022-06-20"]
       valid: ["2022-07-01", "2022-12-20"]
-      test: ["2023-01-01", "2023-06-30"]
+      test: ["2023-01-01", "2023-12-31"]
     seq_len: 20
-    minute_seq_len: 5
     label_names: ["RET_5D"]
     use_augmentation: false
 model:
@@ -85,7 +84,7 @@ evaluator:
   module_path: aiq.evaluation.evaluator
   kwargs:
     start_time: "2023-01-01"
-    end_time: "2023-06-30"
+    end_time: "2023-12-31"
     benchmark: "000906.SH"
     pred_col: "PRED_RET_5D"
     label_col: "RET_5D"

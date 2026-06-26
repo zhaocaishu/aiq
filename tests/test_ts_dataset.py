@@ -1,6 +1,6 @@
 from aiq.utils.config import config as cfg
 from aiq.utils.module import init_instance_by_config
-from aiq.dataset.dataset import MultiscaleTSDataset
+from aiq.dataset.dataset import TSDataset
 
 
 if __name__ == "__main__":
@@ -13,13 +13,12 @@ if __name__ == "__main__":
     print(data_handler.feature_names)
 
     # train dataset
-    train_dataset = MultiscaleTSDataset(
+    train_dataset = TSDataset(
         data=data,
         segments=cfg.dataset.kwargs.segments,
         data_dir="./data",
         universe=cfg.dataset.kwargs.universe,
         seq_len=8,
-        minute_seq_len=4,
         feature_names=data_handler.feature_names,
         label_names=["RET_5D"],
         mode="train",
@@ -30,7 +29,6 @@ if __name__ == "__main__":
         data_dict["sample_indices"].shape,
         data_dict["stock_industry_ids"].shape,
         data_dict["stock_ts_features"].shape,
-        data_dict["stock_intraday_ts_features"].shape,
         data_dict["stock_cs_features"].shape,
         data_dict["stock_fund_features"].shape,
         data_dict["market_state_features"].shape,
