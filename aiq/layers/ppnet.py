@@ -83,22 +83,42 @@ class MLP(nn.Module):
         return self.down_proj(self.act_fn(self.gate_proj(x)) * self.up_proj(x))
 
 
-class MarketGate(nn.Module):
-    def __init__(self, d_input, d_output, beta=1.0):
-        super().__init__()
-        self.enc = nn.Sequential(
-            nn.Linear(d_input, d_output),
-            nn.SiLU(),
-            nn.Linear(d_output, d_output),
-        )
-        self.d_output = d_output
-        self.t = beta
+class MarketFiLM(nn.Module):
+    """用 market state 对单个特征流做 FiLM 仿射调制。
 
-    def forward(self, x):
-        x_enc = self.enc(x)
-        x_scale = torch.softmax(x_enc / self.t, dim=-1)
-        x_scale = self.d_output * x_scale
-        return x_scale
+    h' = (1 + gamma) * h + beta
+
+    - 自带独立 market 编码器，不与其他特征流共享；
+    - gamma/beta 零初始化 → 训练初始为恒等映射，不破坏原特征分布；
+    - 自动适配 ts (3D: [N, T, d_feat]) 与 cs (2D: [N, d_feat]) 两种输入。
+    """
+
+    def __init__(self, d_mkt, d_feat, d_hidden=64):
+        super().__init__()
+        self.encoder = nn.Sequential(
+            nn.Linear(d_mkt, d_hidden),
+            nn.SiLU(),
+            nn.Linear(d_hidden, d_hidden),
+            nn.SiLU(),
+        )
+        self.gamma = nn.Linear(d_hidden, d_feat)
+        self.beta = nn.Linear(d_hidden, d_feat)
+
+        # 零初始化：gamma=0 → (1+0)=1，beta=0 → 恒等
+        nn.init.zeros_(self.gamma.weight)
+        nn.init.zeros_(self.gamma.bias)
+        nn.init.zeros_(self.beta.weight)
+        nn.init.zeros_(self.beta.bias)
+
+    def forward(self, x, cond):
+        z = self.encoder(cond)
+        gamma = self.gamma(z)
+        beta = self.beta(z)
+        if x.dim() == 3:
+            # ts: [N, T, d_feat] → gamma/beta 广播到 T 轴
+            gamma = gamma.unsqueeze(1)
+            beta = beta.unsqueeze(1)
+        return (1.0 + gamma) * x + beta
 
 
 class FusionBlock(nn.Module):
@@ -288,7 +308,8 @@ class PPNet(nn.Module):
             self.cross_attn = CrossAttention(self.d_temporal_hidden, t_nhead)
 
         # Market-Conditioned Feature Gating
-        self.market_gate = MarketGate(d_input=d_mkt_feat, d_output=d_cs_feat, beta=beta)
+        self.ts_film = MarketFiLM(d_mkt=d_mkt_feat, d_feat=d_ts_feat, d_hidden=64)
+        self.cs_film = MarketFiLM(d_mkt=d_mkt_feat, d_feat=d_cs_feat, d_hidden=64)
 
         # Fusion Encoder (Temporal + Cross-Sectional Feature Integration)
         self.fusion_block = FusionBlock(
@@ -320,6 +341,7 @@ class PPNet(nn.Module):
         stock_intraday_ts_features=None,
     ):
         # Intra-Stock Temporal Modeling (Daily)
+        stock_ts_features = self.ts_film(stock_ts_features, market_state_features)
         stock_temporal_embeds = self.data_embedding(stock_ts_features)
         stock_temporal_states = self.temporal_layers(stock_temporal_embeds)
         stock_temporal_features = self.temporal_attn(stock_temporal_states)
@@ -333,7 +355,6 @@ class PPNet(nn.Module):
             stock_intraday_temporal_states = self.intraday_temporal_layers(
                 stock_intraday_temporal_embeds
             )
-
             stock_intraday_temporal_features = self.cross_attn(
                 stock_temporal_features,
                 stock_intraday_temporal_states,
@@ -341,8 +362,7 @@ class PPNet(nn.Module):
             )
 
         # Market-Conditioned Feature Gating
-        gate_weights = self.market_gate(market_state_features)
-        gated_stock_cs_features = stock_cs_features * gate_weights
+        gated_stock_cs_features = self.cs_film(stock_cs_features, market_state_features)
 
         # Feature Fusion
         if self.use_intraday:
