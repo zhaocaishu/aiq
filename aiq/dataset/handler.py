@@ -51,6 +51,11 @@ class DataHandler:
             self.instruments = df["Instrument"].unique().tolist()
         else:
             self.instruments = instruments
+        self.calendar = DataLoader.load_calendar(
+            self.data_dir,
+            start_time=start_time,
+            end_time=end_time,
+        )
         self.start_time = start_time
         self.end_time = end_time
         self.fit_start_time = fit_start_time
@@ -104,7 +109,170 @@ class Alpha158(DataHandler):
             label_price,
         )
         self.feature_names = []
-        self.label_names = ["RET_5D", "RET_3D"]
+        self.label_names = ["RET_5D"]
+
+    def _get_calendar_index(self) -> pd.DatetimeIndex:
+        """Return a normalized, unique and sorted trading calendar."""
+        calendar = self.calendar
+
+        if isinstance(calendar, pd.DataFrame):
+            if "Date" not in calendar.columns:
+                raise ValueError("Trading calendar DataFrame must contain 'Date'.")
+            calendar = calendar["Date"]
+
+        calendar_index = pd.DatetimeIndex(pd.to_datetime(calendar, errors="coerce"))
+        calendar_index = calendar_index[~calendar_index.isna()]
+        calendar_index = calendar_index.normalize().unique().sort_values()
+
+        if len(calendar_index) == 0:
+            raise ValueError("Trading calendar is empty.")
+
+        return calendar_index
+
+    def _align_instrument_to_calendar(
+        self,
+        df: pd.DataFrame,
+        calendar: pd.DatetimeIndex,
+    ) -> pd.DataFrame:
+        """
+        Align one instrument to the market trading calendar.
+
+        A completely missing row between the first available quotation and the
+        handler end date is treated as a suspension day. On such days:
+
+        - OHLC and pre-close are set to the latest available close;
+        - volume, amount, turnover and money-flow fields are set to zero;
+        - adjustment factor, fundamentals and classifications are forward-filled;
+        - ``Is_suspended`` is set to 1.
+
+        Existing rows with partially missing fields are not classified as
+        suspensions, so ordinary data-quality problems are not silently hidden.
+        """
+        if df.empty:
+            return df
+
+        instrument = df["Instrument"].iloc[0]
+        aligned = df.copy()
+        aligned["Date"] = pd.to_datetime(
+            aligned["Date"], errors="coerce"
+        ).dt.normalize()
+        aligned = aligned.dropna(subset=["Date"])
+        aligned = (
+            aligned.sort_values("Date")
+            .drop_duplicates(subset=["Date"], keep="last")
+            .set_index("Date")
+        )
+
+        if aligned.empty:
+            return df.iloc[0:0].copy()
+
+        # Do not create observations before the stock has its first valid quote.
+        # The dynamic universe filter is responsible for excluding delisted or
+        # otherwise ineligible stocks at the sample endpoint.
+        first_date = aligned.index.min()
+        end_date = aligned.index.max()
+        instrument_calendar = calendar[
+            (calendar >= first_date) & (calendar <= end_date)
+        ]
+
+        original_dates = aligned.index
+        aligned = aligned.reindex(instrument_calendar)
+        suspension_mask = ~aligned.index.isin(original_dates)
+
+        aligned["Instrument"] = instrument
+        aligned["Is_suspended"] = suspension_mask.astype(np.int8)
+
+        # Use the last observable close as the unchanged reference price during
+        # suspension. This preserves a fixed market-calendar horizon.
+        previous_close = aligned["Close"].ffill()
+        for column in ["Open", "High", "Low", "Close", "Pre_Close"]:
+            if column in aligned.columns:
+                aligned.loc[suspension_mask, column] = previous_close.loc[
+                    suspension_mask
+                ]
+
+        # A suspension day has no actual transaction.
+        zero_fill_columns = [
+            "Change",
+            "Pct_Chg",
+            "Volume",
+            "AMount",
+            "Turnover_rate",
+            "Turnover_rate_f",
+            "Volume_ratio",
+            "Mfd_inflow_vol_ratio",
+            "Mfd_large_amount_ratio",
+        ]
+        for column in zero_fill_columns:
+            if column in aligned.columns:
+                aligned.loc[suspension_mask, column] = 0.0
+
+        # Only use information already known at that time. Backward filling is
+        # intentionally avoided to prevent future information leakage.
+        forward_fill_columns = [
+            "Adj_factor",
+            "Pe",
+            "Pe_ttm",
+            "Pb",
+            "Ps",
+            "Ps_ttm",
+            "Dv_ratio",
+            "Dv_ttm",
+            "Total_share",
+            "Float_share",
+            "Free_share",
+            "Total_mv",
+            "Circ_mv",
+            "Ind_class_l1",
+            "Ind_class_l2",
+            "List_date",
+        ]
+        existing_forward_fill_columns = [
+            column for column in forward_fill_columns if column in aligned.columns
+        ]
+        if existing_forward_fill_columns:
+            forward_filled = aligned[existing_forward_fill_columns].ffill()
+            aligned.loc[
+                suspension_mask,
+                existing_forward_fill_columns,
+            ] = forward_filled.loc[
+                suspension_mask,
+                existing_forward_fill_columns,
+            ]
+
+        aligned.index.name = "Date"
+        aligned = aligned.reset_index()
+        aligned["Date"] = aligned["Date"].dt.strftime("%Y-%m-%d")
+        return aligned
+
+    def preprocess_instrument_data(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Align all instruments to the same market trading calendar."""
+        if df.empty:
+            return df
+
+        required_columns = {"Date", "Instrument", "Close"}
+        missing_columns = required_columns - set(df.columns)
+        if missing_columns:
+            raise ValueError(
+                "Missing required columns before calendar alignment: "
+                f"{sorted(missing_columns)}"
+            )
+
+        calendar = self._get_calendar_index()
+        aligned_frames = [
+            self._align_instrument_to_calendar(group, calendar)
+            for _, group in df.groupby("Instrument", sort=False)
+        ]
+        aligned_frames = [frame for frame in aligned_frames if not frame.empty]
+
+        if not aligned_frames:
+            return pd.DataFrame()
+
+        return (
+            pd.concat(aligned_frames, ignore_index=True)
+            .sort_values(["Instrument", "Date"])
+            .reset_index(drop=True)
+        )
 
     def extract_instrument_features(self, df):
         # fundamental data
@@ -119,6 +287,12 @@ class Alpha158(DataHandler):
         volume = df["Volume"] * 100  # 股
         amount = df["AMount"] * 1000  # 元
         vwap = amount / (volume + 1e-12)
+
+        # A suspension has no real VWAP. For feature continuity only, use the
+        # unchanged close. Is_suspended remains available while constructing
+        # features and labels; endpoint tradability is filtered separately.
+        if "Is_suspended" in df.columns:
+            vwap = vwap.where(df["Is_suspended"] == 0, df["Close"])
 
         # adjusted prices
         adj_factor = df["Adj_factor"]
@@ -463,14 +637,18 @@ class Alpha158(DataHandler):
             volume = df["Volume"] * 100
             amount = df["AMount"] * 1000
             vwap = amount / (volume + 1e-12)
+            if "Is_suspended" in df.columns:
+                # This synthetic price only keeps the calendar-aligned series
+                # continuous. Tradability filters should still exclude samples
+                # whose entry day is suspended.
+                vwap = vwap.where(df["Is_suspended"] == 0, df["Close"])
             price = vwap * adj_factor
         else:
             raise ValueError("label_price must be one of {'close', 'vwap'}")
 
         # Forward return from t+1 to t+5
         ret_5d = Ref(price, -5) / Ref(price, -1) - 1
-        ret_3d = Ref(price, -3) / Ref(price, -1) - 1
-        labels = [ret_5d, ret_3d]
+        labels = [ret_5d]
 
         return df[["Instrument", "Date"]].assign(
             **{
@@ -508,6 +686,11 @@ class Alpha158(DataHandler):
         df = DataLoader.load_instruments_features(
             self.data_dir, self.instruments, self.start_time, self.end_time
         )
+
+        # Align each stock to the common market calendar before calculating any
+        # rolling feature or forward label. Missing whole rows are treated as
+        # suspension days and filled according to market semantics.
+        df = self.preprocess_instrument_data(df)
 
         # Extract feature and label from data
         feature_df = df.groupby("Instrument", group_keys=False).apply(

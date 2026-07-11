@@ -84,7 +84,7 @@ class DataLoader:
         return df
 
     @staticmethod
-    def load_calendars(
+    def load_calendar(
         data_dir: str,
         timestamp_col: str = "Date",
         start_time: str = "",
