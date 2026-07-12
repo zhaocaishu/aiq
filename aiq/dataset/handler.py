@@ -245,7 +245,7 @@ class Alpha158(DataHandler):
         aligned["Date"] = aligned["Date"].dt.strftime("%Y-%m-%d")
         return aligned
 
-    def preprocess_instrument_data(self, df: pd.DataFrame) -> pd.DataFrame:
+    def align_instruments_to_calendar(self, df: pd.DataFrame) -> pd.DataFrame:
         """Align all instruments to the same market trading calendar."""
         if df.empty:
             return df
@@ -312,7 +312,6 @@ class Alpha158(DataHandler):
             ep,
             bp,
             sp,
-            Log(volume + 1.0),
             (high - low) / open,
             (close - open) / open,
             (close - open) / ((high - low) + 1e-12),
@@ -322,7 +321,8 @@ class Alpha158(DataHandler):
             (Less(open, close) - low) / ((high - low) + 1e-12),
             (2 * close - high - low) / open,
             (2 * close - high - low) / ((high - low) + 1e-12),
-            open / close,
+            Log(close / Ref(close, 1)),
+            Log(open / Ref(close, 1)),
             high / close,
             low / close,
             vwap / close,
@@ -336,7 +336,6 @@ class Alpha158(DataHandler):
             "FUND_EP",
             "FUND_BP",
             "FUND_SP",
-            "TS_VOLUME",
             "TS_KLEN",
             "TS_KMID1",
             "TS_KMID2",
@@ -346,7 +345,8 @@ class Alpha158(DataHandler):
             "TS_KLOW2",
             "TS_KSFT1",
             "TS_KSFT2",
-            "TS_OPEN0",
+            "TS_RET_1D",
+            "TS_GAP",
             "TS_HIGH0",
             "TS_LOW0",
             "TS_VWAP0",
@@ -476,7 +476,11 @@ class Alpha158(DataHandler):
             # The correlation between price change ratio and volume change ratio
             for d in windows:
                 features.append(
-                    Corr(close / Ref(close, 1), Log(volume / Ref(volume, 1) + 1), d)
+                    Corr(
+                        Log(close / Ref(close, 1)),
+                        Log(volume + 1.0) - Ref(Log(volume + 1.0), 1),
+                        d,
+                    )
                 )
                 feature_names.append("CS_CORD%d" % d)
 
@@ -537,13 +541,13 @@ class Alpha158(DataHandler):
         if use("CS_VMA"):
             # Simple Volume Moving average: https://www.barchart.com/education/technical-indicators/volume_moving_average
             for d in windows:
-                features.append(Mean(volume, d) / (volume + 1e-12))
+                features.append(volume / (Mean(volume, d) + 1e-12))
                 feature_names.append("CS_VMA%d" % d)
 
         if use("CS_VSTD"):
             # The standard deviation for volume in past d days.
             for d in windows:
-                features.append(Std(volume, d) / (volume + 1e-12))
+                features.append(Std(volume, d) / (Mean(volume, d) + 1e-12))
                 feature_names.append("CS_VSTD%d" % d)
 
         if use("CS_WVMA"):
@@ -629,11 +633,7 @@ class Alpha158(DataHandler):
         if self.label_price == "close":
             price = df["Close"] * adj_factor
 
-            tradable = (
-                df["Is_suspended"].eq(0)
-                & price.notna()
-                & price.gt(0)
-            )
+            tradable = df["Is_suspended"].eq(0) & price.notna() & price.gt(0)
 
         elif self.label_price == "vwap":
             volume = df["Volume"] * 100
@@ -661,9 +661,7 @@ class Alpha158(DataHandler):
         ret_5d = price.shift(-5) / price.shift(-1) - 1
         ret_5d = ret_5d.where(label_valid, np.nan)
 
-        return df[["Instrument", "Date"]].assign(
-            RET_5D=ret_5d.astype("float32")
-        )
+        return df[["Instrument", "Date"]].assign(RET_5D=ret_5d.astype("float32"))
 
     def process(
         self,
@@ -698,7 +696,7 @@ class Alpha158(DataHandler):
         # Align each stock to the common market calendar before calculating any
         # rolling feature or forward label. Missing whole rows are treated as
         # suspension days and filled according to market semantics.
-        df = self.preprocess_instrument_data(df)
+        df = self.align_instruments_to_calendar(df)
 
         # Extract feature and label from data
         feature_df = df.groupby("Instrument", group_keys=False).apply(
