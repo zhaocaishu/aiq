@@ -275,7 +275,7 @@ class Alpha158(DataHandler):
         )
 
     def extract_instrument_features(self, df):
-        # fundamental data
+        # Fundamental data
         ind_class_l1 = df["Ind_class_l1"]
         ind_class_l2 = df["Ind_class_l2"]
         cap = np.log(df["Circ_mv"])
@@ -283,18 +283,13 @@ class Alpha158(DataHandler):
         bp = (1.0 / df["Pb"].replace(0, np.nan)).fillna(0)
         sp = (1.0 / df["Ps_ttm"].replace(0, np.nan)).fillna(0)
 
-        # volume & amount
+        # Volume & amount
         volume = df["Volume"] * 100  # 股
         amount = df["AMount"] * 1000  # 元
         vwap = amount / (volume + 1e-12)
+        vwap = vwap.where(df["Is_suspended"] == 0, df["Close"])
 
-        # A suspension has no real VWAP. For feature continuity only, use the
-        # unchanged close. Is_suspended remains available while constructing
-        # features and labels; endpoint tradability is filtered separately.
-        if "Is_suspended" in df.columns:
-            vwap = vwap.where(df["Is_suspended"] == 0, df["Close"])
-
-        # adjusted prices
+        # Adjusted prices
         adj_factor = df["Adj_factor"]
         open = df["Open"] * adj_factor
         close = df["Close"] * adj_factor
@@ -302,14 +297,14 @@ class Alpha158(DataHandler):
         low = df["Low"] * adj_factor
         vwap = vwap * adj_factor
 
-        # turnover rate
+        # Turnover rate
         turn = df["Turnover_rate_f"]
 
-        # moneyflow
+        # Moneyflow
         mfd_inflow_vol_ratio = df["Mfd_inflow_vol_ratio"]
         mfd_large_amount_ratio = df["Mfd_large_amount_ratio"]
 
-        # kbar
+        # K-bar
         features = [
             ind_class_l1,
             ind_class_l2,
@@ -359,7 +354,7 @@ class Alpha158(DataHandler):
             "TS_MFD_LARGE_AMT_RATIO",
         ]
 
-        # rolling
+        # Rolling features
         windows = [5, 10, 20, 30, 60]
         include = None
         exclude = ["CS_SUMN", "CS_SUMD", "CS_CNTN", "CS_CNTD", "CS_VSUMN", "CS_VSUMD"]
@@ -601,10 +596,10 @@ class Alpha158(DataHandler):
                 features.append(Std(turn, d))
                 feature_names.append("CS_TURN_STD%d" % d)
 
-        # feature names
+        # Feature names
         self.feature_names = feature_names
 
-        # concat features
+        # Concat features
         feature_df = pd.concat(
             [
                 df[["Instrument", "Date"]],
@@ -628,33 +623,46 @@ class Alpha158(DataHandler):
         return feature_df
 
     def extract_instrument_labels(self, df):
+        df = df.sort_values("Date").copy()
         adj_factor = df["Adj_factor"]
 
         if self.label_price == "close":
             price = df["Close"] * adj_factor
+
+            tradable = (
+                df["Is_suspended"].eq(0)
+                & price.notna()
+                & price.gt(0)
+            )
+
         elif self.label_price == "vwap":
-            # Volume: 手 -> 股; AMount: 千元 -> 元，与特征侧 TS_VWAP0 保持一致
             volume = df["Volume"] * 100
             amount = df["AMount"] * 1000
-            vwap = amount / (volume + 1e-12)
-            if "Is_suspended" in df.columns:
-                # This synthetic price only keeps the calendar-aligned series
-                # continuous. Tradability filters should still exclude samples
-                # whose entry day is suspended.
-                vwap = vwap.where(df["Is_suspended"] == 0, df["Close"])
+
+            vwap = amount / volume.replace(0, np.nan)
             price = vwap * adj_factor
+
+            tradable = (
+                df["Is_suspended"].eq(0)
+                & volume.gt(0)
+                & amount.gt(0)
+                & price.notna()
+                & price.gt(0)
+            )
         else:
             raise ValueError("label_price must be one of {'close', 'vwap'}")
 
-        # Forward return from t+1 to t+5
-        ret_5d = Ref(price, -5) / Ref(price, -1) - 1
-        labels = [ret_5d]
+        signal_valid = tradable
+        entry_valid = tradable.shift(-1, fill_value=False)
+        exit_valid = tradable.shift(-5, fill_value=False)
+
+        label_valid = signal_valid & entry_valid & exit_valid
+
+        ret_5d = price.shift(-5) / price.shift(-1) - 1
+        ret_5d = ret_5d.where(label_valid, np.nan)
 
         return df[["Instrument", "Date"]].assign(
-            **{
-                name: label.astype("float32")
-                for name, label in zip(self.label_names, labels)
-            }
+            RET_5D=ret_5d.astype("float32")
         )
 
     def process(
@@ -795,11 +803,11 @@ class MarketAlpha158(Alpha158):
         return feature_df
 
     def setup_data(self, mode="train") -> pd.DataFrame:
-        # Load instrument-level features and labels
+        # Load instrument data and extract instrument-level features & labels
         feature_label_df = super().setup_data(mode=mode)
         feature_label_df = feature_label_df.reset_index()
 
-        # Load raw market data
+        # Load market data and extract market-level features
         market_df = DataLoader.load_markets_features(
             self.data_dir,
             self.market_names,
@@ -807,7 +815,6 @@ class MarketAlpha158(Alpha158):
             self.end_time,
         )
 
-        # Extract market-level features
         market_feature_df = pd.concat(
             [
                 self.extract_market_features(
