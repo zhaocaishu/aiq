@@ -10,6 +10,7 @@ data_handler:
     fit_end_time: "2022-06-20"
     market_names: ["000300.SH", "000905.SH", "000906.SH"]
     label_price: "vwap"
+    use_hf_features: true
     processors:
       - class: CSWinsorize
         module_path: aiq.dataset.processor
@@ -60,7 +61,7 @@ model:
   class: PPNetModel
   module_path: aiq.models.ppnet
   kwargs:
-    d_ts_feat: 16
+    d_ts_feat: 26
     d_cs_feat: 125
     d_fund_feat: 4
     d_mkt_feat: 63

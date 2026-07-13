@@ -32,5 +32,5 @@ if __name__ == "__main__":
         data_dict["stock_cs_features"].shape,
         data_dict["stock_fund_features"].shape,
         data_dict["market_state_features"].shape,
-        data_dict["labels"].shape
+        data_dict["labels"].shape,
     )

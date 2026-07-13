@@ -42,6 +42,7 @@ class DataHandler:
         fit_end_time: str = "",
         processors: List[Processor] = [],
         label_price: str = "close",
+        use_hf_features: bool = False,
     ):
         self.data_dir = data_dir
         if isinstance(instruments, str):
@@ -62,6 +63,7 @@ class DataHandler:
         self.fit_end_time = fit_end_time
         self.processors = [init_instance_by_config(proc) for proc in processors]
         self.label_price = label_price
+        self.use_hf_features = use_hf_features
 
     def setup_data(self, mode="train") -> pd.DataFrame:
         raise NotImplementedError
@@ -97,6 +99,7 @@ class Alpha158(DataHandler):
         fit_end_time: str = "",
         processors: List[Processor] = [],
         label_price: str = "close",
+        use_hf_features: bool = False,
     ):
         super().__init__(
             data_dir,
@@ -107,6 +110,7 @@ class Alpha158(DataHandler):
             fit_end_time,
             processors,
             label_price,
+            use_hf_features,
         )
         self.feature_names = []
         self.label_names = ["RET_5D"]
@@ -626,6 +630,130 @@ class Alpha158(DataHandler):
 
         return feature_df
 
+    @staticmethod
+    def _aggregate_daily_hf_features(group: pd.DataFrame) -> pd.Series:
+        """Aggregate one trading day's 5-minute bars into daily HF features."""
+        returns = group["Ret_5m"].dropna()
+        amounts = group["AMount"].dropna()
+
+        # Insufficient intraday observations are discarded to avoid noisy features.
+        if len(returns) < 20:
+            return pd.Series(dtype="float32")
+
+        positive_returns = returns[returns > 0]
+        negative_returns = returns[returns < 0]
+        tail_group = group.tail(6)
+        tail_returns = tail_group["Ret_5m"]
+        illiquidity = np.abs(returns) / (amounts + 1e-12)
+
+        # Align amounts with valid intraday returns before computing direction.
+        return_amounts = group.loc[returns.index, "AMount"].fillna(0.0)
+        total_return_amount = return_amounts.sum()
+        total_amount = group["AMount"].fillna(0.0).sum()
+        tail_amount = tail_group["AMount"].fillna(0.0).sum()
+
+        features = {
+            "TS_HF_RV": np.sum(returns**2),
+            "TS_HF_SKEW": returns.skew(),
+            "TS_HF_KURT": returns.kurtosis(),
+            "TS_HF_UP_VAR": (
+                np.sum(positive_returns**2) if len(positive_returns) > 0 else 0.0
+            ),
+            "TS_HF_DOWN_VAR": (
+                np.sum(negative_returns**2) if len(negative_returns) > 0 else 0.0
+            ),
+            "TS_HF_TAIL_RET": np.prod(1 + tail_returns.fillna(0)) - 1,
+            "TS_HF_AMIHUD": np.log1p(np.mean(illiquidity) * 1e8),
+            "TS_HF_SIGNED_AMT_IMB": (
+                (np.sign(returns) * return_amounts).sum()
+                / (total_return_amount + 1e-12)
+            ),
+            "TS_HF_TREND_EFF": (returns.sum() / (returns.abs().sum() + 1e-12)),
+            "TS_HF_TAIL_AMT_RATIO": tail_amount / (total_amount + 1e-12),
+        }
+        return pd.Series(features).astype("float32")
+
+    def extract_hf_features(
+        self,
+        hf_df: pd.DataFrame,
+        timestamp_col: str = "Trade_time",
+    ) -> pd.DataFrame:
+        """Extract daily microstructure features from one instrument's intraday bars."""
+        if hf_df is None or hf_df.empty:
+            return pd.DataFrame()
+
+        prepared_df = hf_df.copy()
+        prepared_df[timestamp_col] = pd.to_datetime(prepared_df[timestamp_col])
+        prepared_df["Date"] = prepared_df[timestamp_col].dt.normalize()
+        prepared_df["Adj_close"] = prepared_df["Close"] * prepared_df["Adj_factor"]
+
+        # Sorting must precede pct_change so returns remain strictly intraday.
+        prepared_df = prepared_df.sort_values(timestamp_col)
+        prepared_df["Ret_5m"] = (
+            prepared_df.groupby("Date")["Adj_close"].pct_change().astype("float32")
+        )
+
+        daily_feature_df = (
+            prepared_df.groupby("Date")
+            .apply(self._aggregate_daily_hf_features)
+            .reset_index()
+        )
+        daily_feature_df["Instrument"] = prepared_df["Instrument"].iloc[0]
+
+        feature_columns = [
+            column
+            for column in daily_feature_df.columns
+            if column not in ["Date", "Instrument"]
+        ]
+        return daily_feature_df.dropna(
+            how="all",
+            subset=feature_columns,
+        )
+
+    def _merge_hf_features(self, feature_df: pd.DataFrame) -> pd.DataFrame:
+        """Load, aggregate and merge HF features for all configured instruments."""
+        daily_feature_frames: List[pd.DataFrame] = []
+
+        for instrument in self.instruments:
+            hf_df = DataLoader.load_instrument_features(
+                data_dir=self.data_dir,
+                instrument=instrument,
+                timestamp_col="Trade_time",
+                start_time=self.start_time,
+                end_time=self.end_time,
+                freq="5min",
+            )
+            daily_feature_df = self.extract_hf_features(
+                hf_df,
+                timestamp_col="Trade_time",
+            )
+            if not daily_feature_df.empty:
+                daily_feature_frames.append(daily_feature_df)
+
+        if not daily_feature_frames:
+            return feature_df
+
+        hf_feature_df = pd.concat(daily_feature_frames, ignore_index=True)
+        hf_feature_df["Date"] = hf_feature_df["Date"].dt.strftime("%Y-%m-%d")
+
+        hf_feature_names = [
+            column
+            for column in hf_feature_df.columns
+            if column not in ["Date", "Instrument"]
+        ]
+        self.feature_names.extend(
+            feature_name
+            for feature_name in hf_feature_names
+            if feature_name not in self.feature_names
+        )
+
+        return pd.merge(
+            feature_df,
+            hf_feature_df,
+            on=["Date", "Instrument"],
+            how="left",
+        )
+
     def extract_instrument_labels(self, df):
         df = df.sort_values("Date").copy()
         adj_factor = df["Adj_factor"]
@@ -705,6 +833,10 @@ class Alpha158(DataHandler):
         label_df = df.groupby("Instrument", group_keys=False).apply(
             lambda group: self.extract_instrument_labels(group)
         )
+
+        if self.use_hf_features:
+            feature_df = self._merge_hf_features(feature_df)
+
         feature_label_df = pd.merge(
             feature_df, label_df, on=["Date", "Instrument"], how="inner"
         )
@@ -737,6 +869,7 @@ class MarketAlpha158(Alpha158):
         market_names: List[str] = [],
         market_processors: List[Processor] = [],
         label_price: str = "close",
+        use_hf_features: bool = False,
     ):
         super().__init__(
             data_dir,
@@ -747,6 +880,7 @@ class MarketAlpha158(Alpha158):
             fit_end_time,
             processors,
             label_price,
+            use_hf_features,
         )
 
         self.market_names = market_names
