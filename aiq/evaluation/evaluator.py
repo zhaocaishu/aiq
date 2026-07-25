@@ -58,7 +58,7 @@ class Evaluator:
 
     def _compute_bench_returns(self, df: pd.DataFrame) -> pd.DataFrame:
         """Compute benchmark 5D returns."""
-        df["VWAP"] = df["Amount"] / (df["Volume"] + 1e-12) * 10
+        df["VWAP"] = df["AMount"] / (df["Volume"] + 1e-12) * 10
         ret_5d = Ref(df["VWAP"], -5) / Ref(df["VWAP"], -1) - 1
         data = {
             self.date_col: df[self.date_col],
