@@ -64,7 +64,7 @@ model:
     d_ts_feat: 26
     d_cs_feat: 125
     d_fund_feat: 4
-    d_mkt_feat: 63
+    d_mkt_feat: 20
     d_emb: 16
     d_model: 256
     t_nhead: 4

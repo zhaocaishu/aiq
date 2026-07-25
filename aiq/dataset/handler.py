@@ -888,51 +888,113 @@ class MarketAlpha158(Alpha158):
             init_instance_by_config(proc) for proc in market_processors
         ]
 
-    def extract_market_features(self, df: pd.DataFrame):
+    def extract_market_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        # Validate required columns to avoid silent all-NaN features
+        required = {
+            "Date",
+            "Instrument",
+            "Close",
+            "High",
+            "Low",
+            "Pre_Close",
+            "Pct_Chg",
+            "Amount",
+            "Turnover_rate_f",
+            "Constituent_Number",
+            "Constituent_Raise_Number",
+            "Constituent_Fall_Number",
+            "Constituent_Up_Number",
+            "Constituent_Dl_Number",
+            "New_High_Num",
+            "New_Low_Num",
+            "Over250_Avgclose_Num_Ratio",
+            "Constituent_Chg_Ratio_Aa",
+            "Constituent_Chg_Ratio_M",
+        }
+        missing = required - set(df.columns)
+        if missing:
+            raise ValueError(f"Missing required columns: {sorted(missing)}")
+
+        df = df.sort_values("Date")
         close = df["Close"]
-        amount = df["AMount"]
+        high = df["High"]
+        low = df["Low"]
+        amount = df["Amount"]
+        turnover_f = df["Turnover_rate_f"]
+        prev_close = df["Pre_Close"]
 
-        # Define window sizes and compute features systematically
-        returns = close / Ref(close, 1) - 1
-        features = [returns]
-        feature_names = ["RETURN_1D"]
+        # Guard against zero constituent counts in division
+        c_num = df["Constituent_Number"].replace(0, np.nan)
 
-        windows = [5, 10, 20, 30, 60]
-        for window in windows:
-            features.extend(
-                [
-                    Mean(returns, window),
-                    Std(returns, window),
-                    amount / Mean(amount, window),
-                    Std(amount, window) / Mean(amount, window),
-                ]
-            )
-            feature_names.extend(
-                [
-                    f"RETURN_MEAN_{window}D",
-                    f"RETURN_STD_{window}D",
-                    f"AMOUNT_MEAN_{window}D",
-                    f"AMOUNT_STD_{window}D",
-                ]
-            )
+        # In-house simple and log returns as the unified decimal baseline
+        idx_ret = df["Pct_Chg"] / 100.0
+        log_ret = np.log1p(idx_ret)
 
-        # Concat features
-        feature_df = pd.concat(
-            [
-                df[["Date", "Instrument"]],
-                pd.concat(
-                    [
-                        features[i].rename(feature_names[i])
-                        for i in range(len(feature_names))
-                    ],
-                    axis=1,
-                ).astype("float32"),
-            ],
-            axis=1,
-        )
-        feature_df = feature_df.set_index(["Date", "Instrument"]).sort_index()
+        # Convert percent-form breadth returns to the same decimal scale
+        chg_aa = df["Constituent_Chg_Ratio_Aa"] / 100.0
+        chg_m = df["Constituent_Chg_Ratio_M"] / 100.0
 
-        return feature_df
+        features = pd.DataFrame(index=df.index)
+
+        # ================== 1. Trend & Position (4) ==================
+        features["RET_5D"] = close / close.shift(5) - 1
+        features["RET_20D"] = close / close.shift(20) - 1
+        # Deviation of close from its 60D moving average
+        features["MA_DEV_60D"] = close / close.rolling(60).mean() - 1
+        # Drawdown of close from its 60D rolling high (<= 0)
+        features["DRAWDOWN_60D"] = close / close.rolling(60).max() - 1
+
+        # ================== 2. Volatility & Risk (4) ==================
+        features["VOL_5D"] = log_ret.rolling(5).std()
+        features["VOL_20D"] = log_ret.rolling(20).std()
+        # RMS of negative log returns
+        downside_ret = log_ret.clip(upper=0)
+        features["DOWNSIDE_VOL_20D"] = np.sqrt(downside_ret.pow(2).rolling(20).mean())
+        # True Range normalized by previous close
+        tr1 = high - low
+        tr2 = (high - prev_close).abs()
+        tr3 = (low - prev_close).abs()
+        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+        features["ATR_RATIO_14D"] = (tr / prev_close).rolling(14).mean()
+
+        # ================== 3. Turnover & Liquidity (2) ==================
+        # Relative activity vs 20D mean, guarded against zero means
+        amount_ma = amount.rolling(20).mean().replace(0, np.nan)
+        turn_ma = turnover_f.rolling(20).mean().replace(0, np.nan)
+        features["AMOUNT_MA_RATIO_20D"] = amount / amount_ma - 1
+        features["TURNOVER_MA_RATIO_20D"] = turnover_f / turn_ma - 1
+
+        # ================== 4. Breadth & Sentiment (6) ==================
+        # Net advance-decline balance as a share of constituents
+        features["AD_BALANCE"] = (
+            df["Constituent_Raise_Number"] - df["Constituent_Fall_Number"]
+        ) / c_num
+        # Net limit-up minus limit-down ratio
+        features["LIMIT_NET_RATIO"] = (
+            df["Constituent_Up_Number"] - df["Constituent_Dl_Number"]
+        ) / c_num
+        # Net new-high minus new-low ratio
+        features["NHNL_NET_RATIO"] = (df["New_High_Num"] - df["New_Low_Num"]) / c_num
+        # Share of constituents above the 250D MA
+        features["ABOVE_MA250_RATIO"] = df["Over250_Avgclose_Num_Ratio"] / 100.0
+        # Equal-weight return minus index return
+        features["EQ_WEIGHT_SPREAD"] = chg_aa - idx_ret
+        # Mean-minus-median return as a skewness proxy
+        features["RET_SKEW_PROXY"] = chg_aa - chg_m
+
+        # ================== 5. Cross-Sectional Dispersion (1) ==================
+        # Share of limit-up and limit-down stocks, 5D mean
+        extreme_moves = (
+            df["Constituent_Up_Number"] + df["Constituent_Dl_Number"]
+        ) / c_num
+        features["CS_DISPERSION_5D"] = extreme_moves.rolling(5).mean()
+
+        features["Date"] = df["Date"]
+        features["Instrument"] = df["Instrument"]
+
+        # Replace inf with NaN to protect downstream processing
+        features = features.replace([np.inf, -np.inf], np.nan)
+        return features.set_index(["Date", "Instrument"]).sort_index()
 
     def setup_data(self, mode="train") -> pd.DataFrame:
         # Load instrument data and extract instrument-level features & labels
@@ -947,18 +1009,50 @@ class MarketAlpha158(Alpha158):
             self.end_time,
         )
 
-        market_feature_df = pd.concat(
-            [
-                self.extract_market_features(
-                    market_df[market_df["Instrument"] == market_name]
-                )
-                .add_prefix(f"MKT_{market_name}_")
-                .droplevel("Instrument")
-                for market_name in self.market_names
-            ],
-            axis=1,
-            join="inner",
+        # Use CSI 800 as the broad market proxy
+        broad_index = "000906.SH"
+        large_index = "000300.SH"
+        small_index = "000905.SH"
+
+        df_broad = market_df[market_df["Instrument"] == broad_index].copy()
+        market_feature_df = (
+            self.extract_market_features(df_broad)
+            .add_prefix("MKT_")
+            .droplevel("Instrument")
         )
+
+        # Add large-cap vs small-cap style divergence features
+        df_large = (
+            market_df[market_df["Instrument"] == large_index]
+            .set_index("Date")
+            .sort_index()
+        )
+        df_small = (
+            market_df[market_df["Instrument"] == small_index]
+            .set_index("Date")
+            .sort_index()
+        )
+        # Align to the broad index calendar to guard against trading-day misalignment
+        broad_dates = market_feature_df.index
+
+        for window in (5, 20):
+            ret_large = (
+                df_large["Close"] / df_large["Close"].shift(window) - 1
+            ).reindex(broad_dates)
+            ret_small = (
+                df_small["Close"] / df_small["Close"].shift(window) - 1
+            ).reindex(broad_dates)
+            market_feature_df[f"MKT_STYLE_RET_DIFF_{window}D"] = ret_large - ret_small
+
+        adv_large = (
+            df_large["Constituent_Raise_Number"]
+            / df_large["Constituent_Number"].replace(0, np.nan)
+        ).reindex(broad_dates)
+        adv_small = (
+            df_small["Constituent_Raise_Number"]
+            / df_small["Constituent_Number"].replace(0, np.nan)
+        ).reindex(broad_dates)
+        market_feature_df["MKT_STYLE_BREADTH_DIFF"] = adv_large - adv_small
 
         market_feature_names = market_feature_df.columns.tolist()
         self.feature_names.extend(market_feature_names)
