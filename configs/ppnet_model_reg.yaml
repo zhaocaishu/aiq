@@ -8,7 +8,7 @@ data_handler:
     end_time: "2023-12-31"
     fit_start_time: "2017-01-01"
     fit_end_time: "2022-06-20"
-    market_names: ["000300.SH", "000905.SH", "000906.SH"]
+    market_names: ["000300.SH", "000905.SH", "000852.SH"]
     label_price: "vwap"
     use_hf_features: true
     processors:
@@ -64,7 +64,7 @@ model:
     d_ts_feat: 26
     d_cs_feat: 125
     d_fund_feat: 4
-    d_mkt_feat: 20
+    d_mkt_feat: 63
     d_emb: 16
     d_model: 256
     t_nhead: 4
