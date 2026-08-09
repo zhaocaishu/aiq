@@ -83,41 +83,80 @@ class MLP(nn.Module):
         return self.down_proj(self.act_fn(self.gate_proj(x)) * self.up_proj(x))
 
 
-class MarketFiLM(nn.Module):
-    """用 market state 对单个特征流做 FiLM 仿射调制。
-
-    h' = (1 + gamma) * h + beta
-
-    - 自带独立 market 编码器，不与其他特征流共享；
-    - gamma/beta 零初始化 → 训练初始为恒等映射，不破坏原特征分布；
-    - 自动适配 ts (3D: [N, T, d_feat]) 与 cs (2D: [N, d_feat]) 两种输入。
+class RegimeEncoder(nn.Module):
+    """
+    市场状态特征映射为连续的Regime Embedding
     """
 
-    def __init__(self, d_mkt, d_feat, d_hidden=64):
+    def __init__(
+        self,
+        d_mkt: int,
+        d_regime: int = 32,
+        d_hidden: int = 64,
+        dropout: float = 0.1,
+    ):
         super().__init__()
+
         self.encoder = nn.Sequential(
             nn.Linear(d_mkt, d_hidden),
             nn.SiLU(),
-            nn.Linear(d_hidden, d_hidden),
+            nn.Dropout(dropout),
+            nn.Linear(d_hidden, d_regime),
+        )
+
+        self.skip_proj = nn.Linear(d_mkt, d_regime, bias=False)
+
+        # ReZero初始化：初期以线性映射分支(skip_proj)为主，利于稳定收敛
+        self.regime_scale = nn.Parameter(torch.ones(1) * 0.01)
+
+    def forward(self, market_features):
+        # market_features: [..., d_mkt]
+        residual = self.skip_proj(market_features)
+        nonlinear = self.encoder(market_features)
+
+        return residual + self.regime_scale * nonlinear
+
+
+class MarketFiLM(nn.Module):
+    """
+    使用统一 Regime Embedding 对特征流进行 FiLM 调制。
+
+    h' = (1 + gamma) * h + beta
+    """
+
+    def __init__(
+        self,
+        d_regime: int,
+        d_feat: int,
+        d_hidden: int = 64,
+    ):
+        super().__init__()
+
+        self.adapter = nn.Sequential(
+            nn.Linear(d_regime, d_hidden),
             nn.SiLU(),
         )
+
         self.gamma = nn.Linear(d_hidden, d_feat)
         self.beta = nn.Linear(d_hidden, d_feat)
 
-        # 零初始化：gamma=0 → (1+0)=1，beta=0 → 恒等
+        # 初始保持恒等映射
         nn.init.zeros_(self.gamma.weight)
         nn.init.zeros_(self.gamma.bias)
+
         nn.init.zeros_(self.beta.weight)
         nn.init.zeros_(self.beta.bias)
 
-    def forward(self, x, cond):
-        z = self.encoder(cond)
+    def forward(self, x, regime_embedding):
+        z = self.adapter(regime_embedding)
+
         gamma = self.gamma(z)
         beta = self.beta(z)
+
         if x.dim() == 3:
-            # ts: [N, T, d_feat] → gamma/beta 广播到 T 轴
             gamma = gamma.unsqueeze(1)
             beta = beta.unsqueeze(1)
+
         return (1.0 + gamma) * x + beta
 
 
@@ -307,9 +346,28 @@ class PPNet(nn.Module):
             # Cross attention
             self.cross_attn = CrossAttention(self.d_temporal_hidden, t_nhead)
 
-        # Market-Conditioned Feature Gating
-        self.ts_film = MarketFiLM(d_mkt=d_mkt_feat, d_feat=d_ts_feat, d_hidden=64)
-        self.cs_film = MarketFiLM(d_mkt=d_mkt_feat, d_feat=d_cs_feat, d_hidden=64)
+        # Market Regime Encoder
+        d_regime = 32
+
+        self.regime_encoder = RegimeEncoder(
+            d_mkt=d_mkt_feat,
+            d_regime=d_regime,
+            d_hidden=64,
+            dropout=0.1,
+        )
+
+        # Regime-Conditioned Feature Modulation
+        self.ts_film = MarketFiLM(
+            d_regime=d_regime,
+            d_feat=d_ts_feat,
+            d_hidden=64,
+        )
+
+        self.cs_film = MarketFiLM(
+            d_regime=d_regime,
+            d_feat=d_cs_feat,
+            d_hidden=64,
+        )
 
         # Fusion Encoder (Temporal + Cross-Sectional Feature Integration)
         self.fusion_block = FusionBlock(
@@ -340,8 +398,11 @@ class PPNet(nn.Module):
         stock_fund_features=None,
         stock_intraday_ts_features=None,
     ):
+        # Encode Market Regime
+        regime_embedding = self.regime_encoder(market_state_features)
+
         # Intra-Stock Temporal Modeling (Daily)
-        stock_ts_features = self.ts_film(stock_ts_features, market_state_features)
+        stock_ts_features = self.ts_film(stock_ts_features, regime_embedding)
         stock_temporal_embeds = self.data_embedding(stock_ts_features)
         stock_temporal_states = self.temporal_layers(stock_temporal_embeds)
         stock_temporal_features = self.temporal_attn(stock_temporal_states)
@@ -361,8 +422,8 @@ class PPNet(nn.Module):
                 stock_intraday_temporal_states,
             )
 
-        # Market-Conditioned Feature Gating
-        gated_stock_cs_features = self.cs_film(stock_cs_features, market_state_features)
+        # Regime-conditioned CS Features
+        gated_stock_cs_features = self.cs_film(stock_cs_features, regime_embedding)
 
         # Feature Fusion
         if self.use_intraday:
