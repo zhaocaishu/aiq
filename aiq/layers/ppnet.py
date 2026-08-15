@@ -7,28 +7,40 @@ from .embed import DataEmbedding
 
 
 class TemporalAttention(nn.Module):
-    def __init__(self, d_model):
+    def __init__(self, d_model, d_regime):
         super().__init__()
-        # 分离 Query 和 Key/Value 的映射空间
         self.q_trans = nn.Linear(d_model, d_model, bias=False)
         self.k_trans = nn.Linear(d_model, d_model, bias=False)
         self.scale = math.sqrt(d_model)
 
-    def forward(self, z):
-        # z shape: [N, T, D]
+        # regime 条件偏置生成器
+        self.regime_bias_proj = nn.Linear(d_regime, d_model, bias=False)
 
-        # 1. 提取最后一天作为 Query，并映射到 Q 空间
+    def forward(self, z, regime_embedding):
+        # z shape: [N, T, D]
+        N, T, D = z.shape
+
+        # 1. 最后一天作为 Query
         last_day_feat = z[:, -1, :]  # [N, D]
         query = self.q_trans(last_day_feat).unsqueeze(-1)  # [N, D, 1]
 
-        # 2. 将整个历史序列映射到 K 空间
+        # 2. 历史序列作为 Key
         keys = self.k_trans(z)  # [N, T, D]
 
-        # 3. 计算注意力得分，并加入缩放因子防梯度消失
+        # 3. 计算内容相似度 logits
         scores = torch.matmul(keys, query).squeeze(-1)  # [N, T]
-        scores = scores / self.scale  # 关键缩放！
+        scores = scores / self.scale
 
-        # 4. 归一化并加权求和
+        # 4. 加入 regime-conditioned bias（逐时间步）
+        #    regime_embedding -> [N, d_regime] -> [N, D]
+        regime_query = self.regime_bias_proj(regime_embedding)  # [N, D]
+        bias = (
+            torch.matmul(keys, regime_query.unsqueeze(-1)).squeeze(-1) / self.scale
+        )  # [N, T]
+
+        scores = scores + bias
+
+        # 5. 归一化并加权求和
         lam = torch.softmax(scores, dim=1).unsqueeze(1)  # [N, 1, T]
         output = torch.matmul(lam, z).squeeze(1)  # [N, D]
 
@@ -311,6 +323,29 @@ class PPNet(nn.Module):
         if self.use_intraday:
             self.d_fusion_input += self.d_temporal_hidden
 
+        # Market Regime Encoder
+        d_regime = 32
+
+        self.regime_encoder = RegimeEncoder(
+            d_mkt=d_mkt_feat,
+            d_regime=d_regime,
+            d_hidden=64,
+            dropout=0.1,
+        )
+
+        # Regime-Conditioned Feature Modulation
+        self.ts_film = MarketFiLM(
+            d_regime=d_regime,
+            d_feat=self.d_temporal_hidden,
+            d_hidden=64,
+        )
+
+        self.cs_film = MarketFiLM(
+            d_regime=d_regime,
+            d_feat=d_cs_feat,
+            d_hidden=64,
+        )
+
         # Temporal Encoder (Intra-stock) for daily data
         self.data_embedding = DataEmbedding(
             c_in=d_ts_feat,
@@ -325,7 +360,7 @@ class PPNet(nn.Module):
                 for _ in range(2)
             ]
         )
-        self.temporal_attn = TemporalAttention(self.d_temporal_hidden)
+        self.temporal_attn = TemporalAttention(self.d_temporal_hidden, d_regime)
 
         # Temporal Encoder (Intra-stock) for intraday data
         if self.use_intraday:
@@ -345,29 +380,6 @@ class PPNet(nn.Module):
 
             # Cross attention
             self.cross_attn = CrossAttention(self.d_temporal_hidden, t_nhead)
-
-        # Market Regime Encoder
-        d_regime = 32
-
-        self.regime_encoder = RegimeEncoder(
-            d_mkt=d_mkt_feat,
-            d_regime=d_regime,
-            d_hidden=64,
-            dropout=0.1,
-        )
-
-        # Regime-Conditioned Feature Modulation
-        self.ts_film = MarketFiLM(
-            d_regime=d_regime,
-            d_feat=d_ts_feat,
-            d_hidden=64,
-        )
-
-        self.cs_film = MarketFiLM(
-            d_regime=d_regime,
-            d_feat=d_cs_feat,
-            d_hidden=64,
-        )
 
         # Fusion Encoder (Temporal + Cross-Sectional Feature Integration)
         self.fusion_block = FusionBlock(
@@ -401,11 +413,16 @@ class PPNet(nn.Module):
         # Encode Market Regime
         regime_embedding = self.regime_encoder(market_state_features)
 
+        # Regime-conditioned CS Features
+        stock_cs_features = self.cs_film(stock_cs_features, regime_embedding)
+
         # Intra-Stock Temporal Modeling (Daily)
-        stock_ts_features = self.ts_film(stock_ts_features, regime_embedding)
         stock_temporal_embeds = self.data_embedding(stock_ts_features)
+        stock_temporal_embeds = self.ts_film(stock_temporal_embeds, regime_embedding)
         stock_temporal_states = self.temporal_layers(stock_temporal_embeds)
-        stock_temporal_features = self.temporal_attn(stock_temporal_states)
+        stock_temporal_features = self.temporal_attn(
+            stock_temporal_states, regime_embedding
+        )
 
         # Intra-Stock Temporal Modeling (Intraday)
         if self.use_intraday:
@@ -422,16 +439,13 @@ class PPNet(nn.Module):
                 stock_intraday_temporal_states,
             )
 
-        # Regime-conditioned CS Features
-        gated_stock_cs_features = self.cs_film(stock_cs_features, regime_embedding)
-
         # Feature Fusion
         if self.use_intraday:
             stock_features = torch.cat(
                 [
                     stock_temporal_features,
                     stock_intraday_temporal_features,
-                    gated_stock_cs_features,
+                    stock_cs_features,
                 ],
                 dim=-1,
             )
@@ -439,7 +453,7 @@ class PPNet(nn.Module):
             stock_features = torch.cat(
                 [
                     stock_temporal_features,
-                    gated_stock_cs_features,
+                    stock_cs_features,
                 ],
                 dim=-1,
             )
