@@ -319,9 +319,11 @@ class PPNet(nn.Module):
 
         # Feature Dimensions
         self.d_temporal_hidden = d_model // 4
-        self.d_fusion_input = self.d_temporal_hidden + d_cs_feat
-        if self.use_intraday:
-            self.d_fusion_input += self.d_temporal_hidden
+        self.d_fusion_input = (
+            self.d_temporal_hidden + d_cs_feat
+            if not use_intraday
+            else self.d_temporal_hidden + d_cs_feat + self.d_temporal_hidden
+        )
 
         # Market Regime Encoder
         d_regime = 32
