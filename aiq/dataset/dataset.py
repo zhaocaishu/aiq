@@ -250,7 +250,7 @@ class TSDataset(Dataset):
         stock_ts_features = features[:, :, self.stock_ts_feature_indices]
         stock_cs_features = features[:, -1, self.stock_cs_feature_indices]
         stock_fund_features = features[:, -1, self.stock_fund_feature_indices]
-        market_state_features = features[:, -1, self.market_feature_indices]
+        market_state_features = features[:, :, self.market_feature_indices]
 
         # Data Normalization Pipeline
         stock_ts_features = robust_zscore(

@@ -18,6 +18,7 @@ class TemporalAttention(nn.Module):
 
     def forward(self, z, regime_embedding):
         # z shape: [N, T, D]
+        # regime_embedding: [N, T, d_regime] 或 [N, d_regime]
         N, T, D = z.shape
 
         # 1. 最后一天作为 Query
@@ -32,11 +33,17 @@ class TemporalAttention(nn.Module):
         scores = scores / self.scale
 
         # 4. 加入 regime-conditioned bias（逐时间步）
-        #    regime_embedding -> [N, d_regime] -> [N, D]
-        regime_query = self.regime_bias_proj(regime_embedding)  # [N, D]
-        bias = (
-            torch.matmul(keys, regime_query.unsqueeze(-1)).squeeze(-1) / self.scale
-        )  # [N, T]
+        if regime_embedding.dim() == 3:
+            # regime_embedding: [N, T, d_regime] -> [N, T, D]
+            regime_query = self.regime_bias_proj(regime_embedding)  # [N, T, D]
+            # 每个时间步的 key 与其对应 regime query 做点积
+            bias = torch.einsum("ntd,ntd->nt", keys, regime_query) / self.scale
+        else:
+            # regime_embedding: [N, d_regime] -> [N, D]
+            regime_query = self.regime_bias_proj(regime_embedding)  # [N, D]
+            bias = (
+                torch.matmul(keys, regime_query.unsqueeze(-1)).squeeze(-1) / self.scale
+            )
 
         scores = scores + bias
 
@@ -97,7 +104,7 @@ class MLP(nn.Module):
 
 class RegimeEncoder(nn.Module):
     """
-    市场状态特征映射为连续的Regime Embedding
+    市场状态特征编码为连续的Regime Embedding
     """
 
     def __init__(
@@ -121,11 +128,10 @@ class RegimeEncoder(nn.Module):
         # ReZero初始化：初期以线性映射分支(skip_proj)为主，利于稳定收敛
         self.regime_scale = nn.Parameter(torch.ones(1) * 0.01)
 
-    def forward(self, market_features):
-        # market_features: [..., d_mkt]
-        residual = self.skip_proj(market_features)
-        nonlinear = self.encoder(market_features)
-
+    def forward(self, market_state_features):
+        # market_state_features: [..., d_mkt]
+        residual = self.skip_proj(market_state_features)
+        nonlinear = self.encoder(market_state_features)
         return residual + self.regime_scale * nonlinear
 
 
@@ -152,7 +158,6 @@ class MarketFiLM(nn.Module):
         self.gamma = nn.Linear(d_hidden, d_feat)
         self.beta = nn.Linear(d_hidden, d_feat)
 
-        # 初始保持恒等映射
         nn.init.zeros_(self.gamma.weight)
         nn.init.zeros_(self.gamma.bias)
 
@@ -160,14 +165,25 @@ class MarketFiLM(nn.Module):
         nn.init.zeros_(self.beta.bias)
 
     def forward(self, x, regime_embedding):
+        # x: [N, d_feat] 或 [N, T, d_feat]
+        # regime_embedding: [N, d_regime] 或 [N, T, d_regime]
         z = self.adapter(regime_embedding)
 
         gamma = self.gamma(z)
         beta = self.beta(z)
 
         if x.dim() == 3:
-            gamma = gamma.unsqueeze(1)
-            beta = beta.unsqueeze(1)
+            if gamma.dim() == 2:
+                gamma = gamma.unsqueeze(1)  # [N, 1, d_feat]
+                beta = beta.unsqueeze(1)
+        elif x.dim() == 2:
+            if gamma.dim() == 3:
+                raise ValueError(
+                    "For 2D feature x, regime_embedding must be 2D. "
+                    "Please aggregate the temporal regime before calling."
+                )
+        else:
+            raise ValueError("x must be either 2D or 3D")
 
         return (1.0 + gamma) * x + beta
 
@@ -416,7 +432,8 @@ class PPNet(nn.Module):
         regime_embedding = self.regime_encoder(market_state_features)
 
         # Regime-conditioned CS Features
-        stock_cs_features = self.cs_film(stock_cs_features, regime_embedding)
+        regime_current = regime_embedding[:, -1, :]  # [N, d_regime]
+        stock_cs_features = self.cs_film(stock_cs_features, regime_current)
 
         # Intra-Stock Temporal Modeling (Daily)
         stock_temporal_embeds = self.data_embedding(stock_ts_features)
