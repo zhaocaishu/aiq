@@ -429,7 +429,10 @@ class PPNet(nn.Module):
         stock_intraday_ts_features=None,
     ):
         # Encode Market Regime
-        regime_embedding = self.regime_encoder(market_state_features)
+        regime_series = self.regime_encoder(market_state_features[0])  # [T, d_regime]
+        regime_embedding = regime_series.unsqueeze(0).expand(
+            market_state_features.shape[0], -1, -1
+        )
 
         # Regime-conditioned CS Features
         regime_current = regime_embedding[:, -1, :]  # [N, d_regime]

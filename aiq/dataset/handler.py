@@ -971,7 +971,7 @@ class MarketAlpha158(Alpha158):
         net_raise = (
             df["Constituent_Raise_Number"] - df["Constituent_Fall_Number"]
         ) / number
-        limit_net = df["Up_Num_Ratio"] - df["Constituent_Dl_Number"] / number
+        limit_net = (df["Constituent_Up_Number"] - df["Constituent_Dl_Number"]) / number
         nhnl = (df["New_High_Num"] - df["New_Low_Num"]) / number
 
         features.extend(
