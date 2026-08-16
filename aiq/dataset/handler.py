@@ -875,6 +875,7 @@ class MarketAlpha158(Alpha158):
         "Constituent_Number",
         "Constituent_Raise_Number",
         "Constituent_Fall_Number",
+        "Constituent_Up_Number",
         "Constituent_Dl_Number",
         "New_High_Num",
         "New_Low_Num",
