@@ -804,7 +804,10 @@ class Alpha158(DataHandler):
             column_tuples.extend([("label", label_name) for label_name in label_names])
         df.columns = pd.MultiIndex.from_tuples(column_tuples)
 
-        fit_df = df.loc[self.fit_start_time : self.fit_end_time]
+        date_index = df.index.get_level_values("Date")
+        fit_df = df.loc[
+            (date_index >= self.fit_start_time) & (date_index <= self.fit_end_time)
+        ]
         for proc in processors:
             if mode == "train" and hasattr(proc, "fit"):
                 proc.fit(fit_df)
@@ -879,7 +882,6 @@ class MarketAlpha158(Alpha158):
         "Constituent_Dl_Number",
         "New_High_Num",
         "New_Low_Num",
-        "Up_Num_Ratio",
         "Raise_Num_Ratio",
         "Over250_Avgclose_Num_Ratio",
         "Constituent_Chg_Ratio_M",
