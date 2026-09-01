@@ -5,13 +5,71 @@ import copy
 import numpy as np
 import torch
 from torch import nn, optim
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, Sampler
 from transformers import get_scheduler
 
 from aiq.layers import PPNet, Muon
 from aiq.losses import TopKLoss, HybridLoss
 
 from .base import BaseModel
+
+
+class PhaseRotationSampler(Sampler):
+    """按预测周期轮换训练日期，每个 epoch 内的标签窗口互不重叠。
+
+    以 ``stride=5`` 为例：
+
+    - epoch 0: 0, 5, 10, ...
+    - epoch 1: 1, 6, 11, ...
+    - ...
+    - epoch 4: 4, 9, 14, ...
+
+    五个 epoch 使用完全部训练日，但始终只训练一个模型。
+    """
+
+    def __init__(
+        self,
+        data_source: Dataset,
+        stride: int = 5,
+        shuffle: bool = True,
+        seed: int = 42,
+    ):
+        if stride < 1:
+            raise ValueError("stride must be greater than or equal to 1")
+
+        self.data_source = data_source
+        self.stride = int(stride)
+        self.shuffle = shuffle
+        self.seed = int(seed)
+        self.epoch = 0
+
+    @property
+    def phase(self) -> int:
+        return self.epoch % self.stride
+
+    def set_epoch(self, epoch: int):
+        self.epoch = int(epoch)
+
+    def __iter__(self):
+        indices = np.arange(
+            self.phase,
+            len(self.data_source),
+            self.stride,
+            dtype=np.int64,
+        )
+
+        # 只打乱不同交易日的训练顺序；每个交易日内部的时间序列顺序不变。
+        if self.shuffle and len(indices) > 1:
+            rng = np.random.default_rng(self.seed + self.epoch)
+            rng.shuffle(indices)
+
+        return iter(indices.tolist())
+
+    def __len__(self):
+        data_size = len(self.data_source)
+        if self.phase >= data_size:
+            return 0
+        return (data_size - self.phase + self.stride - 1) // self.stride
 
 
 class PPNetModel(BaseModel):
@@ -39,6 +97,8 @@ class PPNetModel(BaseModel):
         learning_rate=0.001,
         criterion_name="MSE",
         early_stopping_patience=5,
+        train_stride=5,
+        sampler_seed=42,
         label_weights=None,
         pretrained=None,
         save_dir=None,
@@ -56,6 +116,8 @@ class PPNetModel(BaseModel):
         self.learning_rate = float(learning_rate)
         self.criterion_name = criterion_name
         self.early_stopping_patience = early_stopping_patience
+        self.train_stride = int(train_stride)
+        self.sampler_seed = int(sampler_seed)
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
         # label weights
@@ -137,8 +199,17 @@ class PPNetModel(BaseModel):
         return muon_params, adamw_params
 
     def fit(self, train_dataset: Dataset, val_dataset: Dataset = None):
+        train_sampler = PhaseRotationSampler(
+            train_dataset,
+            stride=self.train_stride,
+            shuffle=True,
+            seed=self.sampler_seed,
+        )
         train_loader = DataLoader(
-            train_dataset, batch_size=self.batch_size, shuffle=True
+            train_dataset,
+            batch_size=self.batch_size,
+            sampler=train_sampler,
+            shuffle=False,
         )
 
         train_steps_epoch = len(train_loader)
@@ -181,6 +252,9 @@ class PPNetModel(BaseModel):
         min_train_steps_before_stop = int(0.1 * num_training_steps)
 
         for epoch in range(self.epochs):
+            train_sampler.set_epoch(epoch)
+            train_steps_epoch = len(train_loader)
+
             self.model.train()
             train_losses = []
 
