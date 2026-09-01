@@ -7,51 +7,39 @@ from .embed import DataEmbedding
 
 
 class TemporalAttention(nn.Module):
+    """Regime 条件化的时间注意力。
+
+    Args:
+        d_model: 时序特征维度 D。
+        d_regime: regime embedding 维度。
+
+    Inputs:
+        z: 历史时序特征，形状 [N, T, D]。
+        regime_current: 最后一天的 regime embedding，形状 [N, d_regime]。
+
+    Returns:
+        聚合后的时序特征，形状 [N, D]。
+    """
+
     def __init__(self, d_model, d_regime):
         super().__init__()
         self.q_trans = nn.Linear(d_model, d_model, bias=False)
         self.k_trans = nn.Linear(d_model, d_model, bias=False)
         self.scale = math.sqrt(d_model)
 
-        # regime 条件偏置生成器
-        self.regime_bias_proj = nn.Linear(d_regime, d_model, bias=False)
+        # 零初始化：初期退化为纯内容检索，与 MarketFiLM 策略一致
+        self.regime_query_proj = nn.Linear(d_regime, d_model, bias=False)
+        nn.init.zeros_(self.regime_query_proj.weight)
 
-    def forward(self, z, regime_embedding):
-        # z shape: [N, T, D]
-        # regime_embedding: [N, T, d_regime] 或 [N, d_regime]
-        N, T, D = z.shape
-
-        # 1. 最后一天作为 Query
-        last_day_feat = z[:, -1, :]  # [N, D]
-        query = self.q_trans(last_day_feat).unsqueeze(-1)  # [N, D, 1]
-
-        # 2. 历史序列作为 Key
+    def forward(self, z, regime_current):
+        query = self.q_trans(z[:, -1, :]) + self.regime_query_proj(
+            regime_current
+        )  # [N, D]
         keys = self.k_trans(z)  # [N, T, D]
 
-        # 3. 计算内容相似度 logits
-        scores = torch.matmul(keys, query).squeeze(-1)  # [N, T]
-        scores = scores / self.scale
-
-        # 4. 加入 regime-conditioned bias（逐时间步）
-        if regime_embedding.dim() == 3:
-            # regime_embedding: [N, T, d_regime] -> [N, T, D]
-            regime_query = self.regime_bias_proj(regime_embedding)  # [N, T, D]
-            # 每个时间步的 key 与其对应 regime query 做点积
-            bias = torch.einsum("ntd,ntd->nt", keys, regime_query) / self.scale
-        else:
-            # regime_embedding: [N, d_regime] -> [N, D]
-            regime_query = self.regime_bias_proj(regime_embedding)  # [N, D]
-            bias = (
-                torch.matmul(keys, regime_query.unsqueeze(-1)).squeeze(-1) / self.scale
-            )
-
-        scores = scores + bias
-
-        # 5. 归一化并加权求和
+        scores = torch.matmul(keys, query.unsqueeze(-1)).squeeze(-1) / self.scale
         lam = torch.softmax(scores, dim=1).unsqueeze(1)  # [N, 1, T]
-        output = torch.matmul(lam, z).squeeze(1)  # [N, D]
-
-        return output
+        return torch.matmul(lam, z).squeeze(1)  # [N, D]
 
 
 class CrossAttention(nn.Module):
@@ -432,9 +420,9 @@ class PPNet(nn.Module):
         regime_embedding = self.regime_encoder(
             market_state_features
         )  # [N, T, d_regime]
+        regime_current = regime_embedding[:, -1, :]  # [N, d_regime]
 
         # Regime-conditioned CS Features
-        regime_current = regime_embedding[:, -1, :]  # [N, d_regime]
         stock_cs_features = self.cs_film(stock_cs_features, regime_current)
 
         # Intra-Stock Temporal Modeling (Daily)
@@ -442,7 +430,7 @@ class PPNet(nn.Module):
         stock_temporal_embeds = self.ts_film(stock_temporal_embeds, regime_embedding)
         stock_temporal_states = self.temporal_layers(stock_temporal_embeds)
         stock_temporal_features = self.temporal_attn(
-            stock_temporal_states, regime_embedding
+            stock_temporal_states, regime_current
         )
 
         # Intra-Stock Temporal Modeling (Intraday)

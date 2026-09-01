@@ -981,7 +981,7 @@ class MarketAlpha158(Alpha158):
             [
                 Mean(df["Raise_Num_Ratio"], 5),
                 Mean(net_raise, 5),
-                limit_net,
+                Mean(limit_net, 5),
                 Mean(nhnl, 20),
                 df["Over250_Avgclose_Num_Ratio"],
             ]
@@ -990,7 +990,7 @@ class MarketAlpha158(Alpha158):
             [
                 "RAISE_RATIO_5D",
                 "NET_RAISE_5D",
-                "LIMIT_NET",
+                "LIMIT_NET_5D",
                 "NHNL_MEAN_20D",
                 "OVER250_RATIO",
             ]
