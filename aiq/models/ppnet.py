@@ -14,7 +14,7 @@ from aiq.losses import TopKLoss, HybridLoss
 from .base import BaseModel
 
 
-class PhaseRotationSampler(Sampler):
+class CyclicPhaseOffsetSampler(Sampler):
     """按预测周期轮换训练日期，每个 epoch 内的标签窗口互不重叠。
 
     以 ``stride=5`` 为例：
@@ -30,7 +30,7 @@ class PhaseRotationSampler(Sampler):
     def __init__(
         self,
         data_source: Dataset,
-        stride: int = 5,
+        stride: int = 1,
         shuffle: bool = True,
         seed: int = 42,
     ):
@@ -199,7 +199,7 @@ class PPNetModel(BaseModel):
         return muon_params, adamw_params
 
     def fit(self, train_dataset: Dataset, val_dataset: Dataset = None):
-        train_sampler = PhaseRotationSampler(
+        train_sampler = CyclicPhaseOffsetSampler(
             train_dataset,
             stride=self.train_stride,
             shuffle=True,

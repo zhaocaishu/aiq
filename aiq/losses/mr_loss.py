@@ -11,7 +11,7 @@ class MarginRankingLoss(nn.Module):
     than those with lower returns, maintaining at least a specified margin.
     """
 
-    def __init__(self, margin: float = 0.1, epsilon: float = 0.05):
+    def __init__(self, margin: float = 0.0, epsilon: float = 0.1):
         super().__init__()
         self.margin = margin
         self.epsilon = epsilon
@@ -32,14 +32,14 @@ class MarginRankingLoss(nn.Module):
 
         N = preds.size(0)
         if N <= 1:
-            return preds.new_tensor(0.0, requires_grad=True)
+            return preds.sum() * 0.0
 
         # base loss
         diff_r = targets.unsqueeze(1) - targets.unsqueeze(0)
         mask = diff_r.abs() > self.epsilon
 
         if not mask.any():
-            return preds.new_tensor(0.0, requires_grad=True)
+            return preds.sum() * 0.0
 
         y = torch.where(diff_r > 0, 1.0, -1.0)
         diff_s = preds.unsqueeze(1) - preds.unsqueeze(0)
