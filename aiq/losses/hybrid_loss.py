@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
+from torch.nn import MSELoss
 
-from .topk_loss import TopKLoss
 from .mr_loss import MarginRankingLoss
 
 
@@ -17,7 +17,7 @@ class HybridLoss(nn.Module):
         super().__init__()
         self.aux_loss_weight = aux_loss_weight
         
-        self.main_loss_fn = TopKLoss()
+        self.main_loss_fn = MSELoss()
         self.aux_loss_fn = MarginRankingLoss()
 
     def forward(self, preds: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
