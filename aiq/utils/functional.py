@@ -7,64 +7,6 @@ import numpy as np
 from sklearn.linear_model import LinearRegression
 
 
-def ts_ohlcv_normalize(x: np.ndarray) -> np.ndarray:
-    """Normalize OHLCV time-series data.
-
-    Price features use log relative values: log(price / last_close)
-    Volume/Amount use temporal mean normalization: value / temporal_mean
-
-    Args:
-        x: Input data with shape (N, T, D), where D must contain at least 6 features:
-           [open, high, low, close, volume, amount]
-           N: number of samples, T: time steps, D: feature dimensions
-
-    Returns:
-        Normalized data with same shape as input, dtype float32
-
-    Raises:
-        ValueError: When input dimensions are incorrect or insufficient features
-    """
-    # Input validation
-    if x.ndim != 3:
-        raise ValueError(f"Expected 3D array (N, T, D), got dimension: {x.ndim}")
-    if x.shape[2] < 6:
-        raise ValueError(f"Expected at least 6 features, got: {x.shape[2]}")
-
-    # Feature index constants
-    OPEN, HIGH, LOW, CLOSE, VOLUME, AMOUNT = 0, 1, 2, 3, 4, 5
-
-    # Create copy and convert to float32
-    x_norm = x.astype(np.float32, copy=True)
-
-    # Price feature normalization: log relative values
-    # Using the last closing price of each sample as reference
-    ref_close = x_norm[:, -1:, CLOSE][:, :, np.newaxis]  # Shape: (N, 1, 1)
-    PRICE_IDX = (OPEN, HIGH, LOW, CLOSE)
-
-    # Calculate log relative values for all price features at once
-    # Add epsilon to avoid division by zero
-    epsilon = 1e-5
-    price_rel = x_norm[:, :, PRICE_IDX] / (ref_close + epsilon)
-    x_norm[:, :, PRICE_IDX] = np.log(price_rel)
-
-    # Volume normalization: temporal mean normalization
-    vol = x_norm[:, :, VOLUME]
-    vol_mean = np.mean(vol, axis=1, keepdims=True)
-    # Safe division to handle zero mean
-    x_norm[:, :, VOLUME] = np.divide(
-        vol, vol_mean, out=np.zeros_like(vol), where=vol_mean != 0
-    )
-
-    # Amount normalization: temporal mean normalization
-    amt = x_norm[:, :, AMOUNT]
-    amt_mean = np.mean(amt, axis=1, keepdims=True)
-    x_norm[:, :, AMOUNT] = np.divide(
-        amt, amt_mean, out=np.zeros_like(amt), where=amt_mean != 0
-    )
-
-    return x_norm
-
-
 def ts_robust_zscore(x: np.ndarray, clip_outlier: bool = False) -> np.ndarray:
     """
     Robust z-score normalization along the time axis.
@@ -124,28 +66,34 @@ def zscore(x, clip_min=-3.0, clip_max=3.0):
 
 def neutralize(
     df: pd.DataFrame,
+    fields_group: str = "feature",
+    exposure_group: str = "feature",
     industry_col: str = None,
     cap_col: str = None,
-    factor_cols: List[str] = [],
+    factor_cols: List[str] = None,
     add_suffix: bool = False,
-    feature_group: str = "feature",
-    label_group: str = "label",
+    suffix: str = "_NEU",
+    min_samples: int = 10,
 ) -> pd.DataFrame:
     """
     Neutralize specified factor columns by regressing out industry and market cap effects.
     Supports regex patterns in factor_cols to match multiple column names.
 
     Parameters:
-    - df: DataFrame with a top‑level column label “feature” containing all features.
-    - industry_col: Name of the column under “feature” that holds industry categories.
-    - cap_col: Name of the column under “feature” that holds market capitalization values.
+    - df: DataFrame with a top‑level column label exposure_group containing all features.
+    - fields_group: str, default "feature"
+        Top-level column name for the factor sub-DataFrame.
+    - exposure_group: str, default "feature"
+        Top-level column name for the exposure sub-DataFrame.
+    - industry_col: Name of the column under exposure_group that holds industry categories.
+    - cap_col: Name of the column under exposure_group that holds market capitalization values.
     - factor_cols: List of regex patterns (as strings) to select which factor columns to neutralize.
     - add_suffix: If True, keep original columns and add new columns with "_NEU" suffix.
                   If False, replace original columns with residuals (default).
-    - feature_group : str, default "feature"
-        Top-level column name for the feature sub-DataFrame.
-    - label_group : str, default "label"
-        Top-level column name for the label sub-DataFrame.
+    - suffix: str, default "_NEU"
+        Suffix for the new columns.
+    - min_samples: int, default 10
+        Minimum number of valid samples to fit the regression model.
 
     Returns:
     - The same DataFrame, but with each matched factor column replaced by its regression residuals, or with new "_NEU" columns added if add_suffix=True.
@@ -159,18 +107,32 @@ def neutralize(
 
     # Extract the “feature” sub‑DataFrame
     res_df = df.copy()
-    features = res_df[feature_group]
+    factor_df = res_df[fields_group]
+    exposure_df = res_df[exposure_group]
 
     # Create design matrix: industry dummies + cap + constant
     X_parts = []
+    valid_x = pd.Series(True, index=res_df.index)
+
     if industry_col is not None:
+        industry = exposure_df[industry_col]
+
+        # Missing industry should not silently become baseline industry.
+        valid_x &= industry.notna()
+
         industry_dummies = pd.get_dummies(
-            features[industry_col].astype("category"), prefix="IND", drop_first=True
+            industry.astype("category"), prefix="IND", drop_first=True
         )
+
         X_parts.append(industry_dummies)
 
     if cap_col is not None:
-        cap_series = features[[cap_col]].astype(float)
+        cap = exposure_df[cap_col]
+
+        # Missing cap should not silently become baseline cap.
+        valid_x &= cap.notna() & np.isfinite(cap)
+
+        cap_series = cap.astype(float)
         X_parts.append(cap_series)
 
     X = pd.concat(X_parts, axis=1)
@@ -181,12 +143,9 @@ def neutralize(
 
     # Collect all matched (group, column_name) pairs
     matched_factors = []
-    for group in [feature_group, label_group]:
-        if group not in res_df.columns:
-            continue
-        for col in res_df[group].columns:
-            if re.search(combined_pattern, str(col)):
-                matched_factors.append((group, col))
+    for col in res_df[fields_group].columns:
+        if re.search(combined_pattern, str(col)):
+            matched_factors.append(col)
 
     if not matched_factors:
         return res_df
@@ -195,17 +154,19 @@ def neutralize(
     model = LinearRegression(fit_intercept=False)
 
     # Loop through each factor, fit on non‑missing rows, and store residuals
-    for group, factor in matched_factors:
-        y = res_df[group][factor].astype(float)
+    for factor in matched_factors:
+        y = factor_df[factor].astype(float)
 
-        valid_mask = y.notna()
-        if not valid_mask.any():
-            # Skip if all values are missing
+        valid = valid_x & y.notna() & np.isfinite(y)
+
+        n_valid = int(valid.sum())
+
+        if n_valid < min_samples:
             continue
 
         # Fit on rows where y is present
-        X_sub = X.loc[valid_mask].values
-        y_sub = y.loc[valid_mask].values
+        X_sub = X.loc[valid].values
+        y_sub = y.loc[valid].values
 
         model.fit(X_sub, y_sub)
         residuals = y_sub - model.predict(X_sub)
@@ -213,31 +174,45 @@ def neutralize(
         # Write residuals back
         if add_suffix:
             # Keep original column and add a new column with "_NEU" suffix
-            neu_col = f"{factor}_NEU"
-            res_df.loc[valid_mask, (group, neu_col)] = residuals.astype("float32")
+            neu_col = f"{factor}{suffix}"
+            res_df.loc[valid, (fields_group, neu_col)] = residuals.astype("float32")
         else:
             # Replace original column with residuals
-            res_df.loc[valid_mask, (group, factor)] = residuals.astype("float32")
+            res_df.loc[valid, (fields_group, factor)] = residuals.astype("float32")
 
     return res_df
 
 
 def drop_extreme_label(x: np.ndarray, percentile: float = 2.5):
     x = np.asarray(x)
-    if x.ndim != 2 or x.shape[1] != 1:
-        if x.ndim == 1:
-            x = x.reshape(-1, 1)
-        else:
-            raise ValueError(f"Expected input shape (N, 1) or (N,), got {x.shape}")
 
-    lower, upper = np.percentile(x, [percentile, 100 - percentile])
-    mask = (x[:, 0] >= lower) & (x[:, 0] <= upper)
-    return mask
+    if x.ndim == 1:
+        x = x.reshape(-1, 1)
+    elif x.ndim != 2 or x.shape[1] != 1:
+        raise ValueError(f"Expected input shape (N, 1) or (N,), got {x.shape}")
+
+    if not 0 <= percentile < 50:
+        raise ValueError(f"percentile must be in [0, 50), got {percentile}")
+
+    values = x[:, 0]
+
+    valid = np.isfinite(values)
+
+    # 没有有效 label
+    if not valid.any():
+        return np.zeros(len(values), dtype=bool)
+
+    lower, upper = np.percentile(
+        values[valid],
+        [percentile, 100 - percentile],
+    )
+
+    return valid & (values >= lower) & (values <= upper)
 
 
 def fillna(x: np.ndarray, fill_value=0.0):
     if not isinstance(x, np.ndarray):
-        raise TypeError("输入必须是 numpy.ndarray 类型")
+        raise TypeError(f"Expected numpy.ndarray, got {type(x)}")
 
     x_filled = np.where(np.isnan(x), fill_value, x)
     return x_filled

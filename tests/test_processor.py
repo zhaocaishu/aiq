@@ -31,6 +31,7 @@ if __name__ == "__main__":
     print(cswinsorize(df))
 
     cs_neutralize = CSNeutralize(
+        fields_group="feature",
         industry_col="IND_CLS",
         cap_col="MKT_CAP",
         factor_cols=["Factor_0", "Factor_1", "Factor_2"],

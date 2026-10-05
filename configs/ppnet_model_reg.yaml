@@ -20,6 +20,7 @@ data_handler:
       - class: CSNeutralize
         module_path: aiq.dataset.processor
         kwargs:
+          fields_group: "feature"
           industry_col: "IND_CLS_L1"
           cap_col: "FUND_CAP"
           factor_cols:
@@ -31,10 +32,6 @@ data_handler:
             - "CS_VMA(?:5|10|20|30|60)$"
             - "CS_WVMA(?:5|10|20|30|60)$"
             - "CS_TURN_(?:MA|STD)(?:5|10|20|30|60)$"
-      - class: Dropna
-        module_path: aiq.dataset.processor
-        kwargs:
-          fields_group: "label"
       - class: CSWinsorize
         module_path: aiq.dataset.processor
         kwargs:
@@ -58,7 +55,7 @@ dataset:
       train: ["2017-01-01", "2022-06-20"]
       valid: ["2022-07-01", "2022-12-20"]
       test: ["2023-01-01", "2023-12-31"]
-    seq_len: 120
+    seq_len: 20
     label_names: ["RET_5D"]
     use_augmentation: false
 model:

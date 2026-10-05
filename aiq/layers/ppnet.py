@@ -42,94 +42,6 @@ class TemporalAttention(nn.Module):
         return torch.matmul(lam, z).squeeze(1)  # [N, D]
 
 
-class DynamicWindowTemporalAttention(TemporalAttention):
-    def __init__(
-        self,
-        d_model,
-        d_regime,
-        windows=(20, 60, 120),
-        router_hidden=64,
-        dynamic_init=0.01,
-    ):
-        super().__init__(d_model, d_regime)
-
-        self.windows = tuple(sorted(windows))
-
-        self.router = nn.Sequential(
-            nn.LayerNorm(d_model + d_regime),
-            nn.Linear(d_model + d_regime, router_hidden),
-            nn.SiLU(),
-            nn.Linear(router_hidden, len(self.windows)),
-        )
-
-        nn.init.zeros_(self.router[-1].weight)
-        nn.init.zeros_(self.router[-1].bias)
-
-        self.dynamic_scale = nn.Parameter(torch.tensor(float(dynamic_init)))
-
-        self.last_window_weights = None
-
-    def forward(self, z, regime_current):
-        _, T, _ = z.shape
-
-        baseline = super().forward(z, regime_current)
-
-        router_input = torch.cat(
-            [z[:, -1, :], regime_current],
-            dim=-1,
-        )
-        logits = self.router(router_input)
-
-        window_features = []
-        valid_mask = []
-
-        for w in self.windows:
-            if w <= T:
-                feat = super().forward(
-                    z[:, -w:, :],
-                    regime_current,
-                )
-                valid_mask.append(True)
-            else:
-                feat = torch.zeros_like(baseline)
-                valid_mask.append(False)
-
-            window_features.append(feat)
-
-        valid_mask = torch.tensor(
-            valid_mask,
-            dtype=torch.bool,
-            device=z.device,
-        )
-
-        if not valid_mask.any():
-            self.last_window_weights = None
-            return baseline
-
-        logits = logits.masked_fill(
-            ~valid_mask.unsqueeze(0),
-            float("-inf"),
-        )
-
-        weights = torch.softmax(logits, dim=-1)
-
-        window_features = torch.stack(
-            window_features,
-            dim=1,
-        )
-
-        dynamic_feature = torch.sum(
-            window_features * weights.unsqueeze(-1),
-            dim=1,
-        )
-
-        self.last_window_weights = weights.detach()
-
-        scale = torch.tanh(self.dynamic_scale)
-
-        return baseline + scale * (dynamic_feature - baseline)
-
-
 class CrossAttention(nn.Module):
     def __init__(self, d_model, nhead):
         super().__init__()
@@ -454,12 +366,9 @@ class PPNet(nn.Module):
                 for _ in range(2)
             ]
         )
-        self.temporal_attn = DynamicWindowTemporalAttention(
+        self.temporal_attn = TemporalAttention(
             d_model=self.d_temporal_hidden,
             d_regime=d_regime,
-            windows=(20, 60, 120),
-            router_hidden=64,
-            dynamic_init=0.01,
         )
 
         # Temporal Encoder (Intra-stock) for intraday data

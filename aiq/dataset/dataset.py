@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import List, Dict, Tuple, Optional, Set
+from typing import List, Dict, Tuple
 
 import torch
 import numpy as np
@@ -26,9 +26,9 @@ class Dataset(torch.utils.data.Dataset):
         data_dir: str = "",
         feature_names: List[str] = [],
         label_names: List[str] = [],
-        mode: str = "train",
+        split: str = "train",
     ):
-        start_time, end_time = segments[mode]
+        start_time, end_time = segments[split]
         self.data = data.loc[start_time:end_time].copy()
         self.data_dir = data_dir
         self.feature_names = feature_names
@@ -61,7 +61,7 @@ class TSDataset(Dataset):
         feature_names: List[str] = [],
         label_names: List[str] = [],
         use_augmentation: bool = False,
-        mode: str = "train",
+        split: str = "train",
     ):
         """
         Initialize the dataset.
@@ -75,7 +75,7 @@ class TSDataset(Dataset):
             feature_names (List[str], optional): List of feature column names. Defaults to [].
             label_names (List[str], optional): List of label column names. Defaults to [].
             use_augmentation (bool, optional): Whether to apply data augmentation. Defaults to False.
-            mode (str, optional): Dataset mode ('train', 'val', 'test'). Defaults to "train".
+            split (str, optional): Dataset split ('train', 'val', 'test'). Defaults to "train".
         """
         self.data_dir = data_dir
         self.data = data.copy(deep=False)
@@ -83,15 +83,14 @@ class TSDataset(Dataset):
         self.feature_names = feature_names
         self.label_names = label_names
         self.use_augmentation = use_augmentation
-        self.mode = mode
 
-        self.start_time, self.end_time = segments[mode]
+        self.start_time, self.end_time = segments[split]
 
         # Build feature index positions for efficiency
         self._build_feature_indices()
 
         # Load and set instrument filter if provided
-        self.instruments_set = self._load_instruments(data_dir, universe)
+        self._load_instruments(data_dir, universe)
 
         # Setup the time series data
         self._setup_time_series()
@@ -119,9 +118,7 @@ class TSDataset(Dataset):
             i for i, name in enumerate(self.feature_names) if name.startswith("MKT_")
         ]
 
-    def _load_instruments(
-        self, data_dir: str, universe: str
-    ) -> Optional[Set[Tuple[str, str]]]:
+    def _load_instruments(self, data_dir: str, universe: str):
         """
         Load instruments from the specified directory and universe, if provided.
 
@@ -136,10 +133,11 @@ class TSDataset(Dataset):
             df = DataLoader.load_instruments(
                 data_dir, universe, self.start_time, self.end_time
             )
-            return set(zip(df["Instrument"], df["Date"]))
-        return None
+            self.instruments_set = set(zip(df["Instrument"], df["Date"]))
+        else:
+            self.instruments_set = None
 
-    def _is_valid_sample(self, instrument: str, date: str) -> bool:
+    def _in_segment_and_pool(self, instrument: str, date: str) -> bool:
         """
         Validate whether current sample should be included.
         """
@@ -175,7 +173,7 @@ class TSDataset(Dataset):
         # Group valid slices by date
         daily_slices = defaultdict(list)
         for i, (instrument, date) in enumerate(self._index):
-            if not self._is_valid_sample(instrument, date):
+            if not self._in_segment_and_pool(instrument, date):
                 continue
 
             # Ensure slice has exact sequence length
@@ -243,6 +241,21 @@ class TSDataset(Dataset):
         # Append ground truth labels if in training/validation mode
         if self._labels is not None:
             labels = np.array([self._labels[sl.stop - 1] for sl in ts_slices])
+
+            # 每只股票的所有标签都必须有效
+            valid_mask = np.isfinite(labels).all(axis=1)
+
+            if not valid_mask.any():
+                raise ValueError(
+                    f"{self._daily_dates[index]}: 所有样本标签均无效"
+                )
+
+            labels = labels[valid_mask]
+            features = features[valid_mask]
+            sample_indices = sample_indices[valid_mask]
+            ts_slices = [
+                sl for sl, valid in zip(ts_slices, valid_mask) if valid
+            ]
         else:
             labels = None
 

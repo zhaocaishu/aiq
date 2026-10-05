@@ -21,7 +21,7 @@ if __name__ == "__main__":
         seq_len=8,
         feature_names=data_handler.feature_names,
         label_names=["RET_5D"],
-        mode="train",
+        split="train",
     )
 
     data_dict = train_dataset[0]

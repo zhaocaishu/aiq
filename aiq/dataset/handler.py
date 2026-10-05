@@ -28,7 +28,7 @@ from aiq.ops import (
 from aiq.utils.module import init_instance_by_config
 
 from .loader import DataLoader
-from .processor import Processor
+from .processor import Processor, CSWinsorize
 
 
 class DataHandler:
@@ -40,9 +40,9 @@ class DataHandler:
         end_time: str = "",
         fit_start_time: str = "",
         fit_end_time: str = "",
-        processors: List[Processor] = [],
         label_price: str = "close",
         use_hf_features: bool = False,
+        processors: List[Processor] = [],
     ):
         self.data_dir = data_dir
         if isinstance(instruments, str):
@@ -61,9 +61,9 @@ class DataHandler:
         self.end_time = end_time
         self.fit_start_time = fit_start_time
         self.fit_end_time = fit_end_time
-        self.processors = [init_instance_by_config(proc) for proc in processors]
         self.label_price = label_price
         self.use_hf_features = use_hf_features
+        self.processors = [init_instance_by_config(proc) for proc in processors]
 
     def setup_data(self, mode="train") -> pd.DataFrame:
         raise NotImplementedError
@@ -97,9 +97,9 @@ class Alpha158(DataHandler):
         end_time: str = "",
         fit_start_time: str = "",
         fit_end_time: str = "",
-        processors: List[Processor] = [],
         label_price: str = "close",
         use_hf_features: bool = False,
+        processors: List[Processor] = [],
     ):
         super().__init__(
             data_dir,
@@ -108,11 +108,12 @@ class Alpha158(DataHandler):
             end_time,
             fit_start_time,
             fit_end_time,
-            processors,
             label_price,
             use_hf_features,
+            processors,
         )
         self.feature_names = []
+        self.hf_feature_names = []
         self.label_names = ["RET_5D"]
 
     def _get_calendar_index(self) -> pd.DatetimeIndex:
@@ -630,15 +631,28 @@ class Alpha158(DataHandler):
 
         return feature_df
 
-    @staticmethod
-    def _aggregate_daily_hf_features(group: pd.DataFrame) -> pd.Series:
-        """Aggregate one trading day's 5-minute bars into daily HF features."""
+    def _aggregate_daily_hf_features(self, group: pd.DataFrame) -> pd.Series:
+        # Define feature names
+        self.hf_feature_names = [
+            "TS_HF_RV",
+            "TS_HF_SKEW",
+            "TS_HF_KURT",
+            "TS_HF_UP_VAR",
+            "TS_HF_DOWN_VAR",
+            "TS_HF_TAIL_RET",
+            "TS_HF_AMIHUD",
+            "TS_HF_SIGNED_AMT_IMB",
+            "TS_HF_TREND_EFF",
+            "TS_HF_TAIL_AMT_RATIO",
+        ]
+
+        # Aggregate one trading day's 5-minute bars into daily HF features
         returns = group["Ret_5m"].dropna()
         amounts = group["AMount"].dropna()
 
         # Insufficient intraday observations are discarded to avoid noisy features.
         if len(returns) < 20:
-            return pd.Series(dtype="float32")
+            return pd.Series(np.nan, index=self.hf_feature_names, dtype="float32")
 
         positive_returns = returns[returns > 0]
         negative_returns = returns[returns < 0]
@@ -652,36 +666,26 @@ class Alpha158(DataHandler):
         total_amount = group["AMount"].fillna(0.0).sum()
         tail_amount = tail_group["AMount"].fillna(0.0).sum()
 
-        features = {
-            "TS_HF_RV": np.sum(returns**2),
-            "TS_HF_SKEW": returns.skew(),
-            "TS_HF_KURT": returns.kurtosis(),
-            "TS_HF_UP_VAR": (
-                np.sum(positive_returns**2) if len(positive_returns) > 0 else 0.0
-            ),
-            "TS_HF_DOWN_VAR": (
-                np.sum(negative_returns**2) if len(negative_returns) > 0 else 0.0
-            ),
-            "TS_HF_TAIL_RET": np.prod(1 + tail_returns.fillna(0)) - 1,
-            "TS_HF_AMIHUD": np.log1p(np.mean(illiquidity) * 1e8),
-            "TS_HF_SIGNED_AMT_IMB": (
-                (np.sign(returns) * return_amounts).sum()
-                / (total_return_amount + 1e-12)
-            ),
-            "TS_HF_TREND_EFF": (returns.sum() / (returns.abs().sum() + 1e-12)),
-            "TS_HF_TAIL_AMT_RATIO": tail_amount / (total_amount + 1e-12),
-        }
-        return pd.Series(features).astype("float32")
+        features = [
+            np.sum(returns**2),
+            returns.skew(),
+            returns.kurtosis(),
+            np.sum(positive_returns**2),
+            np.sum(negative_returns**2),
+            np.prod(1 + tail_returns.fillna(0)) - 1,
+            np.log1p(np.mean(illiquidity) * 1e8),
+            ((np.sign(returns) * return_amounts).sum() / (total_return_amount + 1e-12)),
+            returns.sum() / (returns.abs().sum() + 1e-12),
+            tail_amount / (total_amount + 1e-12),
+        ]
+        return pd.Series(features, index=self.hf_feature_names, dtype="float32")
 
     def extract_hf_features(
         self,
         hf_df: pd.DataFrame,
         timestamp_col: str = "Trade_time",
     ) -> pd.DataFrame:
-        """Extract daily microstructure features from one instrument's intraday bars."""
-        if hf_df is None or hf_df.empty:
-            return pd.DataFrame()
-
+        # Extract daily microstructure features from one instrument's intraday bars
         prepared_df = hf_df.copy()
         prepared_df[timestamp_col] = pd.to_datetime(prepared_df[timestamp_col])
         prepared_df["Date"] = prepared_df[timestamp_col].dt.normalize()
@@ -690,7 +694,9 @@ class Alpha158(DataHandler):
         # Sorting must precede pct_change so returns remain strictly intraday.
         prepared_df = prepared_df.sort_values(timestamp_col)
         prepared_df["Ret_5m"] = (
-            prepared_df.groupby("Date")["Adj_close"].pct_change().astype("float32")
+            prepared_df.groupby("Date")["Adj_close"]
+            .pct_change(fill_method=None)
+            .astype("float32")
         )
 
         daily_feature_df = (
@@ -714,7 +720,7 @@ class Alpha158(DataHandler):
         """Load, aggregate and merge HF features for all configured instruments."""
         daily_feature_frames: List[pd.DataFrame] = []
 
-        for instrument in self.instruments:
+        for instrument in feature_df["Instrument"].unique():
             hf_df = DataLoader.load_instrument_features(
                 data_dir=self.data_dir,
                 instrument=instrument,
@@ -723,27 +729,29 @@ class Alpha158(DataHandler):
                 end_time=self.end_time,
                 freq="5min",
             )
+
+            if hf_df is None or hf_df.empty:
+                raise ValueError(
+                    f"{instrument}: 在 [{self.start_time}, {self.end_time}] "
+                    "内缺少5分钟数据"
+                )
+
             daily_feature_df = self.extract_hf_features(
                 hf_df,
                 timestamp_col="Trade_time",
             )
-            if not daily_feature_df.empty:
-                daily_feature_frames.append(daily_feature_df)
 
-        if not daily_feature_frames:
-            return feature_df
+            if daily_feature_df.empty:
+                raise ValueError(f"{instrument}: 分钟数据无法生成有效的日级高频特征")
+
+            daily_feature_frames.append(daily_feature_df)
 
         hf_feature_df = pd.concat(daily_feature_frames, ignore_index=True)
         hf_feature_df["Date"] = hf_feature_df["Date"].dt.strftime("%Y-%m-%d")
 
-        hf_feature_names = [
-            column
-            for column in hf_feature_df.columns
-            if column not in ["Date", "Instrument"]
-        ]
         self.feature_names.extend(
             feature_name
-            for feature_name in hf_feature_names
+            for feature_name in self.hf_feature_names
             if feature_name not in self.feature_names
         )
 
@@ -804,16 +812,23 @@ class Alpha158(DataHandler):
             column_tuples.extend([("label", label_name) for label_name in label_names])
         df.columns = pd.MultiIndex.from_tuples(column_tuples)
 
-        date_index = df.index.get_level_values("Date")
-        fit_df = df.loc[
-            (date_index >= self.fit_start_time) & (date_index <= self.fit_end_time)
-        ]
         for proc in processors:
-            if mode == "train" and hasattr(proc, "fit"):
+            if mode == "train":
+                dates = df.index.get_level_values("Date")
+                fit_df = df.loc[
+                    (dates >= self.fit_start_time) & (dates <= self.fit_end_time)
+                ]
                 proc.fit(fit_df)
-            # 判断是否在当前模式下启用该处理器
-            if mode == "train" or proc.is_for_infer():
-                df = proc(df)
+
+            # Skip CSWinsorize for test mode
+            if (
+                mode == "test"
+                and isinstance(proc, CSWinsorize)
+                and proc.fields_group == "label"
+            ):
+                continue
+
+            df = proc(df)
 
         df.columns = df.columns.droplevel()
         return df
@@ -895,11 +910,11 @@ class MarketAlpha158(Alpha158):
         end_time: str = "",
         fit_start_time: str = "",
         fit_end_time: str = "",
-        processors: List[Processor] = [],
         market_names: List[str] = [],
-        market_processors: List[Processor] = [],
         label_price: str = "close",
         use_hf_features: bool = False,
+        processors: List[Processor] = [],
+        market_processors: List[Processor] = [],
     ):
         super().__init__(
             data_dir,
@@ -908,12 +923,13 @@ class MarketAlpha158(Alpha158):
             end_time,
             fit_start_time,
             fit_end_time,
-            processors,
             label_price,
             use_hf_features,
+            processors,
         )
 
         self.market_names = market_names
+        self.market_feature_names = []
         self.market_processors = [
             init_instance_by_config(proc) for proc in market_processors
         ]
@@ -1072,13 +1088,13 @@ class MarketAlpha158(Alpha158):
         # go through the same market_processors pipeline)
         market_feature_df = self._add_cross_index_spreads(market_feature_df)
 
-        market_feature_names = market_feature_df.columns.tolist()
-        self.feature_names.extend(market_feature_names)
+        self.market_feature_names = market_feature_df.columns.tolist()
+        self.feature_names.extend(self.market_feature_names)
 
         # Process market features (Normalization, etc.)
         market_feature_df = self.process(
             df=market_feature_df,
-            feature_names=market_feature_names,
+            feature_names=self.market_feature_names,
             processors=self.market_processors,
             mode=mode,
         ).astype("float32")

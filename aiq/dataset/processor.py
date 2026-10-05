@@ -1,5 +1,5 @@
 import abc
-from typing import List, Optional
+from typing import List
 
 import pandas as pd
 import numpy as np
@@ -34,15 +34,14 @@ def get_group_columns(
 
 
 class Processor(abc.ABC):
-    def fit(self, df: pd.DataFrame = None):
-        """
-        learn data processing parameters
-        Parameters
-        ----------
-        df : pd.DataFrame
-            When we fit and process data with processor one by one. The fit function reiles on the output of previous
-            processor, i.e. `df`.
-        """
+    """Base interface for data transformations."""
+
+    def __init__(self, fields_group: str = None):
+        self.fields_group = fields_group
+
+    def fit(self, df: pd.DataFrame):
+        """Fit processor on training data."""
+        return self
 
     @abc.abstractmethod
     def __call__(self, df: pd.DataFrame):
@@ -55,24 +54,17 @@ class Processor(abc.ABC):
         df : pd.DataFrame
             The raw_df of handler or result from previous processor.
         """
+        raise NotImplementedError
 
-    def is_for_infer(self) -> bool:
+    def fit_transform(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Is this processor usable for inference
-        Some processors are not usable for inference.
-
-        Returns
-        -------
-        bool:
-            if it is usable for infenrece.
+        Fit the processor and transform the same dataset.
         """
-        return True
+        self.fit(df)
+        return self(df)
 
 
 class Dropna(Processor):
-    def __init__(self, fields_group=None):
-        self.fields_group = fields_group
-
     def __call__(self, df):
         return df.dropna(subset=get_group_columns(df, self.fields_group))
 
@@ -80,8 +72,8 @@ class Dropna(Processor):
 class Fillna(Processor):
     """Process NaN values by filling with a constant."""
 
-    def __init__(self, fields_group=None, fill_value=0):
-        self.fields_group = fields_group
+    def __init__(self, fields_group: str = None, fill_value=0):
+        super().__init__(fields_group)
         self.fill_value = fill_value
 
     def __call__(self, df):
@@ -107,7 +99,7 @@ class RobustZScoreNorm(Processor):
     """
 
     def __init__(self, fields_group=None, clip_outlier=True, exclude_cols=None):
-        self.fields_group = fields_group
+        super().__init__(fields_group)
         self.clip_outlier = clip_outlier
         self.exclude_cols = exclude_cols or []
 
@@ -133,15 +125,24 @@ class CSNeutralize(Processor):
     """Factors Neutralization"""
 
     def __init__(
-        self, industry_col: str = None, cap_col: str = None, factor_cols: List[str] = []
+        self,
+        fields_group: str = None,
+        industry_col: str = None,
+        cap_col: str = None,
+        factor_cols: List[str] = [],
     ):
+        super().__init__(fields_group)
         self.industry_col = industry_col
         self.cap_col = cap_col
         self.factor_cols = factor_cols
 
     def __call__(self, df):
         df = df.groupby(level="Date", group_keys=False).apply(
-            neutralize, self.industry_col, self.cap_col, self.factor_cols
+            neutralize,
+            fields_group=self.fields_group,
+            industry_col=self.industry_col,
+            cap_col=self.cap_col,
+            factor_cols=self.factor_cols,
         )
         return df
 
@@ -163,7 +164,7 @@ class CSWinsorize(Processor):
         lower_quantile: lower tail cutoff (e.g. 0.01 for 1%)
         upper_quantile: upper tail cutoff (e.g. 0.99 for 99%)
         """
-        self.fields_group = fields_group
+        super().__init__(fields_group)
         self.lower_quantile = lower_quantile
         self.upper_quantile = upper_quantile
         self.exclude_cols = exclude_cols or []
@@ -184,59 +185,11 @@ class CSWinsorize(Processor):
         return df
 
 
-class DropExtremeLabel(Processor):
-    """
-    Processor that drops extreme label values within each cross-sectional group.
-
-    For each date, this processor groups the data using `fields_group` (on the label column),
-    and removes the lowest `percent` fraction and the highest `percent` fraction of label values.
-
-    Parameters
-    ----------
-    fields_group : str
-        Column name whose values are the labels to filter.
-    percent : float
-        Fraction of data to drop at each tail (0 < percent < 0.5).
-    """
-
-    def __init__(self, fields_group=None, percent: float = 0.025):
-        if not (0.0 < percent < 0.5):
-            raise ValueError("percent must be between 0 and 0.5")
-        self.fields_group = fields_group
-        self.percent = percent
-
-    def __call__(self, df: pd.DataFrame) -> pd.DataFrame:
-        cols = get_group_columns(df, self.fields_group)
-
-        # Start with an all-True mask
-        mask = pd.Series(True, index=df.index)
-        for col in cols:
-            # Compute per-date quantiles on the ORIGINAL data
-            lower = (
-                df[col]
-                .groupby(level="Date", group_keys=False)
-                .transform(lambda x: x.quantile(self.percent))
-            )
-            upper = (
-                df[col]
-                .groupby(level="Date", group_keys=False)
-                .transform(lambda x: x.quantile(1 - self.percent))
-            )
-            # Combine conditions: row must be within bounds for this column
-            mask &= df[col].between(lower, upper)
-
-        # Apply the final mask once
-        return df[mask]
-
-    def is_for_infer(self) -> bool:
-        return False
-
-
 class CSZScoreNorm(Processor):
     """Cross Sectional ZScore Normalization"""
 
     def __init__(self, fields_group=None, method="zscore", exclude_cols=None):
-        self.fields_group = fields_group
+        super().__init__(fields_group)
         if method == "zscore":
             self.zscore_func = zscore
         elif method == "robust":
@@ -261,8 +214,8 @@ class CSRankNorm(Processor):
     then normalizes the ranks to have zero mean and unit variance.
     """
 
-    def __init__(self, fields_group=None):
-        self.fields_group = fields_group
+    def __init__(self, fields_group: str = None):
+        super().__init__(fields_group)
 
     def __call__(self, df):
         cols = get_group_columns(df, self.fields_group)
