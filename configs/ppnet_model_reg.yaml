@@ -4,10 +4,10 @@ data_handler:
   module_path: aiq.dataset.handler
   kwargs:
     instruments: *market
-    start_time: "2016-01-01"
-    end_time: "2023-12-31"
-    fit_start_time: "2017-01-01"
-    fit_end_time: "2022-06-20"
+    start_time: "2015-07-01"
+    end_time: "2024-06-30"
+    fit_start_time: "2016-01-01"
+    fit_end_time: "2021-12-21"
     market_names: ["000300.SH", "000905.SH", "000852.SH"]
     label_price: "vwap"
     use_hf_features: true
@@ -52,8 +52,8 @@ dataset:
   kwargs:
     universe: *market
     segments:
-      train: ["2017-01-01", "2022-06-20"]
-      valid: ["2022-07-01", "2022-12-20"]
+      train: ["2016-01-01", "2021-12-21"]
+      valid: ["2022-01-01", "2022-12-21"]
       test: ["2023-01-01", "2023-12-31"]
     seq_len: 20
     label_names: ["RET_5D"]

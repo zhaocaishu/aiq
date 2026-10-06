@@ -4,10 +4,10 @@ data_handler:
   module_path: aiq.dataset.handler
   kwargs:
     instruments: *market
-    start_time: "2016-01-01"
-    end_time: "2023-12-31"
-    fit_start_time: "2017-01-01"
-    fit_end_time: "2022-06-20"
+    start_time: "2015-07-01"
+    end_time: "2024-06-30"
+    fit_start_time: "2016-01-01"
+    fit_end_time: "2021-12-21"
     processors:
       - class: Dropna
         module_path: aiq.dataset.processor
@@ -22,9 +22,9 @@ dataset:
   module_path: aiq.dataset.dataset
   kwargs:
     segments:
-      train: ["2017-01-01", "2022-06-20"]
-      valid: ["2022-07-01", "2022-12-20"]
-      test: ["2023-01-01", "2023-06-30"]
+      train: ["2016-01-01", "2021-12-21"]
+      valid: ["2022-01-01", "2022-12-21"]
+      test: ["2023-01-01", "2023-12-31"]
     label_names: ["RET_5D"]
 model:
   class: XGBModel
@@ -46,7 +46,7 @@ evaluator:
   module_path: aiq.evaluation.evaluator
   kwargs:
     start_time: "2023-01-01"
-    end_time: "2023-06-30"
+    end_time: "2023-12-31"
     benchmark: "000906.SH"
     pred_col: "PRED_RET_5D"
     label_col: "RET_5D"
