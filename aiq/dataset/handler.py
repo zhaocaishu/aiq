@@ -41,7 +41,6 @@ class DataHandler:
         fit_start_time: str = "",
         fit_end_time: str = "",
         label_price: str = "close",
-        use_hf_features: bool = False,
         processors: List[Processor] = [],
     ):
         self.data_dir = data_dir
@@ -62,7 +61,8 @@ class DataHandler:
         self.fit_start_time = fit_start_time
         self.fit_end_time = fit_end_time
         self.label_price = label_price
-        self.use_hf_features = use_hf_features
+        self.feature_names = []
+        self.label_names = ["RET_5D"]
         self.processors = [init_instance_by_config(proc) for proc in processors]
 
     def setup_data(self, mode="train") -> pd.DataFrame:
@@ -109,12 +109,11 @@ class Alpha158(DataHandler):
             fit_start_time,
             fit_end_time,
             label_price,
-            use_hf_features,
             processors,
         )
-        self.feature_names = []
+
+        self.use_hf_features = use_hf_features
         self.hf_feature_names = []
-        self.label_names = ["RET_5D"]
 
     def _get_calendar_index(self) -> pd.DatetimeIndex:
         """Return a normalized, unique and sorted trading calendar."""
