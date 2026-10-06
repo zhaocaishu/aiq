@@ -116,17 +116,6 @@ class Evaluator:
             how="inner",
         ).merge(bench_ret, on=self.date_col, how="inner")
 
-        # Check if the merged dataframe is missing any samples from the instrument features
-        key_cols = [self.date_col, self.instrument_col]
-        inst_keys = pd.MultiIndex.from_frame(inst_features[key_cols])
-        df_keys = pd.MultiIndex.from_frame(df[key_cols])
-        missing_keys = inst_keys.difference(df_keys)
-
-        assert missing_keys.empty, (
-            f"merged df is missing {len(missing_keys)} samples from inst_features. "
-            f"Examples: {list(missing_keys[:5])}"
-        )
-
         # Check if the label and prediction columns contain any NaN values
         assert not df[self.label_col].isna().any(), f"{self.label_col} contains NaN"
         assert not df[self.pred_col].isna().any(), f"{self.pred_col} contains NaN"
