@@ -820,12 +820,8 @@ class Alpha158(DataHandler):
                 ]
                 proc.fit(fit_df)
 
-            # Skip CSWinsorize for test mode
-            if (
-                mode == "test"
-                and isinstance(proc, CSWinsorize)
-                and proc.fields_group == "label"
-            ):
+            # Skip label processing for test mode
+            if mode == "test" and proc.fields_group == "label":
                 continue
 
             df = proc(df)

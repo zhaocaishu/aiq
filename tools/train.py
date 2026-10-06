@@ -75,7 +75,7 @@ def load_datasets(
         data=data,
         data_dir=str(data_dir),
         feature_names=feature_names,
-        split="val",
+        split="valid",
     )
     if len(train_dataset) == 0 or len(val_dataset) == 0:
         raise ValueError("Training and validation datasets must both be non-empty.")

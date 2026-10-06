@@ -83,8 +83,9 @@ class TSDataset(Dataset):
         self.feature_names = feature_names
         self.label_names = label_names
         self.use_augmentation = use_augmentation
+        self.split = split
 
-        self.start_time, self.end_time = segments[split]
+        self.start_time, self.end_time = segments[self.split]
 
         # Build feature index positions for efficiency
         self._build_feature_indices()
@@ -243,7 +244,10 @@ class TSDataset(Dataset):
             labels = np.array([self._labels[sl.stop - 1] for sl in ts_slices])
 
             # 每只股票的所有标签都必须有效
-            valid_mask = np.isfinite(labels).all(axis=1)
+            if self.split == "test":
+                valid_mask = np.ones(len(labels), dtype=bool)
+            else:
+                valid_mask = np.isfinite(labels).all(axis=1)
 
             if not valid_mask.any():
                 raise ValueError(

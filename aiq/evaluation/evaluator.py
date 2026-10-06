@@ -68,7 +68,7 @@ class Evaluator:
         return pd.DataFrame(data)
 
     def _prepare_dataset(self, pred_df: pd.DataFrame) -> pd.DataFrame:
-        """Align prediction / label / benchmark returns."""
+        # Load instruments and features.
         instruments = (
             DataLoader.load_instruments(
                 self.data_dir, self.benchmark, self.start_time, self.end_time
@@ -96,6 +96,7 @@ class Evaluator:
             ]
         ]
 
+        # Load benchmark features.
         extended_end_time = (
             pd.to_datetime(self.end_time) + pd.Timedelta(days=20)
         ).strftime("%Y-%m-%d")
@@ -107,6 +108,7 @@ class Evaluator:
             columns={self.label_col: "BENCH_RET_5D"}
         )[[self.date_col, "BENCH_RET_5D"]]
 
+        # Merge instrument features, prediction, and benchmark returns.
         df = inst_features.merge(
             pred_df[
                 [self.date_col, self.instrument_col, self.pred_col, self.label_col]
@@ -115,13 +117,20 @@ class Evaluator:
             how="inner",
         ).merge(bench_ret, on=self.date_col, how="inner")
 
-        assert set(df[self.date_col]) == set(
-            pred_df[self.date_col]
-        ), f"{self.date_col} mismatch"
-        assert set(df[self.instrument_col]) == set(
-            pred_df[self.instrument_col]
-        ), f"{self.instrument_col} mismatch"
-        assert not pred_df[self.pred_col].isna().any(), f"{self.pred_col} contains NaN"
+        # Check if the merged dataframe is missing any samples from the instrument features
+        key_cols = [self.date_col, self.instrument_col]
+        inst_keys = pd.MultiIndex.from_frame(inst_features[key_cols])
+        df_keys = pd.MultiIndex.from_frame(df[key_cols])
+        missing_keys = inst_keys.difference(df_keys)
+
+        assert missing_keys.empty, (
+            f"merged df is missing {len(missing_keys)} samples from inst_features. "
+            f"Examples: {list(missing_keys[:5])}"
+        )
+
+        # Check if the label and prediction columns contain any NaN values
+        assert not df[self.label_col].isna().any(), f"{self.label_col} contains NaN"
+        assert not df[self.pred_col].isna().any(), f"{self.pred_col} contains NaN"
 
         return df
 
