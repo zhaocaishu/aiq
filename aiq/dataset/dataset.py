@@ -242,24 +242,6 @@ class TSDataset(Dataset):
         # Append ground truth labels if in training/validation mode
         if self._labels is not None:
             labels = np.array([self._labels[sl.stop - 1] for sl in ts_slices])
-
-            # 每只股票的所有标签都必须有效
-            if self.split == "test":
-                valid_mask = np.ones(len(labels), dtype=bool)
-            else:
-                valid_mask = np.isfinite(labels).all(axis=1)
-
-            if not valid_mask.any():
-                raise ValueError(
-                    f"{self._daily_dates[index]}: 所有样本标签均无效"
-                )
-
-            labels = labels[valid_mask]
-            features = features[valid_mask]
-            sample_indices = sample_indices[valid_mask]
-            ts_slices = [
-                sl for sl, valid in zip(ts_slices, valid_mask) if valid
-            ]
         else:
             labels = None
 

@@ -115,8 +115,8 @@ class Evaluator:
             how="inner",
         ).merge(bench_ret, on=self.date_col, how="inner")
 
-        # Check if the label and prediction columns contain any NaN values
-        assert not df[self.label_col].isna().any(), f"{self.label_col} contains NaN"
+        # Check if the prediction column contains any NaN values
+        assert not df["BENCH_RET_5D"].isna().any(), "BENCH_RET_5D contains NaN"
         assert not df[self.pred_col].isna().any(), f"{self.pred_col} contains NaN"
 
         return df
@@ -142,24 +142,38 @@ class Evaluator:
         """Run statistical cross-sectional evaluation and simulation."""
         df = self._prepare_dataset(pred_df)
 
+        # Filter out NaN samples
+        valid_mask = (
+            np.isfinite(df[self.pred_col])
+            & np.isfinite(df[self.label_col])
+        )
+        metric_df = df.loc[valid_mask].copy()
+
+        self.logger.info(
+            "统计评测：总样本 %d，有效样本 %d，排除样本 %d",
+            len(df),
+            len(metric_df),
+            len(df) - len(metric_df),
+        )
+
         # 1. IC & ICIR
-        daily_ic = self._compute_daily_ic(df).dropna()
+        daily_ic = self._compute_daily_ic(metric_df).dropna()
         ic = daily_ic.mean()
         icir = ic / daily_ic.std() if daily_ic.std() > 1e-12 else np.nan
 
         # 2. Hit Rate
         daily_hr = pd.DataFrame(
-            df.groupby(self.date_col).apply(self._compute_hit_rate).tolist()
+            metric_df.groupby(self.date_col).apply(self._compute_hit_rate).tolist()
         )
         hr_stats = daily_hr.mean().to_dict()
 
         # 3. Win Rate
         daily_wr = pd.DataFrame(
-            df.groupby(self.date_col).apply(self._compute_win_rate).tolist()
+            metric_df.groupby(self.date_col).apply(self._compute_win_rate).tolist()
         )
         wr_stats = daily_wr.mean().to_dict()
 
-        # 4. 执行回测
+        # 4. Portfolio Stats
         portfolio_stats = self.backtester.run(df)
 
         self.logger.info(f"{'═' * 72}")

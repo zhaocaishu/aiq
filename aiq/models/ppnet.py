@@ -127,9 +127,9 @@ class PPNetModel(BaseModel):
             self.label_weights = torch.tensor(
                 label_weights, dtype=torch.float, device=self.device
             )
-            assert (
-                len(self.label_weights) == num_labels
-            ), "label_weights 长度必须等于 num_labels"
+        assert (
+            len(self.label_weights) == num_labels
+        ), "label_weights 长度必须等于 num_labels"
 
         # model
         self.model = PPNet(
@@ -185,7 +185,7 @@ class PPNetModel(BaseModel):
         for name, p in model.named_parameters():
             if not p.requires_grad:
                 continue
-            # ===== 1️⃣ Muon：只给核心2D权重 =====
+            # Muon：只给核心2D权重
             if (
                 p.ndim >= 2
                 and "embedding" not in name
@@ -193,10 +193,26 @@ class PPNetModel(BaseModel):
                 and "prediction_head" not in name
             ):
                 muon_params.append(p)
-            # ===== 2️⃣ AdamW：其他全部 =====
+            # AdamW：其他全部
             else:
                 adamw_params.append(p)
         return muon_params, adamw_params
+
+    def compute_loss(self, outputs: torch.Tensor, labels: torch.Tensor):
+        """Compute weighted loss for each label column."""
+        total_loss = 0.0
+
+        for label_idx in range(self.num_labels):
+            preds_i = outputs[:, label_idx : label_idx + 1]
+            labels_i = labels[:, label_idx : label_idx + 1]
+            valid_mask = torch.isfinite(labels_i).squeeze(-1)
+            if not valid_mask.any():
+                continue
+
+            loss_i = self.criterion(preds_i[valid_mask], labels_i[valid_mask])
+            total_loss += self.label_weights[label_idx] * loss_i
+
+        return total_loss / self.label_weights.sum()
 
     def fit(self, train_dataset: Dataset, val_dataset: Dataset = None):
         train_sampler = CyclicPhaseOffsetSampler(
@@ -256,10 +272,11 @@ class PPNetModel(BaseModel):
             train_steps_epoch = len(train_loader)
 
             self.model.train()
-            train_losses = []
 
             iter_count = 0
             time_now = time.time()
+
+            train_losses = []
 
             for i, batch_dict in enumerate(train_loader):
                 # 检查是否需要停止训练
@@ -296,7 +313,6 @@ class PPNetModel(BaseModel):
                 assert not torch.isnan(
                     batch_market_features
                 ).any(), "NaN at batch_market_features"
-                assert not torch.isnan(batch_labels).any(), "NaN at batch_labels"
 
                 optimizer.zero_grad()
                 outputs = self.model(
@@ -308,16 +324,7 @@ class PPNetModel(BaseModel):
                     batch_intraday_ts_features,
                 )
 
-                loss = 0.0
-                for label_idx in range(self.num_labels):
-                    preds_i = outputs[:, label_idx : label_idx + 1]
-                    labels_i = batch_labels[:, label_idx : label_idx + 1]
-
-                    loss += self.label_weights[label_idx] * self.criterion(
-                        preds_i, labels_i
-                    )
-                loss = loss / self.label_weights.sum()
-
+                loss = self.compute_loss(outputs, batch_labels)
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), 3.0)
                 optimizer.step()
@@ -395,9 +402,9 @@ class PPNetModel(BaseModel):
     def eval(self, val_dataset: Dataset):
         val_loader = DataLoader(val_dataset, batch_size=self.batch_size, shuffle=False)
 
-        total_losses = []
-
         self.model.eval()
+
+        total_losses = []
 
         for i, batch_dict in enumerate(val_loader):
             batch_industry_ids = self.to_device(batch_dict["stock_industry_ids"])
@@ -420,15 +427,7 @@ class PPNetModel(BaseModel):
                     batch_intraday_ts_features,
                 )
 
-                loss = 0.0
-                for label_idx in range(self.num_labels):
-                    preds_i = outputs[:, label_idx : label_idx + 1]
-                    labels_i = batch_labels[:, label_idx : label_idx + 1]
-
-                    loss += self.label_weights[label_idx] * self.criterion(
-                        preds_i, labels_i
-                    )
-                loss = loss / self.label_weights.sum()
+                loss = self.compute_loss(outputs, batch_labels)
 
             total_losses.append(loss.item())
 
