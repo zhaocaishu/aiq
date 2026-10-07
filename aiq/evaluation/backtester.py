@@ -22,8 +22,7 @@ class BaseBacktester(ABC):
         instrument_col: str = "Instrument",
         up_limit_col: str = "Up_limit",
         down_limit_col: str = "Down_limit",
-        pred_col: str = "PRED_RET_5D",
-        label_col: str = "RET_5D",
+        score_col: str = "PRED_RET_5D",
         logger: Optional[logging.Logger] = None,
     ):
         self.top_k = top_k
@@ -31,8 +30,7 @@ class BaseBacktester(ABC):
         self.instrument_col = instrument_col
         self.up_limit_col = up_limit_col
         self.down_limit_col = down_limit_col
-        self.pred_col = pred_col
-        self.label_col = label_col
+        self.score_col = score_col
         self.logger = logger or logging.getLogger(__name__)
 
     @abstractmethod
@@ -206,7 +204,7 @@ class TopKDropoutBacktester(BaseBacktester):
 
         # ── 2. 数据预处理 ──
         df = df.sort_values([self.instrument_col, self.date_col])
-        df["Score"] = df.groupby(self.instrument_col)[self.pred_col].shift(1)
+        df["Score"] = df.groupby(self.instrument_col)[self.score_col].shift(1)
         df = df.dropna(subset=["Score"])
         trading_dates = sorted(df[self.date_col].unique())
 

@@ -51,8 +51,7 @@ class Evaluator:
             instrument_col=self.instrument_col,
             up_limit_col=self.up_limit_col,
             down_limit_col=self.down_limit_col,
-            pred_col=self.pred_col,
-            label_col=self.label_col,
+            score_col=self.pred_col,
             logger=self.logger,
         )
 
