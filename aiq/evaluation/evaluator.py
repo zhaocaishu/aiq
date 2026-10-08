@@ -42,6 +42,12 @@ class Evaluator:
         self.label_col = label_col
         self.top_k = top_k
 
+        self.trading_calendar = DataLoader.load_calendar(
+            self.data_dir,
+            start_time=start_time,
+            end_time=end_time,
+        )
+
         self.logger = logger or logging.getLogger(__name__)
 
         # 初始化具体的策略驱动器
@@ -52,6 +58,7 @@ class Evaluator:
             up_limit_col=self.up_limit_col,
             down_limit_col=self.down_limit_col,
             score_col=self.pred_col,
+            trading_calendar=self.trading_calendar,
             logger=self.logger,
         )
 

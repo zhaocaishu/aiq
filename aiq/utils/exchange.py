@@ -9,46 +9,84 @@ class Exchange:
 
     def check_stock_limit(
         self,
-        price: float,
-        up_limit: float,
-        down_limit: float,
+        stock_id: str,
+        price_col: str,
+        up_limit_col: str,
+        down_limit_col: str,
+        daily_dict: Dict[str, Dict[str, Any]],
         direction: Optional[int] = None,
     ) -> bool:
         """
-        Check if price hits limit-up or limit-down.
+        返回 True 表示禁止交易，False 表示未触发限制。
 
-        Returns:
-            True if trading is limited (not tradable), False otherwise.
+        direction:
+            None: 涨停、跌停均禁止交易。
+            Order.BUY: 禁止买入涨停股票。
+            Order.SELL: 禁止卖出跌停股票。
+
+        价格字段应为数值类型；无效或缺失价格数据禁止交易。
+        +inf/-inf 可分别表示没有涨停价/跌停价限制。
         """
-        if direction is None:
-            return price >= up_limit or price <= down_limit
-        if direction == Order.BUY:
-            return price >= up_limit
-        if direction == Order.SELL:
-            return price <= down_limit
-        raise ValueError(f"direction {direction} is not supported")
+        if direction not in (None, Order.BUY, Order.SELL):
+            raise ValueError(f"direction {direction} is not supported")
 
-    def check_stock_suspended(self, stock_id: str, daily_dict: Dict[str, Dict[str, Any]]) -> bool:
-        """Return True if stock is suspended (no valid close price)."""
-        stock_data = daily_dict.get(stock_id)
-        if stock_data is None:
+        row = daily_dict.get(stock_id)
+        if row is None:
             return True
-        close = stock_data.get("Close")  # 或 stock_data.get("adj_close")，取决于你的列名
-        if close is None:
+
+        price = row.get(price_col)
+        if price is None or not np.isfinite(price) or price <= 0:
             return True
-        return bool(np.isnan(close))
+
+        up_limit = row.get(up_limit_col)
+        down_limit = row.get(down_limit_col)
+
+        if up_limit is None or down_limit is None:
+            return True
+
+        valid_up = (np.isfinite(up_limit) and up_limit > 0) or up_limit == np.inf
+        valid_down = (
+            np.isfinite(down_limit) and down_limit > 0
+        ) or down_limit == -np.inf
+
+        if not valid_up or not valid_down or down_limit > up_limit:
+            return True
+
+        if direction == Order.BUY:
+            return bool(price >= up_limit)
+
+        if direction == Order.SELL:
+            return bool(price <= down_limit)
+
+        return bool(price >= up_limit or price <= down_limit)
+
+    def check_stock_suspended(
+        self, stock_id: str, daily_dict: Dict[str, Dict[str, Any]]
+    ) -> bool:
+        """Conservatively block missing quotes or no-volume days."""
+        row = daily_dict.get(stock_id)
+        if row is None:
+            return True
+
+        close = row.get("Close")
+        if close is None or not np.isfinite(close) or close <= 0:
+            return True
+
+        return False
 
     def is_stock_tradable(
         self,
         stock_id: str,
-        price: float,
-        up_limit: float,
-        down_limit: float,
+        price_col: str,
+        up_limit_col: str,
+        down_limit_col: str,
         daily_dict: Dict[str, Dict[str, Any]],
         direction: Optional[int] = None,
     ) -> bool:
         """Return True if stock is tradable (not suspended and not hitting limit)."""
-        suspended = self.check_stock_suspended(stock_id, daily_dict)
-        limited = self.check_stock_limit(price, up_limit, down_limit, direction)
-        return not (suspended or limited)
-        
+        if self.check_stock_suspended(stock_id, daily_dict):
+            return False
+
+        return not self.check_stock_limit(
+            stock_id, price_col, up_limit_col, down_limit_col, daily_dict, direction
+        )

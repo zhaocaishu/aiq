@@ -23,6 +23,7 @@ class BaseBacktester(ABC):
         up_limit_col: str = "Up_limit",
         down_limit_col: str = "Down_limit",
         score_col: str = "PRED_RET_5D",
+        trading_calendar: List[str] = None,
         logger: Optional[logging.Logger] = None,
     ):
         self.top_k = top_k
@@ -31,6 +32,8 @@ class BaseBacktester(ABC):
         self.up_limit_col = up_limit_col
         self.down_limit_col = down_limit_col
         self.score_col = score_col
+        self.trading_calendar = trading_calendar
+
         self.logger = logger or logging.getLogger(__name__)
 
     @abstractmethod
@@ -203,13 +206,29 @@ class TopKDropoutBacktester(BaseBacktester):
         self.logger.info("═" * 72)
 
         # ── 2. 数据预处理 ──
-        df = df.sort_values([self.instrument_col, self.date_col])
-        df["Score"] = df.groupby(self.instrument_col)[self.score_col].shift(1)
-        df = df.dropna(subset=["Score"])
-        trading_dates = sorted(df[self.date_col].unique())
+        if self.trading_calendar is None:
+            raise ValueError("必须提供完整的市场交易日历 trading_calendar")
+
+        df = df.copy()
+        df[self.date_col] = pd.to_datetime(df[self.date_col]).dt.strftime("%Y-%m-%d")
+
+        calendar = sorted(set(self.trading_calendar))
+        date_index = {date: i for i, date in enumerate(calendar)}
+        prev_date = dict(zip(calendar[1:], calendar[:-1]))
+
+        scores = df.set_index([self.date_col, self.instrument_col])[self.score_col]
+
+        keys = pd.MultiIndex.from_arrays(
+            [
+                df[self.date_col].map(prev_date),
+                df[self.instrument_col],
+            ]
+        )
+
+        df["Score"] = scores.reindex(keys).to_numpy()
 
         # ── 3. 历史日历主循环 ──
-        for i, date in enumerate(trading_dates):
+        for i, date in enumerate(calendar):
             daily = df[df[self.date_col] == date]
             if daily.empty:
                 continue
@@ -217,29 +236,30 @@ class TopKDropoutBacktester(BaseBacktester):
             daily_dict = daily.set_index(self.instrument_col).to_dict(orient="index")
 
             def _is_tradable(inst_id: str, direction: Optional[int] = None) -> bool:
-                if inst_id not in daily_dict:
-                    return False
-                row_data = daily_dict[inst_id]
-
                 return exchange.is_stock_tradable(
                     stock_id=inst_id,
-                    price=row_data["Close"],
-                    up_limit=row_data[self.up_limit_col],
-                    down_limit=row_data[self.down_limit_col],
+                    price_col="VWAP",
+                    up_limit_col=self.up_limit_col,
+                    down_limit_col=self.down_limit_col,
                     daily_dict=daily_dict,
                     direction=direction,
                 )
 
-            current_holdings = list(positions.keys())
+            def _score(inst: str) -> float:
+                score = daily_dict.get(inst, {}).get("Score", np.nan)
+                return score if np.isfinite(score) else float("inf")
+
             daily_buy_value = 0.0
             daily_sell_value = 0.0
+            current_holdings = list(positions.keys())
 
             # ── 3.1 初始建仓 ──
             if not current_holdings:
                 buy_candidates = [
                     inst
                     for inst in daily_dict
-                    if _is_tradable(
+                    if np.isfinite(daily_dict[inst]["Score"])
+                    and _is_tradable(
                         inst, None if forbid_all_trade_at_limit else Order.BUY
                     )
                 ]
@@ -331,7 +351,7 @@ class TopKDropoutBacktester(BaseBacktester):
                     (
                         inst,
                         (
-                            daily_dict[inst]["Score"]
+                            _score(inst)
                             if inst in daily_dict
                             else float("-inf")
                         ),
@@ -347,7 +367,8 @@ class TopKDropoutBacktester(BaseBacktester):
             tradable_not_hold = [
                 inst
                 for inst in not_hold
-                if _is_tradable(inst, None if forbid_all_trade_at_limit else Order.BUY)
+                if np.isfinite(daily_dict[inst]["Score"])
+                and _is_tradable(inst, None if forbid_all_trade_at_limit else Order.BUY)
             ]
 
             if method_buy == "top":
@@ -366,7 +387,7 @@ class TopKDropoutBacktester(BaseBacktester):
                     (
                         inst,
                         (
-                            daily_dict[inst]["Score"]
+                            _score(inst)
                             if inst in daily_dict
                             else float("-inf")
                         ),
@@ -380,7 +401,11 @@ class TopKDropoutBacktester(BaseBacktester):
 
             if method_sell == "bottom":
                 bottom_n = comb[-n_drop:] if n_drop > 0 else []
-                sell_candidates = [inst for inst in last_pool if inst in bottom_n]
+                sell_candidates = [
+                    inst for inst in last_pool
+                    if inst in bottom_n
+                    and np.isfinite(_score(inst))
+                ]
             else:
                 raise NotImplementedError(
                     f"不支持的卖出模式: method_sell={method_sell}"
@@ -390,9 +415,8 @@ class TopKDropoutBacktester(BaseBacktester):
             for inst in sell_candidates:
                 if inst not in hold_start:
                     continue
-                hold_days = trading_dates.index(date) - trading_dates.index(
-                    hold_start[inst]
-                )
+                
+                hold_days = i - date_index[hold_start[inst]]
                 if hold_days < hold_thresh:
                     continue
                 if not _is_tradable(
