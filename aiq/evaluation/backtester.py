@@ -227,7 +227,7 @@ class TopKDropoutBacktester(BaseBacktester):
 
         df["Score"] = scores.reindex(keys).to_numpy()
 
-        # ── 3. 历史日历主循环 ──
+        # ── 3. 交易日历主循环 ──
         for i, date in enumerate(calendar):
             daily = df[df[self.date_col] == date]
             if daily.empty:
@@ -238,19 +238,16 @@ class TopKDropoutBacktester(BaseBacktester):
             def _is_tradable(inst_id: str, direction: Optional[int] = None) -> bool:
                 return exchange.is_stock_tradable(
                     stock_id=inst_id,
-                    price_col="VWAP",
+                    price_col="Close",
                     up_limit_col=self.up_limit_col,
                     down_limit_col=self.down_limit_col,
                     daily_dict=daily_dict,
                     direction=direction,
                 )
 
-            def _score(inst: str) -> float:
-                score = daily_dict.get(inst, {}).get("Score", np.nan)
-                return score if np.isfinite(score) else float("inf")
-
             daily_buy_value = 0.0
             daily_sell_value = 0.0
+
             current_holdings = list(positions.keys())
 
             # ── 3.1 初始建仓 ──
@@ -331,108 +328,86 @@ class TopKDropoutBacktester(BaseBacktester):
                             prev_prices[inst] = p
                         else:
                             position_value_after += shares * prev_prices.get(inst, 0.0)
-
+                    
+                    total_asset = cash + position_value_after
                     turnover = (
-                        (daily_buy_value / 2) / position_value_after
-                        if position_value_after > 0
-                        else 0.0
+                        daily_buy_value / total_asset if total_asset > 0 else 0.0
                     )
                     turnover_series.append(turnover)
-                    nav_series.append(cash + position_value_after)
+                    nav_series.append(total_asset)
                     self._log_daily_holdings(date, positions, daily_dict)
                 else:
                     turnover_series.append(0.0)
                     nav_series.append(cash)
                 continue
 
-            # ── 3.2 再平衡信号计算 (TopK-Dropout 核心核心) ──
-            last_scores = sorted(
-                [
-                    (
-                        inst,
-                        (
-                            _score(inst)
-                            if inst in daily_dict
-                            else float("-inf")
-                        ),
-                    )
-                    for inst in current_holdings
-                ],
-                key=lambda x: x[1],
+            # ── 3.2 再平衡信号计算 (TopK-Dropout核心) ──
+            score_map = {}
+            for _inst, _row in daily_dict.items():
+                _s = _row.get("Score", np.nan)
+                score_map[_inst] = _s if np.isfinite(_s) else float("-inf")
+
+            last_pool = sorted(
+                current_holdings,
+                key=lambda inst: score_map.get(inst, float("-inf")),
                 reverse=True,
             )
-            last_pool = [x[0] for x in last_scores]
 
-            not_hold = [inst for inst in daily_dict if inst not in positions]
-            tradable_not_hold = [
-                inst
-                for inst in not_hold
-                if np.isfinite(daily_dict[inst]["Score"])
-                and _is_tradable(inst, None if forbid_all_trade_at_limit else Order.BUY)
-            ]
-
-            if method_buy == "top":
-                tradable_not_hold.sort(
-                    key=lambda x: daily_dict[x]["Score"], reverse=True
-                )
-            else:
-                raise NotImplementedError(f"不支持的买入模式: method_buy={method_buy}")
+            buy_pool = sorted(
+                (
+                    inst
+                    for inst in daily_dict
+                    if inst not in positions
+                    and np.isfinite(daily_dict[inst]["Score"])
+                    and _is_tradable(
+                        inst, None if forbid_all_trade_at_limit else Order.BUY
+                    )
+                ),
+                key=lambda inst: daily_dict[inst]["Score"],
+                reverse=True,
+            )
 
             n_today_need = n_drop + self.top_k - len(last_pool)
-            today_pool = tradable_not_hold[: max(0, n_today_need)]
+            today_pool = buy_pool[: max(0, n_today_need)]
 
-            comb_pool = last_pool + today_pool
-            comb_scores = sorted(
-                [
-                    (
-                        inst,
-                        (
-                            _score(inst)
-                            if inst in daily_dict
-                            else float("-inf")
-                        ),
-                    )
-                    for inst in comb_pool
-                ],
-                key=lambda x: x[1],
+            comb = sorted(
+                last_pool + today_pool,
+                key=lambda inst: score_map.get(inst, float("-inf")),
                 reverse=True,
             )
-            comb = [x[0] for x in comb_scores]
 
             if method_sell == "bottom":
-                bottom_n = comb[-n_drop:] if n_drop > 0 else []
-                sell_candidates = [
-                    inst for inst in last_pool
-                    if inst in bottom_n
-                    and np.isfinite(_score(inst))
-                ]
+                bottom_n = set(comb[-n_drop:]) if n_drop > 0 else set()
+                sell_candidates = [inst for inst in last_pool if inst in bottom_n]
             else:
                 raise NotImplementedError(
                     f"不支持的卖出模式: method_sell={method_sell}"
                 )
 
             sell_queue = []
+            blocked_hold, blocked_limit = 0, 0
             for inst in sell_candidates:
                 if inst not in hold_start:
                     continue
-                
                 hold_days = i - date_index[hold_start[inst]]
                 if hold_days < hold_thresh:
+                    blocked_hold += 1
                     continue
                 if not _is_tradable(
                     inst, None if forbid_all_trade_at_limit else Order.SELL
                 ):
+                    blocked_limit += 1
                     continue
                 sell_queue.append(inst)
 
-            n_buy_need = len(sell_queue) + self.top_k - len(last_pool)
-            buy_candidates = today_pool[: max(0, n_buy_need)]
-            buy_queue = [
-                inst
-                for inst in buy_candidates
-                if inst not in positions
-                and _is_tradable(inst, None if forbid_all_trade_at_limit else Order.BUY)
-            ]
+            if blocked_hold or blocked_limit:
+                self.logger.info(
+                    f"  ⛔ 卖出阻塞: 持有期不足 {blocked_hold} 只, "
+                    f"跌停/停牌 {blocked_limit} 只"
+                )
+
+            n_buy_need = max(0, len(sell_queue) + self.top_k - len(last_pool))
+            buy_queue = today_pool[:n_buy_need]
 
             # ── 3.3 交易执行：卖出控制 ──
             sell_count = 0
@@ -549,16 +524,12 @@ class TopKDropoutBacktester(BaseBacktester):
                     position_value_after += shares * prev_prices.get(inst, 0.0)
 
             total_after = cash + position_value_after
-            if i > 0:
-                daily_returns.append(total_after / nav_series[-1] - 1.0)
-
+            daily_returns.append(total_after / nav_series[-1] - 1.0)
             nav_series.append(total_after)
 
             total_trade_value = daily_buy_value + daily_sell_value
             turnover = (
-                (total_trade_value / 2) / position_value_after
-                if position_value_after > 0
-                else 0.0
+                (total_trade_value / 2) / total_after if total_after > 0 else 0.0
             )
             turnover_series.append(turnover)
 
@@ -571,7 +542,7 @@ class TopKDropoutBacktester(BaseBacktester):
         if len(rets) == 0:
             return {}
 
-        ann_ret = (nav[-1] / initial_capital) ** (trading_days / len(nav)) - 1.0
+        ann_ret = (nav[-1] / initial_capital) ** (trading_days / len(daily_returns)) - 1.0
         sharpe = (
             (rets.mean() / rets.std() * np.sqrt(trading_days))
             if rets.std() > 0

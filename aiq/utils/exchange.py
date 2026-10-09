@@ -63,7 +63,7 @@ class Exchange:
     def check_stock_suspended(
         self, stock_id: str, daily_dict: Dict[str, Dict[str, Any]]
     ) -> bool:
-        """Conservatively block missing quotes or no-volume days."""
+        """Conservatively treat missing or invalid quotes as suspended."""
         row = daily_dict.get(stock_id)
         if row is None:
             return True
