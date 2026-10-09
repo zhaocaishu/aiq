@@ -1,20 +1,17 @@
+"""TopK-Dropout backtester with fixes for daily returns, prices, and sizing."""
+
 import logging
-import numpy as np
-import pandas as pd
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple
+
+import numpy as np
+import pandas as pd
 
 from aiq.utils.exchange import Exchange
 from aiq.utils.decision import Order
 
 
 class BaseBacktester(ABC):
-    """
-    Abstract Base Class for A-share multi-asset backtesting.
-    Provides shared utilities like cross-sectional logging, table formatting,
-    and standardized accounting infrastructure.
-    """
-
     def __init__(
         self,
         top_k: int,
@@ -23,7 +20,7 @@ class BaseBacktester(ABC):
         up_limit_col: str = "Up_limit",
         down_limit_col: str = "Down_limit",
         score_col: str = "PRED_RET_5D",
-        trading_calendar: List[str] = None,
+        trading_calendar: Optional[List[str]] = None,
         logger: Optional[logging.Logger] = None,
     ):
         self.top_k = top_k
@@ -33,17 +30,19 @@ class BaseBacktester(ABC):
         self.down_limit_col = down_limit_col
         self.score_col = score_col
         self.trading_calendar = trading_calendar
-
         self.logger = logger or logging.getLogger(__name__)
 
     @abstractmethod
     def run(self, df: pd.DataFrame, **kwargs) -> Dict[str, float]:
-        """Execute the backtest simulation loop. Must be implemented by subclasses."""
         pass
 
-    # ═══════════════════════════════════════════════════════════════════════════════
-    # 通用日志与高颜值表格格式化工具（子类直接复用）
-    # ═══════════════════════════════════════════════════════════════════════════════
+    @staticmethod
+    def _valid_price(value: Any) -> bool:
+        """Accept only finite, strictly positive numeric prices."""
+        try:
+            return bool(np.isfinite(value) and value > 0)
+        except (TypeError, ValueError):
+            return False
 
     def _print_header(self, title: str, width: int = 72) -> None:
         self.logger.info("═" * width)
@@ -64,10 +63,8 @@ class BaseBacktester(ABC):
             widths = [max(len(str(c)) + 4, 12) for c in cols]
         if aligns is None:
             aligns = ["<"] + [">"] * (len(cols) - 1)
-
         line = " ".join(f"{c:{a}{w}}" for c, a, w in zip(cols, aligns, widths))
         sep = " ".join("─" * w for w in widths)
-
         self.logger.info(f"{' ' * indent}{line}")
         self.logger.info(f"{' ' * indent}{sep}")
         return widths, aligns
@@ -89,19 +86,16 @@ class BaseBacktester(ABC):
         rows = []
         total_mv = 0.0
         prev_prices = prev_prices or {}
-
         for inst, shares in positions.items():
-            if inst in daily_dict:
-                price = daily_dict[inst]["Close"]
-                suspended = False
-            else:
+            price = daily_dict.get(inst, {}).get("Close")
+            fallback = not self._valid_price(price)
+            if fallback:
                 price = prev_prices.get(inst)
-                suspended = True
-
-            mv = shares * price if price is not None else 0.0
+            if not self._valid_price(price):
+                raise ValueError(f"{date}: 持仓 {inst} 缺少有效估值价格")
+            mv = shares * price
             total_mv += mv
-            rows.append((inst, shares, price, mv, suspended))
-
+            rows.append((inst, shares, price, mv, fallback))
         rows.sort(key=lambda x: x[3], reverse=True)
 
         col_widths = {
@@ -110,11 +104,10 @@ class BaseBacktester(ABC):
             "price": 10,
             "mv": 14,
             "wt": 8,
-            "note": 6,
+            "note": 8,
         }
         total_width = sum(col_widths.values()) + len(col_widths) * 3 - 1
         sep = "  " + "─" * total_width
-
         header = (
             f"  {'股票代码':<{col_widths['code']}}   "
             f"{'股数':>{col_widths['shares']}}   "
@@ -125,28 +118,21 @@ class BaseBacktester(ABC):
         )
         self.logger.info(header)
         self.logger.info(sep)
-
-        for inst, shares, price, mv, suspended in rows:
-            shares_str = f"{shares:,}"
-            price_str = f"{price:.2f}" if price is not None else "—"
-            mv_str = f"{mv:,.2f}" if mv > 0 else "0.00"
-            weight = (mv / total_mv * 100) if total_mv > 0 else 0.0
-            note = "停牌" if suspended else ""
-
-            line = (
+        for inst, shares, price, mv, fallback in rows:
+            weight = mv / total_mv * 100 if total_mv > 0 else 0.0
+            note = "价格回退" if fallback else ""
+            self.logger.info(
                 f"  {inst:<{col_widths['code']}}   "
-                f"{shares_str:>{col_widths['shares']}}   "
-                f"{price_str:>{col_widths['price']}}   "
-                f"{mv_str:>{col_widths['mv']}}   "
+                f"{shares:>{col_widths['shares']},}   "
+                f"{price:>{col_widths['price']}.2f}   "
+                f"{mv:>{col_widths['mv']},.2f}   "
                 f"{weight:>{col_widths['wt']}.2f}   "
                 f"{note:<{col_widths['note']}}"
             )
-            self.logger.info(line)
-
         self.logger.info(sep)
         sum_shares = f"{len(positions):,}"
         sum_mv = f"{total_mv:,.2f}"
-        total_line = (
+        self.logger.info(
             f"  {'合计':<{col_widths['code']}}   "
             f"{sum_shares:>{col_widths['shares']}}   "
             f"{'':>{col_widths['price']}}   "
@@ -154,15 +140,10 @@ class BaseBacktester(ABC):
             f"{'100.00':>{col_widths['wt']}}   "
             f"{'':<{col_widths['note']}}"
         )
-        self.logger.info(total_line)
         self.logger.info("")
 
 
 class TopKDropoutBacktester(BaseBacktester):
-    """
-    TopK-Dropout Strategy Backtester for A-shares.
-    """
-
     def run(
         self,
         df: pd.DataFrame,
@@ -178,19 +159,17 @@ class TopKDropoutBacktester(BaseBacktester):
         method_buy: str = "top",
         forbid_all_trade_at_limit: bool = False,
     ) -> Dict[str, float]:
-        """Execute TopK-Dropout simulation loop based on prediction scores."""
         cash = initial_capital
         positions: Dict[str, int] = {}
         hold_start: Dict[str, Any] = {}
         prev_prices: Dict[str, float] = {}
 
-        nav_series: List[float] = []
+        # 初始资金作为基准净值，每个回测交易日记录一次收益。
+        nav_series: List[float] = [initial_capital]
         daily_returns: List[float] = []
         turnover_series: List[float] = []
-
         exchange = Exchange()
 
-        # ── 1. 策略启动日志横幅 ──
         self._print_header("【TopK-Dropout 策略启动】", width=72)
         self._print_kv("初始资金", f"{initial_capital:>15,.2f}", width=18)
         self._print_kv("持仓上限", f"{self.top_k:>15} 只", width=18)
@@ -205,37 +184,74 @@ class TopKDropoutBacktester(BaseBacktester):
         self._print_kv("涨跌停模式", limit_mode, width=18)
         self.logger.info("═" * 72)
 
-        # ── 2. 数据预处理 ──
         if self.trading_calendar is None:
             raise ValueError("必须提供完整的市场交易日历 trading_calendar")
+        if df.empty:
+            return {}
 
         df = df.copy()
         df[self.date_col] = pd.to_datetime(df[self.date_col]).dt.strftime("%Y-%m-%d")
-
-        calendar = sorted(set(self.trading_calendar))
-        date_index = {date: i for i, date in enumerate(calendar)}
-        prev_date = dict(zip(calendar[1:], calendar[:-1]))
-
-        scores = df.set_index([self.date_col, self.instrument_col])[self.score_col]
-
-        keys = pd.MultiIndex.from_arrays(
-            [
-                df[self.date_col].map(prev_date),
-                df[self.instrument_col],
-            ]
+        full_calendar = sorted(
+            set(pd.to_datetime(self.trading_calendar).strftime("%Y-%m-%d"))
         )
-
+        date_index = {date: i for i, date in enumerate(full_calendar)}
+        prev_date = dict(zip(full_calendar[1:], full_calendar[:-1]))
+        scores = df.set_index([self.date_col, self.instrument_col])[self.score_col]
+        keys = pd.MultiIndex.from_arrays(
+            [df[self.date_col].map(prev_date), df[self.instrument_col]]
+        )
         df["Score"] = scores.reindex(keys).to_numpy()
 
-        # ── 3. 交易日历主循环 ──
-        for i, date in enumerate(calendar):
+        # 日历可包含预加载历史，但只模拟输入数据覆盖的日期区间。
+        start_date = df[self.date_col].min()
+        end_date = df[self.date_col].max()
+        calendar = [d for d in full_calendar if start_date <= d <= end_date]
+
+        def _record_day(
+            date: str,
+            daily_dict: Dict[str, Dict[str, Any]],
+            buy_value: float,
+            sell_value: float,
+            opening: bool = False,
+        ) -> None:
+            """统一日终估值、收益记录；无效收盘价使用上一有效估值价。"""
+            position_value = 0.0
+            for inst, shares in positions.items():
+                price = daily_dict.get(inst, {}).get("Close")
+                if self._valid_price(price):
+                    price = float(price)
+                    prev_prices[inst] = price
+                else:
+                    price = prev_prices.get(inst)
+                    if not self._valid_price(price):
+                        raise ValueError(
+                            f"{date}: 持仓 {inst} 缺少有效收盘价及历史估值价格"
+                        )
+                position_value += shares * price
+
+            total_asset = cash + position_value
+            daily_returns.append(total_asset / nav_series[-1] - 1.0)
+            nav_series.append(total_asset)
+
+            # 保留本次请求之外的原有换手口径。
+            trade_value = buy_value if opening else (buy_value + sell_value) / 2
+            turnover_series.append(
+                trade_value / total_asset if total_asset > 0 else 0.0
+            )
+
+        for date in calendar:
+            i = date_index[date]
             daily = df[df[self.date_col] == date]
             if daily.empty:
-                continue
-
+                # 区间内整日行情缺失不能静默缩短统计期间。
+                raise ValueError(f"{date}: 回测区间内缺少整日行情，请补齐数据")
             daily_dict = daily.set_index(self.instrument_col).to_dict(orient="index")
 
             def _is_tradable(inst_id: str, direction: Optional[int] = None) -> bool:
+                # 实际成交价有效，才进入原有停牌和涨跌停检查。
+                row = daily_dict.get(inst_id)
+                if row is None or not self._valid_price(row.get("VWAP")):
+                    return False
                 return exchange.is_stock_tradable(
                     stock_id=inst_id,
                     price_col="Close",
@@ -247,10 +263,8 @@ class TopKDropoutBacktester(BaseBacktester):
 
             daily_buy_value = 0.0
             daily_sell_value = 0.0
-
             current_holdings = list(positions.keys())
 
-            # ── 3.1 初始建仓 ──
             if not current_holdings:
                 buy_candidates = [
                     inst
@@ -260,7 +274,6 @@ class TopKDropoutBacktester(BaseBacktester):
                         inst, None if forbid_all_trade_at_limit else Order.BUY
                     )
                 ]
-
                 if method_buy == "top":
                     buy_candidates.sort(
                         key=lambda x: daily_dict[x]["Score"], reverse=True
@@ -269,13 +282,11 @@ class TopKDropoutBacktester(BaseBacktester):
                     raise NotImplementedError(
                         f"不支持的建仓模式: method_buy={method_buy}"
                     )
-
                 buy_candidates = buy_candidates[: self.top_k]
 
                 if buy_candidates:
                     invest_cash = cash * risk_degree
                     cash_per_stock = invest_cash / len(buy_candidates)
-
                     self.logger.info(f"  ▶ 初始建仓  买入 {len(buy_candidates)} 只")
                     w, a = self._print_table_header(
                         "代码",
@@ -286,16 +297,15 @@ class TopKDropoutBacktester(BaseBacktester):
                         widths=[14, 10, 12, 10, 14],
                         indent=4,
                     )
-
                     for inst in buy_candidates:
-                        price = daily_dict[inst]["VWAP"]
+                        price = daily_dict[inst].get("VWAP")
+                        if not self._valid_price(price):
+                            continue
                         shares = int((cash_per_stock / price) / 100) * 100
                         if shares < 100:
                             continue
-
                         invest = shares * price
                         comm = max(invest * commission, min_commission)
-
                         if cash < invest + comm:
                             max_shares = int(((cash - comm) / price) / 100) * 100
                             if max_shares < 100:
@@ -303,12 +313,10 @@ class TopKDropoutBacktester(BaseBacktester):
                             shares = max_shares
                             invest = shares * price
                             comm = max(invest * commission, min_commission)
-
                         daily_buy_value += invest
                         cash -= invest + comm
                         positions[inst] = shares
                         hold_start[inst] = date
-
                         self._print_table_row(
                             inst,
                             f"{price:.2f}",
@@ -320,39 +328,23 @@ class TopKDropoutBacktester(BaseBacktester):
                             indent=4,
                         )
 
-                    position_value_after = 0.0
-                    for inst, shares in positions.items():
-                        if inst in daily_dict:
-                            p = daily_dict[inst]["Close"]
-                            position_value_after += shares * p
-                            prev_prices[inst] = p
-                        else:
-                            position_value_after += shares * prev_prices.get(inst, 0.0)
-                    
-                    total_asset = cash + position_value_after
-                    turnover = (
-                        daily_buy_value / total_asset if total_asset > 0 else 0.0
-                    )
-                    turnover_series.append(turnover)
-                    nav_series.append(total_asset)
-                    self._log_daily_holdings(date, positions, daily_dict)
-                else:
-                    turnover_series.append(0.0)
-                    nav_series.append(cash)
+                # 首次建仓、重新建仓、继续空仓都记录该日收益。
+                _record_day(
+                    date, daily_dict, daily_buy_value, daily_sell_value, opening=True
+                )
+                if positions:
+                    self._log_daily_holdings(date, positions, daily_dict, prev_prices)
                 continue
 
-            # ── 3.2 再平衡信号计算 (TopK-Dropout核心) ──
             score_map = {}
             for _inst, _row in daily_dict.items():
                 _s = _row.get("Score", np.nan)
                 score_map[_inst] = _s if np.isfinite(_s) else float("-inf")
-
             last_pool = sorted(
                 current_holdings,
                 key=lambda inst: score_map.get(inst, float("-inf")),
                 reverse=True,
             )
-
             buy_pool = sorted(
                 (
                     inst
@@ -366,16 +358,13 @@ class TopKDropoutBacktester(BaseBacktester):
                 key=lambda inst: daily_dict[inst]["Score"],
                 reverse=True,
             )
-
             n_today_need = n_drop + self.top_k - len(last_pool)
             today_pool = buy_pool[: max(0, n_today_need)]
-
             comb = sorted(
                 last_pool + today_pool,
                 key=lambda inst: score_map.get(inst, float("-inf")),
                 reverse=True,
             )
-
             if method_sell == "bottom":
                 bottom_n = set(comb[-n_drop:]) if n_drop > 0 else set()
                 sell_candidates = [inst for inst in last_pool if inst in bottom_n]
@@ -399,38 +388,33 @@ class TopKDropoutBacktester(BaseBacktester):
                     blocked_limit += 1
                     continue
                 sell_queue.append(inst)
-
             if blocked_hold or blocked_limit:
                 self.logger.info(
                     f"  ⛔ 卖出阻塞: 持有期不足 {blocked_hold} 只, "
-                    f"跌停/停牌 {blocked_limit} 只"
+                    f"跌停/停牌/无效价格 {blocked_limit} 只"
                 )
 
-            n_buy_need = max(0, len(sell_queue) + self.top_k - len(last_pool))
-            buy_queue = today_pool[:n_buy_need]
-
-            # ── 3.3 交易执行：卖出控制 ──
             sell_count = 0
             sold_list = []
             for inst in sell_queue:
                 if inst not in positions:
                     continue
-                price = daily_dict[inst]["VWAP"]
+                price = daily_dict[inst].get("VWAP")
+                if not self._valid_price(price):
+                    continue
+                # 校验成交价后，才修改持仓。
                 shares = positions.pop(inst)
                 sell_value = shares * price
-
                 daily_sell_value += sell_value
                 comm = max(sell_value * commission, min_commission)
                 tax = sell_value * stamp_tax
                 total_cost = comm + tax
-
                 cash += sell_value - total_cost
                 sell_count += 1
                 sold_list.append(
                     (inst, sell_value, total_cost, sell_value - total_cost)
                 )
                 hold_start.pop(inst, None)
-
             if sold_list:
                 self.logger.info(f"  ▶ 卖出 {sell_count} 只")
                 w, a = self._print_table_header(
@@ -452,23 +436,13 @@ class TopKDropoutBacktester(BaseBacktester):
                         indent=4,
                     )
 
-            # ── 3.4 交易执行：买入控制 ──
+            # 用实际卖出数量确定买入数量，失败交易不会释放持仓名额。
+            n_buy_need = max(0, sell_count + self.top_k - len(last_pool))
+            buy_queue = today_pool[:n_buy_need]
             if buy_queue:
-                current_total_asset = cash + sum(
-                    (
-                        positions[s] * daily_dict[s]["Close"]
-                        if s in daily_dict
-                        else positions[s] * prev_prices.get(s, 0.0)
-                    )
-                    for s in positions
-                )
-                target_cash_per_stock = (current_total_asset * risk_degree) / self.top_k
-                cash_per_stock = (
-                    min(target_cash_per_stock, cash / len(buy_queue))
-                    if buy_queue
-                    else 0.0
-                )
-
+                # 股目标预算使用前一交易日的资产净值。
+                target_cash_per_stock = nav_series[-1] * risk_degree / self.top_k
+                cash_per_stock = min(target_cash_per_stock, cash / len(buy_queue))
                 self.logger.info(f"  ▶ 买入 {len(buy_queue)} 只")
                 w, a = self._print_table_header(
                     "代码",
@@ -479,16 +453,15 @@ class TopKDropoutBacktester(BaseBacktester):
                     widths=[14, 10, 12, 10, 14],
                     indent=4,
                 )
-
                 for inst in buy_queue:
-                    price = daily_dict[inst]["VWAP"]
+                    price = daily_dict[inst].get("VWAP")
+                    if not self._valid_price(price):
+                        continue
                     shares = int((cash_per_stock / price) / 100) * 100
                     if shares < 100:
                         continue
-
                     invest = shares * price
                     comm = max(invest * commission, min_commission)
-
                     if cash < invest + comm:
                         max_shares = int(((cash - comm) / price) / 100) * 100
                         if max_shares < 100:
@@ -496,12 +469,10 @@ class TopKDropoutBacktester(BaseBacktester):
                         shares = max_shares
                         invest = shares * price
                         comm = max(invest * commission, min_commission)
-
                     daily_buy_value += invest
                     cash -= invest + comm
                     positions[inst] = shares
                     hold_start[inst] = date
-
                     self._print_table_row(
                         inst,
                         f"{price:.2f}",
@@ -513,40 +484,16 @@ class TopKDropoutBacktester(BaseBacktester):
                         indent=4,
                     )
 
-            # ── 3.5 资产清算 ──
-            position_value_after = 0.0
-            for inst, shares in positions.items():
-                if inst in daily_dict:
-                    p = daily_dict[inst]["Close"]
-                    position_value_after += shares * p
-                    prev_prices[inst] = p
-                else:
-                    position_value_after += shares * prev_prices.get(inst, 0.0)
-
-            total_after = cash + position_value_after
-            daily_returns.append(total_after / nav_series[-1] - 1.0)
-            nav_series.append(total_after)
-
-            total_trade_value = daily_buy_value + daily_sell_value
-            turnover = (
-                (total_trade_value / 2) / total_after if total_after > 0 else 0.0
-            )
-            turnover_series.append(turnover)
-
+            _record_day(date, daily_dict, daily_buy_value, daily_sell_value)
             self._log_daily_holdings(date, positions, daily_dict, prev_prices)
 
-        # ── 4. 绩效指标生成 ──
         rets = np.array(daily_returns)
         nav = np.array(nav_series)
-
         if len(rets) == 0:
             return {}
-
-        ann_ret = (nav[-1] / initial_capital) ** (trading_days / len(daily_returns)) - 1.0
+        ann_ret = (nav[-1] / initial_capital) ** (trading_days / len(rets)) - 1.0
         sharpe = (
-            (rets.mean() / rets.std() * np.sqrt(trading_days))
-            if rets.std() > 0
-            else 0.0
+            rets.mean() / rets.std() * np.sqrt(trading_days) if rets.std() > 0 else 0.0
         )
         mdd = np.min(nav / np.maximum.accumulate(nav) - 1.0)
         ann_vol = rets.std() * np.sqrt(trading_days)
@@ -560,7 +507,6 @@ class TopKDropoutBacktester(BaseBacktester):
         self._print_kv("年化波动", f"{ann_vol:>15.4%}", width=16)
         self._print_kv("平均换手(单边)", f"{avg_turnover:>15.4%}", width=16)
         self.logger.info("═" * 72)
-
         return {
             "ARR": ann_ret,
             "Sharpe": sharpe,
