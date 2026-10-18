@@ -134,9 +134,9 @@ class TSDataset(Dataset):
             df = DataLoader.load_instruments(
                 data_dir, universe, self.start_time, self.end_time
             )
-            self.instruments_set = set(zip(df["Instrument"], df["Date"]))
+            self.instruments_d = set(zip(df["Instrument"], df["Date"]))
         else:
-            self.instruments_set = None
+            self.instruments_d = None
 
     def _in_segment_and_pool(self, instrument: str, date: str) -> bool:
         """
@@ -146,8 +146,8 @@ class TSDataset(Dataset):
             return False
 
         if (
-            self.instruments_set is not None
-            and (instrument, date) not in self.instruments_set
+            self.instruments_d is not None
+            and (instrument, date) not in self.instruments_d
         ):
             return False
 
