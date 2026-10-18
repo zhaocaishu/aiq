@@ -73,18 +73,31 @@ class Evaluator:
         return pd.DataFrame(data)
 
     def _prepare_dataset(self, pred_df: pd.DataFrame) -> pd.DataFrame:
-        # Load instruments and features.
-        instruments = (
+        """Keep all quotes; a missing signal must not remove a holding's prices."""
+        pred_df = pred_df[
+            [self.date_col, self.instrument_col, self.pred_col, self.label_col]
+        ].copy()
+        pred_df[self.date_col] = pd.to_datetime(pred_df[self.date_col]).dt.strftime(
+            "%Y-%m-%d"
+        )
+
+        # Include every potential holding, even if its predictions stop before
+        # the evaluation period ends or it is outside the benchmark universe.
+        instruments = set(
             DataLoader.load_instruments(
                 self.data_dir, self.benchmark, self.start_time, self.end_time
             )[self.instrument_col]
             .unique()
             .tolist()
         )
+        instruments.update(pred_df[self.instrument_col].unique())
 
         inst_features = DataLoader.load_instruments_features(
-            self.data_dir, instruments, self.start_time, self.end_time
+            self.data_dir, sorted(instruments), self.start_time, self.end_time
         )
+        inst_features[self.date_col] = pd.to_datetime(
+            inst_features[self.date_col]
+        ).dt.strftime("%Y-%m-%d")
         inst_features["VWAP"] = (
             inst_features["AMount"] / (inst_features["Volume"] + 1e-12) * 10
         )
@@ -112,19 +125,24 @@ class Evaluator:
         bench_ret = self._compute_bench_returns(bench_features).rename(
             columns={self.label_col: "BENCH_RET_5D"}
         )[[self.date_col, "BENCH_RET_5D"]]
+        bench_ret[self.date_col] = pd.to_datetime(bench_ret[self.date_col]).dt.strftime(
+            "%Y-%m-%d"
+        )
 
-        # Merge instrument features, prediction, and benchmark returns.
+        # Quotes drive the simulation. Signals and benchmark returns are
+        # optional observations, so neither is allowed to truncate the market
+        # data. Leave missing signals as NaN; never forward-fill old scores.
         df = inst_features.merge(
-            pred_df[
-                [self.date_col, self.instrument_col, self.pred_col, self.label_col]
-            ],
+            pred_df,
             on=[self.date_col, self.instrument_col],
-            how="inner",
-        ).merge(bench_ret, on=self.date_col, how="inner")
-
-        # Check if the prediction column contains any NaN values
-        assert not df["BENCH_RET_5D"].isna().any(), "BENCH_RET_5D contains NaN"
-        assert not df[self.pred_col].isna().any(), f"{self.pred_col} contains NaN"
+            how="left",
+            validate="one_to_one",
+        ).merge(
+            bench_ret,
+            on=self.date_col,
+            how="left",
+            validate="many_to_one",
+        )
 
         return df
 
@@ -142,6 +160,7 @@ class Evaluator:
     def _compute_win_rate(self, group: pd.DataFrame) -> dict:
         k = self.top_k
         top_pred = group.nlargest(k, self.pred_col)
+        top_pred = top_pred.loc[np.isfinite(top_pred["BENCH_RET_5D"])]
         win_rate = (top_pred[self.label_col] > top_pred["BENCH_RET_5D"]).mean()
         return {f"WinRate@Top{k}": win_rate}
 
@@ -163,22 +182,29 @@ class Evaluator:
             len(df) - len(metric_df),
         )
 
-        # 1. IC & ICIR
-        daily_ic = self._compute_daily_ic(metric_df).dropna()
-        ic = daily_ic.mean()
-        icir = ic / daily_ic.std() if daily_ic.std() > 1e-12 else np.nan
+        if metric_df.empty:
+            # A period with no valid labels/signals still needs portfolio
+            # valuation. Report unavailable statistics instead of dropping it.
+            ic = icir = np.nan
+            hr_stats = {f"HitRate@Top{self.top_k}": np.nan}
+            wr_stats = {f"WinRate@Top{self.top_k}": np.nan}
+        else:
+            # 1. IC & ICIR
+            daily_ic = self._compute_daily_ic(metric_df).dropna()
+            ic = daily_ic.mean()
+            icir = ic / daily_ic.std() if daily_ic.std() > 1e-12 else np.nan
 
-        # 2. Hit Rate
-        daily_hr = pd.DataFrame(
-            metric_df.groupby(self.date_col).apply(self._compute_hit_rate).tolist()
-        )
-        hr_stats = daily_hr.mean().to_dict()
+            # 2. Hit Rate
+            daily_hr = pd.DataFrame(
+                metric_df.groupby(self.date_col).apply(self._compute_hit_rate).tolist()
+            )
+            hr_stats = daily_hr.mean().to_dict()
 
-        # 3. Win Rate
-        daily_wr = pd.DataFrame(
-            metric_df.groupby(self.date_col).apply(self._compute_win_rate).tolist()
-        )
-        wr_stats = daily_wr.mean().to_dict()
+            # 3. Win Rate
+            daily_wr = pd.DataFrame(
+                metric_df.groupby(self.date_col).apply(self._compute_win_rate).tolist()
+            )
+            wr_stats = daily_wr.mean().to_dict()
 
         # 4. Portfolio Stats
         portfolio_stats = self.backtester.run(df)
