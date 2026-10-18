@@ -74,6 +74,7 @@ def neutralize(
     add_suffix: bool = False,
     suffix: str = "_NEU",
     min_samples: int = 10,
+    reference_mask: pd.Series = None,
 ) -> pd.DataFrame:
     """
     Neutralize specified factor columns by regressing out industry and market cap effects.
@@ -94,6 +95,8 @@ def neutralize(
         Suffix for the new columns.
     - min_samples: int, default 10
         Minimum number of valid samples to fit the regression model.
+    - reference_mask: Optional boolean Series selecting rows used to fit the model.
+        Residuals are still calculated for all valid rows.
 
     Returns:
     - The same DataFrame, but with each matched factor column replaced by its regression residuals, or with new "_NEU" columns added if add_suffix=True.
@@ -159,16 +162,19 @@ def neutralize(
 
         valid = valid_x & y.notna() & np.isfinite(y)
 
-        n_valid = int(valid.sum())
+        fit_valid = valid if reference_mask is None else valid & reference_mask.reindex(
+            res_df.index, fill_value=False
+        )
+        n_valid = int(fit_valid.sum())
 
         if n_valid < min_samples:
             continue
 
-        # Fit on rows where y is present
+        # Fit on daily members, then transform all valid historical rows.
         X_sub = X.loc[valid].values
         y_sub = y.loc[valid].values
 
-        model.fit(X_sub, y_sub)
+        model.fit(X.loc[fit_valid].values, y.loc[fit_valid].values)
         residuals = y_sub - model.predict(X_sub)
 
         # Write residuals back

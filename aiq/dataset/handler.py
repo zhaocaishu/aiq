@@ -28,7 +28,7 @@ from aiq.ops import (
 from aiq.utils.module import init_instance_by_config
 
 from .loader import DataLoader
-from .processor import Processor, CSWinsorize
+from .processor import Processor, CSWinsorize, CSNeutralize
 
 
 class DataHandler:
@@ -44,11 +44,13 @@ class DataHandler:
         processors: List[Processor] = [],
     ):
         self.data_dir = data_dir
+        self.instruments_d = None
         if isinstance(instruments, str):
             df = DataLoader.load_instruments(
                 self.data_dir, instruments, start_time, end_time
             )
             self.instruments = df["Instrument"].unique().tolist()
+            self.instruments_d = set(zip(df["Instrument"], df["Date"]))
         else:
             self.instruments = instruments
         self.calendar = DataLoader.load_calendar(
@@ -811,6 +813,12 @@ class Alpha158(DataHandler):
             column_tuples.extend([("label", label_name) for label_name in label_names])
         df.columns = pd.MultiIndex.from_tuples(column_tuples)
 
+        reference_mask = None
+        if self.instruments_d is not None and "Instrument" in df.index.names:
+            reference_mask = pd.Series(
+                df.index.swaplevel().isin(self.instruments_d), index=df.index
+            )
+
         for proc in processors:
             if mode == "train":
                 dates = df.index.get_level_values("Date")
@@ -823,7 +831,10 @@ class Alpha158(DataHandler):
             if mode == "test" and proc.fields_group == "label":
                 continue
 
-            df = proc(df)
+            if isinstance(proc, (CSWinsorize, CSNeutralize)):
+                df = proc(df, reference_mask=reference_mask)
+            else:
+                df = proc(df)
 
         df.columns = df.columns.droplevel()
         return df

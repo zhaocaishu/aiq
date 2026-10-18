@@ -136,13 +136,14 @@ class CSNeutralize(Processor):
         self.cap_col = cap_col
         self.factor_cols = factor_cols
 
-    def __call__(self, df):
+    def __call__(self, df, reference_mask=None):
         df = df.groupby(level="Date", group_keys=False).apply(
             neutralize,
             fields_group=self.fields_group,
             industry_col=self.industry_col,
             cap_col=self.cap_col,
             factor_cols=self.factor_cols,
+            reference_mask=reference_mask,
         )
         return df
 
@@ -169,14 +170,19 @@ class CSWinsorize(Processor):
         self.upper_quantile = upper_quantile
         self.exclude_cols = exclude_cols or []
 
-    def __call__(self, df: pd.DataFrame) -> pd.DataFrame:
+    def __call__(self, df: pd.DataFrame, reference_mask=None) -> pd.DataFrame:
         # Identify numeric columns to winsorize
         cols = get_group_columns(df, self.fields_group, self.exclude_cols)
 
         def winsorize(group: pd.DataFrame) -> pd.DataFrame:
-            # Compute per-column quantiles
-            lower_bounds = group.quantile(self.lower_quantile)
-            upper_bounds = group.quantile(self.upper_quantile)
+            reference = group if reference_mask is None else group.loc[
+                reference_mask.reindex(group.index, fill_value=False)
+            ]
+            if reference.empty:
+                return group
+            # Estimate on daily members; transform all rows to retain history.
+            lower_bounds = reference.quantile(self.lower_quantile)
+            upper_bounds = reference.quantile(self.upper_quantile)
             # Clip values to bounds
             return group.clip(lower=lower_bounds, upper=upper_bounds, axis=1)
 
