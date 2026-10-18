@@ -10,10 +10,10 @@ class HybridLoss(nn.Module):
     Hybrid Loss Function: Main Loss + Auxiliary Loss.
 
     Args:
-        aux_loss_weight (float): Weight coefficient for the auxiliary loss, default is 0.5.
+        aux_loss_weight (float): Weight coefficient for the auxiliary loss, default is 0.3.
     """
 
-    def __init__(self, aux_loss_weight: float = 0.5):
+    def __init__(self, aux_loss_weight: float = 0.3):
         super().__init__()
         self.aux_loss_weight = aux_loss_weight
         
