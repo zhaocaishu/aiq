@@ -90,7 +90,6 @@ class Evaluator:
             .unique()
             .tolist()
         )
-        instruments.update(pred_df[self.instrument_col].unique())
 
         inst_features = DataLoader.load_instruments_features(
             self.data_dir, sorted(instruments), self.start_time, self.end_time

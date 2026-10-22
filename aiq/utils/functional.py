@@ -73,7 +73,7 @@ def neutralize(
     factor_cols: List[str] = None,
     add_suffix: bool = False,
     suffix: str = "_NEU",
-    min_samples: int = 10,
+    min_samples: int = 100,
     reference_mask: pd.Series = None,
 ) -> pd.DataFrame:
     """
@@ -93,10 +93,10 @@ def neutralize(
                   If False, replace original columns with residuals (default).
     - suffix: str, default "_NEU"
         Suffix for the new columns.
-    - min_samples: int, default 10
+    - min_samples: int, default 100
         Minimum number of valid samples to fit the regression model.
     - reference_mask: Optional boolean Series selecting rows used to fit the model.
-        Residuals are still calculated for all valid rows.
+        Residuals are calculated for valid rows in supported industries.
 
     Returns:
     - The same DataFrame, but with each matched factor column replaced by its regression residuals, or with new "_NEU" columns added if add_suffix=True.
@@ -108,10 +108,10 @@ def neutralize(
     if industry_col is None and cap_col is None:
         return df.copy()
 
-    # Extract the “feature” sub‑DataFrame
+    # Read inputs independently of the residual output.
     res_df = df.copy()
-    factor_df = res_df[fields_group]
-    exposure_df = res_df[exposure_group]
+    factor_df = df[fields_group]
+    exposure_df = df[exposure_group]
 
     # Create design matrix: industry dummies + cap + constant
     X_parts = []
@@ -159,6 +159,8 @@ def neutralize(
     # Loop through each factor, fit on non‑missing rows, and store residuals
     for factor in matched_factors:
         y = factor_df[factor].astype(float)
+        target_col = f"{factor}{suffix}" if add_suffix else factor
+        res_df[(fields_group, target_col)] = np.float32(np.nan)
 
         valid = valid_x & y.notna() & np.isfinite(y)
 
@@ -170,11 +172,17 @@ def neutralize(
         if n_valid < min_samples:
             continue
 
-        # Fit on daily members, then transform all valid historical rows.
+        # Fit on daily members, then transform supported historical rows.
+        model.fit(X.loc[fit_valid].values, y.loc[fit_valid].values)
+        expected_rank = industry.loc[fit_valid].nunique() if industry_col is not None else 1
+        expected_rank += int(cap_col is not None)
+        if n_valid <= model.rank_ or model.rank_ < expected_rank:
+            continue
+
+        if industry_col is not None:
+            valid &= industry.isin(industry.loc[fit_valid])
         X_sub = X.loc[valid].values
         y_sub = y.loc[valid].values
-
-        model.fit(X.loc[fit_valid].values, y.loc[fit_valid].values)
         residuals = y_sub - model.predict(X_sub)
 
         # Write residuals back
