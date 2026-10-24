@@ -60,6 +60,7 @@ class Evaluator:
             score_col=self.pred_col,
             trading_calendar=self.trading_calendar,
             logger=self.logger,
+            universe_col="IN_UNIVERSE",
         )
 
     def _compute_bench_returns(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -81,15 +82,17 @@ class Evaluator:
             "%Y-%m-%d"
         )
 
-        # Include every potential holding, even if its predictions stop before
-        # the evaluation period ends or it is outside the benchmark universe.
-        instruments = set(
-            DataLoader.load_instruments(
-                self.data_dir, self.benchmark, self.start_time, self.end_time
-            )[self.instrument_col]
-            .unique()
-            .tolist()
+        key_cols = [self.date_col, self.instrument_col]
+        universe = DataLoader.load_instruments(
+            self.data_dir, self.benchmark, self.start_time, self.end_time
+        )[key_cols].copy()
+        universe[self.date_col] = pd.to_datetime(universe[self.date_col]).dt.strftime(
+            "%Y-%m-%d"
         )
+
+        # Keep full-period quotes for every potential holding, including dates
+        # after it leaves the universe, so it can still be valued and sold.
+        instruments = universe[self.instrument_col].unique().tolist()
 
         inst_features = DataLoader.load_instruments_features(
             self.data_dir, sorted(instruments), self.start_time, self.end_time
@@ -133,7 +136,7 @@ class Evaluator:
         # data. Leave missing signals as NaN; never forward-fill old scores.
         df = inst_features.merge(
             pred_df,
-            on=[self.date_col, self.instrument_col],
+            on=key_cols,
             how="left",
             validate="one_to_one",
         ).merge(
@@ -141,6 +144,12 @@ class Evaluator:
             on=self.date_col,
             how="left",
             validate="many_to_one",
+        )
+
+        # Membership applies on the execution date; only prediction scores
+        # are lagged. Out-of-universe quotes remain available to holdings.
+        df["IN_UNIVERSE"] = pd.MultiIndex.from_frame(df[key_cols]).isin(
+            pd.MultiIndex.from_frame(universe[key_cols])
         )
 
         return df

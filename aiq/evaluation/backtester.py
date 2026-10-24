@@ -12,6 +12,8 @@ from aiq.utils.decision import Order
 
 
 class BaseBacktester(ABC):
+    """Optionally restrict purchases using a daily boolean universe column."""
+
     def __init__(
         self,
         top_k: int,
@@ -22,6 +24,7 @@ class BaseBacktester(ABC):
         score_col: str = "PRED_RET_5D",
         trading_calendar: Optional[List[str]] = None,
         logger: Optional[logging.Logger] = None,
+        universe_col: Optional[str] = None,
     ):
         self.top_k = top_k
         self.date_col = date_col
@@ -31,6 +34,7 @@ class BaseBacktester(ABC):
         self.score_col = score_col
         self.trading_calendar = trading_calendar
         self.logger = logger or logging.getLogger(__name__)
+        self.universe_col = universe_col
 
     @abstractmethod
     def run(self, df: pd.DataFrame, **kwargs) -> Dict[str, float]:
@@ -190,6 +194,12 @@ class TopKDropoutBacktester(BaseBacktester):
             return {}
 
         df = df.copy()
+        if self.universe_col is not None:
+            if self.universe_col not in df.columns:
+                raise ValueError(f"缺少每日股票池标记列: {self.universe_col}")
+            if not pd.api.types.is_bool_dtype(df[self.universe_col]):
+                raise ValueError(f"每日股票池标记列必须为布尔类型: {self.universe_col}")
+            df[self.universe_col] = df[self.universe_col].fillna(False)
         df[self.date_col] = pd.to_datetime(df[self.date_col]).dt.strftime("%Y-%m-%d")
         full_calendar = sorted(
             set(pd.to_datetime(self.trading_calendar).strftime("%Y-%m-%d"))
@@ -252,13 +262,19 @@ class TopKDropoutBacktester(BaseBacktester):
                 row = daily_dict.get(inst_id)
                 if row is None or not self._valid_price(row.get("VWAP")):
                     return False
+                if (
+                    direction == Order.BUY
+                    and self.universe_col is not None
+                    and not row[self.universe_col]
+                ):
+                    return False
                 return exchange.is_stock_tradable(
                     stock_id=inst_id,
                     price_col="Close",
                     up_limit_col=self.up_limit_col,
                     down_limit_col=self.down_limit_col,
                     daily_dict=daily_dict,
-                    direction=direction,
+                    direction=None if forbid_all_trade_at_limit else direction,
                 )
 
             daily_buy_value = 0.0
@@ -270,9 +286,7 @@ class TopKDropoutBacktester(BaseBacktester):
                     inst
                     for inst in daily_dict
                     if np.isfinite(daily_dict[inst]["Score"])
-                    and _is_tradable(
-                        inst, None if forbid_all_trade_at_limit else Order.BUY
-                    )
+                    and _is_tradable(inst, Order.BUY)
                 ]
                 if method_buy == "top":
                     buy_candidates.sort(
@@ -351,9 +365,7 @@ class TopKDropoutBacktester(BaseBacktester):
                     for inst in daily_dict
                     if inst not in positions
                     and np.isfinite(daily_dict[inst]["Score"])
-                    and _is_tradable(
-                        inst, None if forbid_all_trade_at_limit else Order.BUY
-                    )
+                    and _is_tradable(inst, Order.BUY)
                 ),
                 key=lambda inst: daily_dict[inst]["Score"],
                 reverse=True,
@@ -382,9 +394,7 @@ class TopKDropoutBacktester(BaseBacktester):
                 if hold_days < hold_thresh:
                     blocked_hold += 1
                     continue
-                if not _is_tradable(
-                    inst, None if forbid_all_trade_at_limit else Order.SELL
-                ):
+                if not _is_tradable(inst, Order.SELL):
                     blocked_limit += 1
                     continue
                 sell_queue.append(inst)
