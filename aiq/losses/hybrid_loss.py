@@ -2,12 +2,12 @@ import torch
 import torch.nn as nn
 
 from .topk_loss import TopKLoss
-from .mr_loss import MarginRankingLoss
+from .ic_loss import ICLoss
 
 
 class HybridLoss(nn.Module):
     """
-    Hybrid Loss Function: Main Loss + Auxiliary Loss.
+    Hybrid Loss Function: TopK Loss + Auxiliary Pearson IC Loss.
 
     Args:
         aux_loss_weight (float): Weight coefficient for the auxiliary loss.
@@ -16,9 +16,9 @@ class HybridLoss(nn.Module):
     def __init__(self, aux_loss_weight: float = 0.5):
         super().__init__()
         self.aux_loss_weight = aux_loss_weight
-        
+
         self.main_loss_fn = TopKLoss()
-        self.aux_loss_fn = MarginRankingLoss()
+        self.aux_loss_fn = ICLoss()
 
     def forward(self, preds: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         """
