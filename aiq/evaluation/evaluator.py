@@ -229,6 +229,23 @@ class Evaluator:
         monthly_ic.index.name = "Month"
         return monthly_ic.reset_index()
 
+    @staticmethod
+    def _format_value(value: float, percentage: bool = False) -> str:
+        if not np.isfinite(value):
+            return "--"
+        return f"{value:.2%}" if percentage else f"{value:.4f}"
+
+    def _format_metrics(self, metrics: dict, percentage_metrics: tuple = ()) -> str:
+        rows = [
+            (name, self._format_value(value, name in percentage_metrics))
+            for name, value in metrics.items()
+        ]
+        return pd.DataFrame(rows, columns=["Metric", "Value"]).to_markdown(
+            index=False,
+            disable_numparse=True,
+            colalign=("left", "right") if rows else None,
+        )
+
     def evaluate(self, pred_df: pd.DataFrame) -> str:
         """Evaluate scores against unnormalized, adjusted forward-return labels."""
         df = self._prepare_dataset(pred_df)
@@ -296,22 +313,44 @@ class Evaluator:
 
         self.logger.info(f"{'═' * 72}")
 
-        results = {
-            "RankIC": rank_ic,
-            "RankICIR": rank_icir,
-            **topk_stats,
-            **portfolio_stats,
+        # 4. Keep display formatting separate from the numeric statistics.
+        rank_table = self._format_metrics({"RankIC": rank_ic, "RankICIR": rank_icir})
+        topk_display = {
+            name.split("@", 1)[0]: value for name, value in topk_stats.items()
         }
-
-        summary = pd.DataFrame([results]).to_markdown(index=False, floatfmt=".4f")
-        quantile_table = quantile_returns.reset_index().to_markdown(
-            index=False, floatfmt=".4f"
+        topk_table = self._format_metrics(
+            topk_display, percentage_metrics=tuple(topk_display)
         )
-        monthly_table = monthly_ic.to_markdown(index=False, floatfmt=".4f")
+        portfolio_display = {
+            name: portfolio_stats.get(name, np.nan)
+            for name in ("ARR", "Sharpe", "MaxDrawdown", "AnnVol", "AvgTurnover")
+        }
+        portfolio_table = self._format_metrics(
+            portfolio_display,
+            percentage_metrics=("ARR", "MaxDrawdown", "AnnVol", "AvgTurnover"),
+        )
+
+        quantile_display = quantile_returns.reset_index()
+        quantile_display["MeanReturn"] = quantile_display["MeanReturn"].map(
+            lambda value: self._format_value(value, percentage=True)
+        )
+        quantile_table = quantile_display.to_markdown(
+            index=False, disable_numparse=True, colalign=("left", "right", "right")
+        )
+        monthly_display = monthly_ic.copy()
+        monthly_display["RankIC"] = monthly_display["RankIC"].map(self._format_value)
+        monthly_table = monthly_display.to_markdown(
+            index=False,
+            disable_numparse=True,
+            colalign=("left", "right", "right") if not monthly_display.empty else None,
+        )
         return (
-            f"{summary}\n\n"
-            "Forward-return diagnostics: before costs, unannualized; "
-            "TopK statistics use observed labels (see LabelCoverage).\n\n"
-            f"Quantile returns (Q1: lowest score, Q10: highest score):\n{quantile_table}\n\n"
-            f"Monthly IC:\n{monthly_table}"
+            f"排序能力（RankICIR 未年化）\n{rank_table}\n\n"
+            f"Top{self.top_k} 选股表现（标签收益，未扣费、未年化）\n{topk_table}\n\n"
+            f"策略回测（含交易费用）\n{portfolio_table}\n\n"
+            f"十分组收益（Q1 最低分，Q10 最高分；未扣费、未年化）\n{quantile_table}\n\n"
+            f"月度 RankIC\n{monthly_table}\n\n"
+            "说明：ExcessReturn 相对指数基准，PoolExcess 相对有有效预测的股票池；\n"
+            "LabelCoverage 为已选股票的标签覆盖率，选股统计仅使用其中可观测的标签；\n"
+            "Days 为对应指标有效的日期数，-- 表示无法计算。"
         )

@@ -39,7 +39,7 @@ pip3 install .
         --save_dir ./output
     ```
 
-    评估日志包含汇总指标、十分组收益和月度 IC 三张表。主要统计指标如下：
+    评估日志分为排序能力、TopK 选股表现、策略回测、十分组收益和月度 RankIC 五组结果。收益、命中率、覆盖率和换手率以百分比显示，RankIC、RankICIR 和 Sharpe 保留四位小数，无法计算的值显示为 `--`。主要统计指标如下：
 
     - `RankIC` / `RankICIR`：每日 Spearman 相关系数的均值及其均值/标准差。
     - `HitRate@TopK` / `WorstHit@TopK`：预测 TopK 中命中真实最好/最差 K 只股票的比例。
