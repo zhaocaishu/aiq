@@ -155,76 +155,163 @@ class Evaluator:
         return df
 
     def _compute_daily_ic(self, df: pd.DataFrame) -> pd.Series:
-        return df.groupby(self.date_col).apply(
+        df = df.loc[
+            np.isfinite(df[self.label_col]),
+            [self.date_col, self.pred_col, self.label_col],
+        ]
+        if df.empty:
+            return pd.Series(dtype=float, name="RankIC")
+        return df.groupby(self.date_col)[[self.pred_col, self.label_col]].apply(
             lambda x: x[self.pred_col].corr(x[self.label_col], method="spearman")
+            if x[self.pred_col].nunique() > 1 and x[self.label_col].nunique() > 1
+            else np.nan
         )
 
-    def _compute_hit_rate(self, group: pd.DataFrame) -> dict:
-        k = self.top_k
-        top_pred = set(group.nlargest(k, self.pred_col)[self.instrument_col])
-        top_true = set(group.nlargest(k, self.label_col)[self.instrument_col])
-        return {f"HitRate@Top{k}": len(top_pred & top_true) / k}
-
-    def _compute_win_rate(self, group: pd.DataFrame) -> dict:
+    def _compute_topk_stats(self, group: pd.DataFrame) -> dict:
+        """Select before filtering labels; report statistics on observed labels."""
         k = self.top_k
         top_pred = group.nlargest(k, self.pred_col)
-        top_pred = top_pred.loc[np.isfinite(top_pred["BENCH_RET_5D"])]
-        win_rate = (top_pred[self.label_col] > top_pred["BENCH_RET_5D"]).mean()
-        return {f"WinRate@Top{k}": win_rate}
+        observed = top_pred.loc[np.isfinite(top_pred[self.label_col])]
+        reference = group.loc[np.isfinite(group[self.label_col])]
+        stats = {
+            f"HitRate@Top{k}": np.nan,
+            f"WorstHit@Top{k}": np.nan,
+            f"WinRate@Top{k}": np.nan,
+            f"TopReturn@Top{k}": np.nan,
+            f"ExcessReturn@Top{k}": np.nan,
+            f"PoolExcess@Top{k}": np.nan,
+            f"LabelCoverage@Top{k}": len(observed) / len(top_pred)
+            if len(top_pred) > 0
+            else np.nan,
+        }
+        if observed.empty:
+            return stats
+
+        top_return = observed[self.label_col].mean()
+        stats[f"TopReturn@Top{k}"] = top_return
+        # The pool baseline includes only the day's stocks with finite signals.
+        stats[f"PoolExcess@Top{k}"] = top_return - reference[self.label_col].mean()
+
+        benchmark_observed = observed.loc[np.isfinite(observed["BENCH_RET_5D"])]
+        stats[f"ExcessReturn@Top{k}"] = (
+            benchmark_observed[self.label_col] - benchmark_observed["BENCH_RET_5D"]
+        ).mean()
+        stats[f"WinRate@Top{k}"] = (
+            benchmark_observed[self.label_col] > benchmark_observed["BENCH_RET_5D"]
+        ).mean()
+
+        # Undersized pools and constant labels cannot distinguish the two tails.
+        if len(reference) >= 2 * k and reference[self.label_col].nunique() > 1:
+            selected = set(observed[self.instrument_col])
+            ranked = reference.sort_values(self.label_col, kind="stable")
+            top_true = set(ranked.tail(k)[self.instrument_col])
+            bottom_true = set(ranked.head(k)[self.instrument_col])
+            stats[f"HitRate@Top{k}"] = len(selected & top_true) / len(observed)
+            stats[f"WorstHit@Top{k}"] = len(selected & bottom_true) / len(observed)
+        return stats
+
+    def _compute_quantile_returns(self, group: pd.DataFrame) -> dict:
+        """Assign score deciles before filtering labels; never split equal scores."""
+        quantiles = np.ceil(
+            group[self.pred_col].rank(method="average", pct=True) * 10
+        )
+        labels = group[self.label_col].where(np.isfinite(group[self.label_col]))
+        returns = labels.groupby(quantiles).mean()
+        stats = {f"Q{i}": returns.get(i, np.nan) for i in range(1, 11)}
+        stats["Q10-Q1"] = stats["Q10"] - stats["Q1"]
+        return stats
+
+    def _compute_monthly_ic(self, daily_rank_ic: pd.Series) -> pd.DataFrame:
+        daily_ic = pd.DataFrame({"RankIC": daily_rank_ic})
+        months = pd.to_datetime(daily_ic.index).strftime("%Y-%m")
+        monthly_ic = daily_ic.groupby(months).mean()
+        monthly_ic["Days"] = daily_ic["RankIC"].groupby(months).count()
+        monthly_ic.index.name = "Month"
+        return monthly_ic.reset_index()
 
     def evaluate(self, pred_df: pd.DataFrame) -> str:
-        """Run statistical cross-sectional evaluation and simulation."""
+        """Evaluate scores against unnormalized, adjusted forward-return labels."""
         df = self._prepare_dataset(pred_df)
 
-        # Filter out NaN samples
-        valid_mask = (
-            np.isfinite(df[self.pred_col])
-            & np.isfinite(df[self.label_col])
-        )
-        metric_df = df.loc[valid_mask].copy()
+        # Only the current universe participates in signal diagnostics. Keep
+        # all quotes, including missing signals, for portfolio valuation.
+        # Each metric handles missing labels after determining its membership.
+        metric_mask = df["IN_UNIVERSE"] & np.isfinite(df[self.pred_col])
+        metric_df = df.loc[metric_mask].copy()
 
         self.logger.info(
-            "统计评测：总样本 %d，有效样本 %d，排除样本 %d",
+            "统计评测：总样本 %d，候选样本 %d，有效标签 %d",
             len(df),
             len(metric_df),
-            len(df) - len(metric_df),
+            np.isfinite(metric_df[self.label_col]).sum(),
         )
 
+        # 1. Daily RankIC, averaged with equal date weights.
+        metric_dates = pd.Index(
+            sorted(metric_df[self.date_col].unique()), name=self.date_col
+        )
+        daily_rank_ic = self._compute_daily_ic(metric_df).reindex(metric_dates)
+        rank_ic = daily_rank_ic.mean()
+        rank_ic_std = daily_rank_ic.std()
+        rank_icir = rank_ic / rank_ic_std if rank_ic_std > 1e-12 else np.nan
+        monthly_ic = self._compute_monthly_ic(daily_rank_ic)
+
+        # 2. TopK selection and decile membership must not depend on whether a
+        # future label is observable. Missing labels never trigger replacements.
         if metric_df.empty:
-            # A period with no valid labels/signals still needs portfolio
-            # valuation. Report unavailable statistics instead of dropping it.
-            ic = icir = np.nan
-            hr_stats = {f"HitRate@Top{self.top_k}": np.nan}
-            wr_stats = {f"WinRate@Top{self.top_k}": np.nan}
+            topk_stats = self._compute_topk_stats(metric_df)
+            daily_quantile_returns = pd.DataFrame(
+                columns=[f"Q{i}" for i in range(1, 11)] + ["Q10-Q1"],
+                dtype=float,
+            )
         else:
-            # 1. IC & ICIR
-            daily_ic = self._compute_daily_ic(metric_df).dropna()
-            ic = daily_ic.mean()
-            icir = ic / daily_ic.std() if daily_ic.std() > 1e-12 else np.nan
-
-            # 2. Hit Rate
-            daily_hr = pd.DataFrame(
-                metric_df.groupby(self.date_col).apply(self._compute_hit_rate).tolist()
+            daily_topk_stats = pd.DataFrame(
+                metric_df.groupby(self.date_col)
+                .apply(self._compute_topk_stats)
+                .tolist()
             )
-            hr_stats = daily_hr.mean().to_dict()
-
-            # 3. Win Rate
-            daily_wr = pd.DataFrame(
-                metric_df.groupby(self.date_col).apply(self._compute_win_rate).tolist()
+            topk_stats = daily_topk_stats.mean().to_dict()
+            daily_quantile_returns = pd.DataFrame(
+                metric_df.groupby(self.date_col)
+                .apply(self._compute_quantile_returns)
+                .tolist()
             )
-            wr_stats = daily_wr.mean().to_dict()
 
-        # 4. Portfolio Stats
+        quantile_returns = pd.DataFrame(
+            {
+                "MeanReturn": daily_quantile_returns.mean(),
+                "Days": daily_quantile_returns.count(),
+            }
+        )
+        quantile_returns.index.name = "Quantile"
+
+        self.logger.info(
+            "标签收益诊断：按日等权平均，未扣费、未年化；"
+            "TopK 仅统计已选股票中标签可观测的部分，详见 LabelCoverage；"
+            "HitRate/WorstHit 要求至少 2K 个标签可观测的候选股票。"
+        )
+
+        # 3. Portfolio Stats
         portfolio_stats = self.backtester.run(df)
 
         self.logger.info(f"{'═' * 72}")
 
         results = {
-            "IC": ic,
-            "ICIR": icir,
-            **hr_stats,
-            **wr_stats,
+            "RankIC": rank_ic,
+            "RankICIR": rank_icir,
+            **topk_stats,
             **portfolio_stats,
         }
 
-        return pd.DataFrame([results]).to_markdown(index=False, floatfmt=".4f")
+        summary = pd.DataFrame([results]).to_markdown(index=False, floatfmt=".4f")
+        quantile_table = quantile_returns.reset_index().to_markdown(
+            index=False, floatfmt=".4f"
+        )
+        monthly_table = monthly_ic.to_markdown(index=False, floatfmt=".4f")
+        return (
+            f"{summary}\n\n"
+            "Forward-return diagnostics: before costs, unannualized; "
+            "TopK statistics use observed labels (see LabelCoverage).\n\n"
+            f"Quantile returns (Q1: lowest score, Q10: highest score):\n{quantile_table}\n\n"
+            f"Monthly IC:\n{monthly_table}"
+        )
