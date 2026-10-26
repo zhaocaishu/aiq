@@ -9,7 +9,7 @@ from torch.utils.data import Dataset, DataLoader, Sampler
 from transformers import get_scheduler
 
 from aiq.layers import PPNet, Muon
-from aiq.losses import TopKLoss, HybridLoss
+from aiq.losses import TopKLoss, HybridLoss, ICLoss
 
 from .base import BaseModel
 
@@ -165,6 +165,8 @@ class PPNetModel(BaseModel):
             self.criterion = HybridLoss()
         elif self.criterion_name == "TopK":
             self.criterion = TopKLoss()
+        elif self.criterion_name == "IC":
+            self.criterion = ICLoss()
         else:
             raise NotImplementedError
 
