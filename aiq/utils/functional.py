@@ -58,10 +58,15 @@ def robust_zscore(x, clip_outlier: bool = False):
     return z
 
 
-def zscore(x, clip_min=-3.0, clip_max=3.0):
+def zscore(x, clip_outlier: bool = False):
     mean = np.nanmean(x, axis=0)
     std = np.nanstd(x, axis=0)
-    return np.clip((x - mean) / (std + 1e-8), clip_min, clip_max)
+    z = (x - mean) / (std + 1e-8)
+
+    if clip_outlier:
+        z = np.clip(z, -3.0, 3.0)
+
+    return z
 
 
 def neutralize(
@@ -164,8 +169,10 @@ def neutralize(
 
         valid = valid_x & y.notna() & np.isfinite(y)
 
-        fit_valid = valid if reference_mask is None else valid & reference_mask.reindex(
-            res_df.index, fill_value=False
+        fit_valid = (
+            valid
+            if reference_mask is None
+            else valid & reference_mask.reindex(res_df.index, fill_value=False)
         )
         n_valid = int(fit_valid.sum())
 
@@ -174,7 +181,9 @@ def neutralize(
 
         # Fit on daily members, then transform supported historical rows.
         model.fit(X.loc[fit_valid].values, y.loc[fit_valid].values)
-        expected_rank = industry.loc[fit_valid].nunique() if industry_col is not None else 1
+        expected_rank = (
+            industry.loc[fit_valid].nunique() if industry_col is not None else 1
+        )
         expected_rank += int(cap_col is not None)
         if n_valid <= model.rank_ or model.rank_ < expected_rank:
             continue
