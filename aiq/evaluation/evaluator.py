@@ -6,6 +6,7 @@ from aiq.dataset.loader import DataLoader
 from aiq.ops import Ref
 
 from .backtester import TopKDropoutBacktester
+from .risk import RiskEvaluator
 
 
 class Evaluator:
@@ -28,6 +29,7 @@ class Evaluator:
         label_col: str = "RET_5D",
         top_k: int = 30,
         logger: logging.Logger = None,
+        risk_analysis: bool = True,
     ):
         self.data_dir = data_dir
         self.start_time = start_time
@@ -41,6 +43,15 @@ class Evaluator:
         self.pred_col = pred_col
         self.label_col = label_col
         self.top_k = top_k
+        self.risk_analysis = risk_analysis
+        self.risk_evaluator = RiskEvaluator(
+            top_k=top_k,
+            date_col=date_col,
+            instrument_col=instrument_col,
+            pred_col=pred_col,
+            label_col=label_col,
+        )
+        self.risk_results = None
 
         self.trading_calendar = DataLoader.load_calendar(
             self.data_dir,
@@ -94,12 +105,38 @@ class Evaluator:
         # after it leaves the universe, so it can still be valued and sold.
         instruments = universe[self.instrument_col].unique().tolist()
 
+        # Extra history is used only for trailing risk features. It must not
+        # extend the portfolio simulation or change its available quote rows.
+        history_start = (
+            (pd.Timestamp(self.start_time) - pd.Timedelta(days=180)).strftime(
+                "%Y-%m-%d"
+            )
+            if self.risk_analysis
+            else self.start_time
+        )
         inst_features = DataLoader.load_instruments_features(
-            self.data_dir, sorted(instruments), self.start_time, self.end_time
+            self.data_dir, sorted(instruments), history_start, self.end_time
         )
         inst_features[self.date_col] = pd.to_datetime(
             inst_features[self.date_col]
         ).dt.strftime("%Y-%m-%d")
+        extended_end_time = (
+            pd.to_datetime(self.end_time) + pd.Timedelta(days=20)
+        ).strftime("%Y-%m-%d")
+        bench_features = DataLoader.load_markets_features(
+            self.data_dir, [self.benchmark], history_start, extended_end_time
+        )
+        if self.risk_analysis:
+            risk_calendar = DataLoader.load_calendar(
+                self.data_dir, start_time=history_start, end_time=self.end_time
+            )
+            risk_features = self.risk_evaluator.prepare_features(
+                inst_features, bench_features, risk_calendar
+            )
+
+        inst_features = inst_features.loc[
+            inst_features[self.date_col].between(self.start_time, self.end_time)
+        ].copy()
         inst_features["VWAP"] = (
             inst_features["AMount"] / (inst_features["Volume"] + 1e-12) * 10
         )
@@ -115,14 +152,6 @@ class Evaluator:
                 "VWAP",
             ]
         ]
-
-        # Load benchmark features.
-        extended_end_time = (
-            pd.to_datetime(self.end_time) + pd.Timedelta(days=20)
-        ).strftime("%Y-%m-%d")
-        bench_features = DataLoader.load_markets_features(
-            self.data_dir, [self.benchmark], self.start_time, extended_end_time
-        )
 
         bench_ret = self._compute_bench_returns(bench_features).rename(
             columns={self.label_col: "BENCH_RET_5D"}
@@ -151,6 +180,8 @@ class Evaluator:
         df["IN_UNIVERSE"] = pd.MultiIndex.from_frame(df[key_cols]).isin(
             pd.MultiIndex.from_frame(universe[key_cols])
         )
+        if self.risk_analysis:
+            df = df.merge(risk_features, on=key_cols, how="left", validate="one_to_one")
 
         return df
 
@@ -162,9 +193,11 @@ class Evaluator:
         if df.empty:
             return pd.Series(dtype=float, name="RankIC")
         return df.groupby(self.date_col)[[self.pred_col, self.label_col]].apply(
-            lambda x: x[self.pred_col].corr(x[self.label_col], method="spearman")
-            if x[self.pred_col].nunique() > 1 and x[self.label_col].nunique() > 1
-            else np.nan
+            lambda x: (
+                x[self.pred_col].corr(x[self.label_col], method="spearman")
+                if x[self.pred_col].nunique() > 1 and x[self.label_col].nunique() > 1
+                else np.nan
+            )
         )
 
     def _compute_topk_stats(self, group: pd.DataFrame) -> dict:
@@ -180,9 +213,9 @@ class Evaluator:
             f"TopReturn@Top{k}": np.nan,
             f"ExcessReturn@Top{k}": np.nan,
             f"PoolExcess@Top{k}": np.nan,
-            f"LabelCoverage@Top{k}": len(observed) / len(top_pred)
-            if len(top_pred) > 0
-            else np.nan,
+            f"LabelCoverage@Top{k}": (
+                len(observed) / len(top_pred) if len(top_pred) > 0 else np.nan
+            ),
         }
         if observed.empty:
             return stats
@@ -212,9 +245,7 @@ class Evaluator:
 
     def _compute_quantile_returns(self, group: pd.DataFrame) -> dict:
         """Assign score deciles before filtering labels; never split equal scores."""
-        quantiles = np.ceil(
-            group[self.pred_col].rank(method="average", pct=True) * 10
-        )
+        quantiles = np.ceil(group[self.pred_col].rank(method="average", pct=True) * 10)
         labels = group[self.label_col].where(np.isfinite(group[self.label_col]))
         returns = labels.groupby(quantiles).mean()
         stats = {f"Q{i}": returns.get(i, np.nan) for i in range(1, 11)}
@@ -255,6 +286,9 @@ class Evaluator:
         # Each metric handles missing labels after determining its membership.
         metric_mask = df["IN_UNIVERSE"] & np.isfinite(df[self.pred_col])
         metric_df = df.loc[metric_mask].copy()
+        self.risk_results = (
+            self.risk_evaluator.evaluate(metric_df) if self.risk_analysis else None
+        )
 
         self.logger.info(
             "统计评测：总样本 %d，候选样本 %d，有效标签 %d",
@@ -344,7 +378,7 @@ class Evaluator:
             disable_numparse=True,
             colalign=("left", "right", "right") if not monthly_display.empty else None,
         )
-        return (
+        report = (
             f"排序能力（RankICIR 未年化）\n{rank_table}\n\n"
             f"Top{self.top_k} 选股表现（标签收益，未扣费、未年化）\n{topk_table}\n\n"
             f"策略回测（含交易费用）\n{portfolio_table}\n\n"
@@ -354,3 +388,6 @@ class Evaluator:
             "LabelCoverage 为已选股票的标签覆盖率，选股统计仅使用其中可观测的标签；\n"
             "Days 为对应指标有效的日期数，-- 表示无法计算。"
         )
+        if self.risk_results is not None:
+            report += "\n\n" + self.risk_evaluator.format_report(self.risk_results)
+        return report
