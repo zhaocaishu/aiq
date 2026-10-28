@@ -304,7 +304,6 @@ class PPNet(nn.Module):
     def __init__(
         self,
         d_ts_feat,
-        d_intraday_ts_feat,
         d_cs_feat,
         d_fund_feat,
         d_mkt_feat,
@@ -315,19 +314,12 @@ class PPNet(nn.Module):
         dropout,
         beta,
         num_labels,
-        use_intraday=False,
     ):
         super().__init__()
 
-        self.use_intraday = use_intraday
-
         # Feature Dimensions
         self.d_temporal_hidden = d_model // 4
-        self.d_fusion_input = (
-            self.d_temporal_hidden + d_cs_feat
-            if not use_intraday
-            else self.d_temporal_hidden + d_cs_feat + self.d_temporal_hidden
-        )
+        self.d_fusion_input = self.d_temporal_hidden + d_cs_feat
 
         # Market Regime Encoder
         d_regime = 32
@@ -371,25 +363,6 @@ class PPNet(nn.Module):
             d_regime=d_regime,
         )
 
-        # Temporal Encoder (Intra-stock) for intraday data
-        if self.use_intraday:
-            self.intraday_data_embedding = DataEmbedding(
-                c_in=d_intraday_ts_feat,
-                d_model=self.d_temporal_hidden,
-                dropout=dropout,
-            )
-            self.intraday_temporal_layers = nn.Sequential(
-                *[
-                    TAttention(
-                        d_model=self.d_temporal_hidden, nhead=t_nhead, dropout=dropout
-                    )
-                    for _ in range(2)
-                ]
-            )
-
-            # Cross attention
-            self.cross_attn = CrossAttention(self.d_temporal_hidden, t_nhead)
-
         # Fusion Encoder (Temporal + Cross-Sectional Feature Integration)
         self.fusion_block = FusionBlock(
             d_in=self.d_fusion_input,
@@ -417,7 +390,6 @@ class PPNet(nn.Module):
         market_state_features,
         stock_industry_ids=None,
         stock_fund_features=None,
-        stock_intraday_ts_features=None,
     ):
         # Encode Market Regime
         regime_embedding = self.regime_encoder(
@@ -436,39 +408,14 @@ class PPNet(nn.Module):
             stock_temporal_states, regime_current
         )
 
-        # Intra-Stock Temporal Modeling (Intraday)
-        if self.use_intraday:
-            assert stock_intraday_ts_features is not None
-            stock_intraday_temporal_embeds = self.intraday_data_embedding(
-                stock_intraday_ts_features
-            )
-            stock_intraday_temporal_states = self.intraday_temporal_layers(
-                stock_intraday_temporal_embeds
-            )
-            stock_intraday_temporal_features = self.cross_attn(
-                stock_temporal_features,
-                stock_intraday_temporal_states,
-                stock_intraday_temporal_states,
-            )
-
         # Feature Fusion
-        if self.use_intraday:
-            stock_features = torch.cat(
-                [
-                    stock_temporal_features,
-                    stock_intraday_temporal_features,
-                    stock_cs_features,
-                ],
-                dim=-1,
-            )
-        else:
-            stock_features = torch.cat(
-                [
-                    stock_temporal_features,
-                    stock_cs_features,
-                ],
-                dim=-1,
-            )
+        stock_features = torch.cat(
+            [
+                stock_temporal_features,
+                stock_cs_features,
+            ],
+            dim=-1,
+        )
 
         fused_states = self.fusion_block(stock_features)
 

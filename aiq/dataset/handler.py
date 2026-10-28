@@ -332,6 +332,8 @@ class Alpha158(DataHandler):
             high / close,
             low / close,
             vwap / close,
+            amount / Mean(amount, 20),
+            turn,
             mfd_inflow_vol_ratio,
             mfd_large_amount_ratio,
         ]
@@ -356,6 +358,8 @@ class Alpha158(DataHandler):
             "TS_HIGH0",
             "TS_LOW0",
             "TS_VWAP0",
+            "TS_AMT_MA20_RATIO",
+            "TS_TURN_RATE",
             "TS_MFD_INFLOW_VOL_RATIO",
             "TS_MFD_LARGE_AMT_RATIO",
         ]

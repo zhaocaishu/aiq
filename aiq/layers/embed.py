@@ -35,7 +35,7 @@ class TokenEmbedding(nn.Module):
             out_channels=d_model,
             kernel_size=3,
             padding=padding,
-            padding_mode="circular",
+            padding_mode="replicate",
             bias=False,
         )
         for m in self.modules():
