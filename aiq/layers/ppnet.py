@@ -91,10 +91,6 @@ class MLP(nn.Module):
 
 
 class RegimeEncoder(nn.Module):
-    """
-    市场状态特征编码为连续的Regime Embedding
-    """
-
     def __init__(
         self,
         d_mkt: int,
@@ -106,21 +102,25 @@ class RegimeEncoder(nn.Module):
 
         self.encoder = nn.Sequential(
             nn.Linear(d_mkt, d_hidden),
+            nn.LayerNorm(d_hidden),
             nn.SiLU(),
             nn.Dropout(dropout),
             nn.Linear(d_hidden, d_regime),
         )
 
-        self.skip_proj = nn.Linear(d_mkt, d_regime, bias=False)
+        self.skip_proj = nn.Linear(
+            d_mkt, d_regime, bias=False
+        )
 
-        # ReZero初始化：初期以线性映射分支(skip_proj)为主，利于稳定收敛
-        self.regime_scale = nn.Parameter(torch.ones(1) * 0.01)
+        self.output_norm = nn.LayerNorm(d_regime)
+        self.regime_scale = nn.Parameter(torch.tensor(0.01))
 
     def forward(self, market_state_features):
-        # market_state_features: [..., d_mkt]
         residual = self.skip_proj(market_state_features)
         nonlinear = self.encoder(market_state_features)
-        return residual + self.regime_scale * nonlinear
+
+        regime = residual + self.regime_scale * nonlinear
+        return self.output_norm(regime)
 
 
 class MarketFiLM(nn.Module):
@@ -177,14 +177,21 @@ class MarketFiLM(nn.Module):
 
 
 class FusionBlock(nn.Module):
-    def __init__(self, d_in, d_model, dropout=0.1):
+    def __init__(self, d_temporal, d_cs, d_model, dropout=0.1):
         super().__init__()
+        self.temporal_norm = nn.LayerNorm(d_temporal)
+        self.cs_norm = nn.LayerNorm(d_cs)
+
+        d_in = d_temporal + d_cs
         self.proj = nn.Linear(d_in, d_model) if d_in != d_model else nn.Identity()
         self.norm = nn.LayerNorm(d_model)
         self.mlp = MLP(hidden_size=d_model, intermediate_size=d_model * 2)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x):
+    def forward(self, temporal_features, cs_features):
+        temporal_features = self.temporal_norm(temporal_features)
+        cs_features = self.cs_norm(cs_features)
+        x = torch.cat([temporal_features, cs_features], dim=-1)
         x = self.proj(x)
         return x + self.dropout(self.mlp(self.norm(x)))
 
@@ -365,7 +372,8 @@ class PPNet(nn.Module):
 
         # Fusion Encoder (Temporal + Cross-Sectional Feature Integration)
         self.fusion_block = FusionBlock(
-            d_in=self.d_fusion_input,
+            d_temporal=self.d_temporal_hidden,
+            d_cs=d_cs_feat,
             d_model=d_model,
             dropout=dropout,
         )
@@ -409,15 +417,10 @@ class PPNet(nn.Module):
         )
 
         # Feature Fusion
-        stock_features = torch.cat(
-            [
-                stock_temporal_features,
-                stock_cs_features,
-            ],
-            dim=-1,
+        fused_states = self.fusion_block(
+            stock_temporal_features,
+            stock_cs_features,
         )
-
-        fused_states = self.fusion_block(stock_features)
 
         # Industry-aware Inter-Stock Attention
         spatial_states = self.spatial_encoder(fused_states)
