@@ -13,7 +13,7 @@ class HybridLoss(nn.Module):
         aux_loss_weight (float): Weight coefficient for the auxiliary loss.
     """
 
-    def __init__(self, aux_loss_weight: float = 0.1):
+    def __init__(self, aux_loss_weight: float = 0.3):
         super().__init__()
         self.aux_loss_weight = aux_loss_weight
 

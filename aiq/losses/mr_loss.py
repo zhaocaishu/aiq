@@ -22,7 +22,7 @@ class MarginRankingLoss(nn.Module):
         tau: float = 1.0,
         top_k: int = 30,
         num_pairs: Optional[int] = 4096,
-        head_weight: float = 0.5,
+        head_weight: float = 0.7,
     ):
         super().__init__()
         if not math.isfinite(margin) or margin < 0:
