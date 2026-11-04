@@ -78,7 +78,7 @@ class PPNetModel(BaseModel):
         feature_names=None,
         label_names=None,
         d_ts_feat=6,
-        d_cs_feat=125,
+        d_cs_feat=132,
         d_fund_feat=3,
         d_mkt_feat=63,
         d_emb=8,

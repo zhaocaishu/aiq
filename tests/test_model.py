@@ -25,7 +25,7 @@ if __name__ == "__main__":
     dummy_stock_ts_features = torch.zeros(100, 20, 28).to(
         "cuda" if torch.cuda.is_available() else "cpu"
     )
-    dummy_stock_cs_features = torch.zeros(100, 125).to(
+    dummy_stock_cs_features = torch.zeros(100, 132).to(
         "cuda" if torch.cuda.is_available() else "cpu"
     )
     dummy_stock_fund_features = torch.zeros(100, 4).to(

@@ -610,6 +610,20 @@ class Alpha158(DataHandler):
                 features.append(Std(turn, d))
                 feature_names.append("CS_TURN_STD%d" % d)
 
+        # Return volatility
+        returns = close / Ref(close, 1) - 1
+        return_std = returns.rolling(20, min_periods=20).std()
+        if use("CS_RET_STD"):
+            features.append(return_std)
+            feature_names.append("CS_RET_STD20")
+
+        if use("CS_RISK_ADJ_RET"):
+            # Keep a 0.1% daily volatility floor for near-flat histories.
+            features.append(
+                (close / Ref(close, 5) - 1) / (return_std.clip(lower=1e-3) * np.sqrt(5))
+            )
+            feature_names.append("CS_RISK_ADJ_RET5")
+
         # Feature names
         self.feature_names = feature_names
 
@@ -635,6 +649,52 @@ class Alpha158(DataHandler):
             feature_df = feature_df[pd.to_datetime(feature_df["Date"]) >= min_date]
 
         return feature_df
+
+    def _add_industry_features(self, feature_df: pd.DataFrame) -> pd.DataFrame:
+        # Use unprocessed returns and the industry classification on each date.
+        values = pd.DataFrame(
+            {
+                f"CS_INDUSTRY_RET{window}": 1.0 / feature_df[f"CS_ROC{window}"] - 1
+                for window in [5, 20]
+            },
+            index=feature_df.index,
+        )
+        returns_5d = values["CS_INDUSTRY_RET5"]
+        values["CS_INDUSTRY_UP_RATIO5"] = (
+            (returns_5d > 0).astype(float).where(returns_5d.notna())
+        )
+
+        reference = values
+        if self.instruments_d is not None:
+            member_mask = pd.Series(
+                pd.MultiIndex.from_frame(feature_df[["Instrument", "Date"]]).isin(
+                    self.instruments_d
+                ),
+                index=feature_df.index,
+            )
+            reference = values.where(member_mask, axis=0)
+
+        # Exclude the stock itself; require at least two valid industry peers.
+        groups = reference.groupby([feature_df["Date"], feature_df["IND_CLS_L1"]])
+        peer_count = groups.transform("count") - reference.notna().astype(int)
+        industry = (groups.transform("sum") - reference.fillna(0)) / peer_count.where(
+            peer_count >= 2
+        )
+
+        # Small or missing industries fall back to the same-date universe peers.
+        market_groups = reference.groupby(feature_df["Date"])
+        market_count = market_groups.transform("count") - reference.notna().astype(int)
+        market = (
+            market_groups.transform("sum") - reference.fillna(0)
+        ) / market_count.where(market_count > 0)
+        industry = industry.fillna(market)
+
+        for window in [5, 20]:
+            name = f"CS_INDUSTRY_RET{window}"
+            industry[f"CS_EXCESS_RET{window}"] = values[name] - industry[name]
+
+        self.feature_names.extend(industry.columns.tolist())
+        return pd.concat([feature_df, industry.astype("float32")], axis=1)
 
     def _aggregate_daily_hf_features(self, group: pd.DataFrame) -> pd.Series:
         # Define feature names
@@ -858,6 +918,7 @@ class Alpha158(DataHandler):
         feature_df = df.groupby("Instrument", group_keys=False).apply(
             self.extract_instrument_features
         )
+        feature_df = self._add_industry_features(feature_df)
         label_df = df.groupby("Instrument", group_keys=False).apply(
             lambda group: self.extract_instrument_labels(group)
         )
