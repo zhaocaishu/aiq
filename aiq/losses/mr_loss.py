@@ -10,9 +10,10 @@ class MarginRankingLoss(nn.Module):
     """Rank-distance-weighted pairwise loss for one daily cross-section.
 
     Global pairs and predicted-TopK-to-rest pairs are averaged separately and
-    then combined with a fixed head_weight. Pair weights use cross-sectional
-    target-rank distances rather than raw return magnitudes, limiting the
-    influence of extreme returns.
+    then combined with a fixed head_weight. Head pairs are split at rank 4K
+    into near and far groups, normalized separately and weighted 70% and 30%.
+    Pair weights use cross-sectional target-rank distances rather than raw
+    return magnitudes, limiting the influence of extreme returns.
     """
 
     def __init__(
@@ -50,9 +51,7 @@ class MarginRankingLoss(nn.Module):
         self.head_weight = head_weight
 
     @torch.no_grad()
-    def _sample_pairs(
-        self, preds: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    def _sample_pairs(self, preds: torch.Tensor) -> Tuple[torch.Tensor, ...]:
         n = preds.numel()
         if self.num_pairs is None or n * (n - 1) // 2 <= self.num_pairs:
             global_i, global_j = torch.triu_indices(n, n, offset=1, device=preds.device)
@@ -62,12 +61,18 @@ class MarginRankingLoss(nn.Module):
             global_j = global_j + (global_j >= global_i).long()
 
         empty = torch.empty(0, dtype=torch.long, device=preds.device)
-        head_i, head_j = empty, empty
+        near_i, near_j, far_i, far_j = empty, empty, empty, empty
         if 0 < self.top_k < n:
             order = torch.argsort(preds, descending=True, stable=True)
-            head_i = order[: self.top_k].repeat_interleave(n - self.top_k)
-            head_j = order[self.top_k :].repeat(self.top_k)
-        return global_i, global_j, head_i, head_j
+            boundary = min(4 * self.top_k, n)
+            head = order[: self.top_k]
+            near = order[self.top_k : boundary]
+            far = order[boundary:]
+            near_i, near_j = head.repeat_interleave(near.numel()), near.repeat(
+                self.top_k
+            )
+            far_i, far_j = head.repeat_interleave(far.numel()), far.repeat(self.top_k)
+        return global_i, global_j, near_i, near_j, far_i, far_j
 
     def _pair_loss(
         self,
@@ -129,7 +134,7 @@ class MarginRankingLoss(nn.Module):
         if torch.all(targets == targets[0]):
             return preds.sum() * 0.0
 
-        global_i, global_j, head_i, head_j = self._sample_pairs(preds)
+        global_i, global_j, near_i, near_j, far_i, far_j = self._sample_pairs(preds)
 
         # Cross-sectional ranks in [0, 1]. Exact target ties receive different
         # ordinal ranks but their pairs are excluded by diff_r == 0.
@@ -149,7 +154,14 @@ class MarginRankingLoss(nn.Module):
             preds = centered_preds
 
         global_loss = self._pair_loss(global_i, global_j, preds, targets, target_ranks)
-        head_loss = self._pair_loss(head_i, head_j, preds, targets, target_ranks)
+        near_loss = self._pair_loss(near_i, near_j, preds, targets, target_ranks)
+        far_loss = self._pair_loss(far_i, far_j, preds, targets, target_ranks)
+        if near_loss is None:
+            head_loss = far_loss
+        elif far_loss is None:
+            head_loss = near_loss
+        else:
+            head_loss = 0.7 * near_loss + 0.3 * far_loss
 
         if global_loss is None and head_loss is None:
             return preds.sum() * 0.0
