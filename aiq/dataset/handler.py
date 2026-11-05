@@ -650,7 +650,7 @@ class Alpha158(DataHandler):
 
         return feature_df
 
-    def _add_industry_features(self, feature_df: pd.DataFrame) -> pd.DataFrame:
+    def _merge_industry_features(self, feature_df: pd.DataFrame) -> pd.DataFrame:
         # Use unprocessed returns and the industry classification on each date.
         values = pd.DataFrame(
             {
@@ -918,13 +918,12 @@ class Alpha158(DataHandler):
         feature_df = df.groupby("Instrument", group_keys=False).apply(
             self.extract_instrument_features
         )
-        feature_df = self._add_industry_features(feature_df)
+        feature_df = self._merge_industry_features(feature_df)
+        if self.use_hf_features:
+            feature_df = self._merge_hf_features(feature_df)
         label_df = df.groupby("Instrument", group_keys=False).apply(
             lambda group: self.extract_instrument_labels(group)
         )
-
-        if self.use_hf_features:
-            feature_df = self._merge_hf_features(feature_df)
 
         feature_label_df = pd.merge(
             feature_df, label_df, on=["Date", "Instrument"], how="inner"
