@@ -22,7 +22,7 @@ if __name__ == "__main__":
     dummy_industry_ids = (
         torch.zeros(100, 2).to("cuda" if torch.cuda.is_available() else "cpu").long()
     )
-    dummy_stock_ts_features = torch.zeros(100, 20, 32).to(
+    dummy_stock_ts_features = torch.zeros(100, 20, 28).to(
         "cuda" if torch.cuda.is_available() else "cpu"
     )
     dummy_stock_cs_features = torch.zeros(100, 132).to(

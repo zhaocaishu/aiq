@@ -310,10 +310,6 @@ class Alpha158(DataHandler):
         mfd_inflow_vol_ratio = df["Mfd_inflow_vol_ratio"]
         mfd_large_amount_ratio = df["Mfd_large_amount_ratio"]
 
-        # Self-history features use fixed scales and baselines through yesterday.
-        amount_mean = Ref(amount, 1).rolling(20, min_periods=20).mean()
-        turn_mean = Ref(turn, 1).rolling(20, min_periods=20).mean()
-
         # K-bar
         features = [
             ind_class_l1,
@@ -340,10 +336,6 @@ class Alpha158(DataHandler):
             turn,
             mfd_inflow_vol_ratio,
             mfd_large_amount_ratio,
-            100 * Log(close / Ref(close, 1)),
-            100 * Log(open / Ref(close, 1)),
-            np.log1p(amount / (amount_mean + 1e-12)) - np.log(2),
-            np.log1p(turn / (turn_mean + 1e-12)) - np.log(2),
         ]
         feature_names = [
             "IND_CLS_L1",
@@ -370,10 +362,6 @@ class Alpha158(DataHandler):
             "TS_TURN_RATE",
             "TS_MFD_INFLOW_VOL_RATIO",
             "TS_MFD_LARGE_AMT_RATIO",
-            "TS_SELF_RET_1D",
-            "TS_SELF_GAP",
-            "TS_SELF_AMT_REL20",
-            "TS_SELF_TURN_REL20",
         ]
 
         # Rolling features

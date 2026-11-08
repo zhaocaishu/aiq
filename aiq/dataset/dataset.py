@@ -109,11 +109,6 @@ class TSDataset(Dataset):
         self.stock_ts_feature_indices = [
             i for i, name in enumerate(self.feature_names) if name.startswith("TS_")
         ]
-        self.stock_ts_normalize_indices = [
-            i
-            for i, feature_index in enumerate(self.stock_ts_feature_indices)
-            if not self.feature_names[feature_index].startswith("TS_SELF_")
-        ]
         self.stock_cs_feature_indices = [
             i for i, name in enumerate(self.feature_names) if name.startswith("CS_")
         ]
@@ -257,10 +252,7 @@ class TSDataset(Dataset):
         market_state_features = features[:, :, self.market_feature_indices]
 
         # Data Normalization Pipeline
-        # Preserve the fixed scales of self-history features.
-        stock_ts_features[:, :, self.stock_ts_normalize_indices] = robust_zscore(
-            stock_ts_features[:, :, self.stock_ts_normalize_indices]
-        )
+        stock_ts_features = robust_zscore(stock_ts_features)
         stock_cs_features = robust_zscore(stock_cs_features)
         stock_fund_features = robust_zscore(stock_fund_features)
 

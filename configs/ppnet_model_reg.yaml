@@ -20,10 +20,6 @@ data_handler:
             - "IND_CLS_L1"
             - "IND_CLS_L2"
             - "FUND_CAP"
-            - "TS_SELF_RET_1D"
-            - "TS_SELF_GAP"
-            - "TS_SELF_AMT_REL20"
-            - "TS_SELF_TURN_REL20"
       - class: CSNeutralize
         module_path: aiq.dataset.processor
         kwargs:
@@ -71,7 +67,7 @@ model:
   class: PPNetModel
   module_path: aiq.models.ppnet
   kwargs:
-    d_ts_feat: 32
+    d_ts_feat: 28
     d_cs_feat: 132
     d_fund_feat: 4
     d_mkt_feat: 63
