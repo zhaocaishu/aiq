@@ -194,6 +194,59 @@ class FusionBlock(nn.Module):
         return x + self.dropout(self.mlp(self.norm(x)))
 
 
+class IndustryBlock(nn.Module):
+    def __init__(self, d_model, dropout):
+        super().__init__()
+
+        self.industry_encoder = nn.Sequential(
+            nn.LayerNorm(d_model),
+            MLP(d_model, d_model // 4),
+        )
+        self.relative_encoder = nn.Sequential(
+            nn.LayerNorm(d_model),
+            MLP(d_model, d_model // 4),
+        )
+        self.dropout = nn.Dropout(dropout)
+        self.industry_scale = nn.Parameter(torch.tensor(0.01))
+        self.relative_scale = nn.Parameter(torch.tensor(0.01))
+
+    def forward(self, x, stock_industry_ids):
+        """
+        x: (N, D), one daily cross-section
+        stock_industry_ids: (N, 2), L1 and L2 industry IDs
+        """
+        # Missing or small industries fall back to the same-date universe peers.
+        industry_states = (x.sum(dim=0, keepdim=True) - x) / max(x.size(0) - 1, 1)
+
+        if stock_industry_ids is not None:
+            industry_ids = stock_industry_ids[:, 0]
+            _, group_index, group_counts = torch.unique(
+                industry_ids, return_inverse=True, return_counts=True
+            )
+            group_sums = x.new_zeros(group_counts.numel(), x.size(-1))
+            group_sums.index_add_(0, group_index, x)
+
+            # Exclude the stock itself; require at least two industry peers.
+            peer_counts = (group_counts[group_index] - 1).unsqueeze(-1)
+            peer_states = (group_sums[group_index] - x) / peer_counts.clamp_min(1).to(
+                x.dtype
+            )
+            has_industry = (
+                torch.isfinite(industry_ids) & (industry_ids >= 0)
+            ).unsqueeze(-1) & (peer_counts >= 2)
+            industry_states = torch.where(has_industry, peer_states, industry_states)
+
+        relative_states = x - industry_states
+        industry_states = self.industry_encoder(industry_states)
+        relative_states = self.relative_encoder(relative_states)
+
+        return (
+            x
+            + self.industry_scale * self.dropout(industry_states)
+            + self.relative_scale * self.dropout(relative_states)
+        )
+
+
 class TAttention(nn.Module):
     def __init__(self, d_model, nhead, dropout):
         super().__init__()
@@ -376,6 +429,9 @@ class PPNet(nn.Module):
             dropout=dropout,
         )
 
+        # Industry Common and Stock-relative Representations
+        self.industry_block = IndustryBlock(d_model=d_model, dropout=dropout)
+
         # Spatial Encoder (Inter-stock)
         self.spatial_encoder = SAttention(
             d_model=d_model,
@@ -420,8 +476,11 @@ class PPNet(nn.Module):
             stock_cs_features,
         )
 
-        # Industry-aware Inter-Stock Attention
-        spatial_states = self.spatial_encoder(fused_states)
+        # Industry Common and Stock-relative Modeling
+        industry_states = self.industry_block(fused_states, stock_industry_ids)
+
+        # Inter-Stock Attention
+        spatial_states = self.spatial_encoder(industry_states)
 
         # Final Prediction on Spatial Representations
         predictions = torch.cat(
