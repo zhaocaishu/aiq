@@ -98,13 +98,29 @@ class RobustZScoreNorm(Processor):
         https://en.wikipedia.org/wiki/Median_absolute_deviation.
     """
 
-    def __init__(self, fields_group=None, clip_outlier=True, exclude_cols=None):
+    def __init__(
+        self,
+        fields_group=None,
+        clip_outlier=True,
+        exclude_cols=None,
+        include_cols=None,
+    ):
         super().__init__(fields_group)
         self.clip_outlier = clip_outlier
         self.exclude_cols = exclude_cols or []
+        self.include_cols = include_cols or []
 
     def fit(self, df: pd.DataFrame = None):
         self.cols = get_group_columns(df, self.fields_group, self.exclude_cols)
+        if self.include_cols:
+            # Match feature names by regex while preserving their column order.
+            self.cols = self.cols[
+                self.cols.get_level_values(-1).str.contains("|".join(self.include_cols))
+            ]
+        if len(self.cols) == 0 or df.empty:
+            raise ValueError(
+                "RobustZScoreNorm requires selected columns and training samples"
+            )
         X = df[self.cols].values
         self.mean_train = np.nanmedian(X, axis=0)
         self.std_train = np.nanmedian(np.abs(X - self.mean_train), axis=0)
@@ -175,9 +191,11 @@ class CSWinsorize(Processor):
         cols = get_group_columns(df, self.fields_group, self.exclude_cols)
 
         def winsorize(group: pd.DataFrame) -> pd.DataFrame:
-            reference = group if reference_mask is None else group.loc[
-                reference_mask.reindex(group.index, fill_value=False)
-            ]
+            reference = (
+                group
+                if reference_mask is None
+                else group.loc[reference_mask.reindex(group.index, fill_value=False)]
+            )
             if reference.empty:
                 return group
             # Estimate on daily members; transform all rows to retain history.
