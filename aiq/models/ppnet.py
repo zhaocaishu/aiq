@@ -103,6 +103,11 @@ class PPNetModel(BaseModel):
         save_dir=None,
         logger=None,
     ):
+        if batch_size != 1:
+            raise ValueError(
+                "PPNetModel requires batch_size=1 for daily cross-sections."
+            )
+
         # input args
         self.num_labels = num_labels
         self.feature_names = feature_names
@@ -146,11 +151,10 @@ class PPNetModel(BaseModel):
         )
 
         if pretrained is not None:
-            try:
-                state_dict = torch.load(pretrained, map_location=self.device)
-                self.model.load_state_dict(state_dict)
-            except Exception as e:
-                print(f"Error loading pretrained weights from {pretrained}: {e}")
+            state_dict = torch.load(
+                pretrained, map_location=self.device, weights_only=True
+            )
+            self.model.load_state_dict(state_dict)
 
         self.model = self.model.to(self.device)
 
@@ -199,8 +203,9 @@ class PPNetModel(BaseModel):
         return muon_params, adamw_params
 
     def compute_loss(self, outputs: torch.Tensor, labels: torch.Tensor):
-        """Compute weighted loss for each label column."""
-        total_loss = 0.0
+        """Compute weighted loss, or return None if all label columns are missing."""
+        total_loss = None
+        total_weight = 0.0
 
         for label_idx in range(self.num_labels):
             preds_i = outputs[:, label_idx : label_idx + 1]
@@ -210,11 +215,17 @@ class PPNetModel(BaseModel):
                 continue
 
             loss_i = self.criterion(preds_i[valid_mask], labels_i[valid_mask])
-            total_loss += self.label_weights[label_idx] * loss_i
+            weighted_loss = self.label_weights[label_idx] * loss_i
+            total_loss = (
+                weighted_loss if total_loss is None else total_loss + weighted_loss
+            )
+            total_weight += self.label_weights[label_idx]
 
-        return total_loss / self.label_weights.sum()
+        return None if total_loss is None else total_loss / total_weight
 
     def fit(self, train_dataset: Dataset, val_dataset: Dataset = None):
+        self.best_model_state = None
+
         train_sampler = CyclicPhaseOffsetSampler(
             train_dataset,
             stride=self.train_stride,
@@ -262,10 +273,14 @@ class PPNetModel(BaseModel):
         best_step = 0
         global_step = 0
         val_check_interval = max(500, train_steps_epoch // 2)
+        last_val_step = -1
+        val_loss = None
         stop_training = False
 
         # Warmup-safe + early-stop protection
-        min_train_steps_before_stop = int(0.1 * num_training_steps)
+        min_train_steps_before_stop = max(
+            self.warmup_steps, int(0.1 * num_training_steps)
+        )
 
         for epoch in range(self.epochs):
             train_sampler.set_epoch(epoch)
@@ -282,9 +297,6 @@ class PPNetModel(BaseModel):
                 # 检查是否需要停止训练
                 if stop_training:
                     break
-
-                iter_count += 1
-                global_step += 1
 
                 batch_industry_ids = self.to_device(batch_dict["stock_industry_ids"])
                 batch_ts_features = self.to_device(batch_dict["stock_ts_features"])
@@ -321,15 +333,18 @@ class PPNetModel(BaseModel):
                 )
 
                 loss = self.compute_loss(outputs, batch_labels)
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 3.0)
-                optimizer.step()
-                lr_scheduler.step()
+                if loss is not None:
+                    iter_count += 1
+                    global_step += 1
+                    loss.backward()
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), 3.0)
+                    optimizer.step()
+                    lr_scheduler.step()
 
-                train_losses.append(loss.item())
+                    train_losses.append(loss.item())
 
                 # Log training progress
-                if (i + 1) % 100 == 0:
+                if (i + 1) % 100 == 0 and iter_count > 0:
                     speed = (time.time() - time_now) / iter_count
                     left_time = speed * (
                         (self.epochs - epoch - 1) * train_steps_epoch
@@ -345,11 +360,18 @@ class PPNetModel(BaseModel):
                     time_now = time.time()
 
                 # Step-based validation check
-                if val_dataset is not None and (
-                    global_step % val_check_interval == 0 or i == train_steps_epoch - 1
+                if (
+                    val_dataset is not None
+                    and global_step > 0
+                    and global_step != last_val_step
+                    and (
+                        global_step % val_check_interval == 0
+                        or i == train_steps_epoch - 1
+                    )
                 ):
 
                     val_loss = self.eval(val_dataset)
+                    last_val_step = global_step
                     steps_since_best = global_step - best_step
                     msg = f"[Step {global_step}] Validation Loss: {val_loss:.8f}"
 
@@ -373,9 +395,14 @@ class PPNetModel(BaseModel):
 
                     self.model.train()
 
+            if not train_losses:
+                self.logger.warning(
+                    f"[Epoch {epoch+1}/{self.epochs}] No valid training labels."
+                )
+                continue
+
             train_loss = np.mean(train_losses)
             if val_dataset is not None:
-                val_loss = self.eval(val_dataset)
                 self.logger.info(
                     f"[Epoch {epoch+1}/{self.epochs}] "
                     f"Train Loss: {train_loss:.6f}, Val Loss: {val_loss:.6f}"
@@ -387,6 +414,9 @@ class PPNetModel(BaseModel):
 
             if stop_training:
                 break
+
+        if global_step == 0:
+            raise ValueError("Training dataset contains no valid labels.")
 
         # load the best weights back into the model after training
         if self.best_model_state is not None:
@@ -402,26 +432,40 @@ class PPNetModel(BaseModel):
 
         total_losses = []
 
-        for i, batch_dict in enumerate(val_loader):
-            batch_industry_ids = self.to_device(batch_dict["stock_industry_ids"])
-            batch_ts_features = self.to_device(batch_dict["stock_ts_features"])
-            batch_cs_features = self.to_device(batch_dict["stock_cs_features"])
-            batch_fund_features = self.to_device(batch_dict["stock_fund_features"])
-            batch_market_features = self.to_device(batch_dict["market_state_features"])
-            batch_labels = self.to_device(batch_dict["labels"])
+        # Keep validation sampling fixed without changing the training RNG state.
+        devices = [self.device.index] if self.device.type == "cuda" else []
+        with torch.random.fork_rng(devices=devices):
+            torch.random.default_generator.manual_seed(0)
+            if devices:
+                with torch.cuda.device(self.device):
+                    torch.cuda.manual_seed(0)
 
-            with torch.no_grad():
-                outputs = self.model(
-                    batch_ts_features,
-                    batch_cs_features,
-                    batch_market_features,
-                    batch_industry_ids,
-                    batch_fund_features,
+            for i, batch_dict in enumerate(val_loader):
+                batch_industry_ids = self.to_device(batch_dict["stock_industry_ids"])
+                batch_ts_features = self.to_device(batch_dict["stock_ts_features"])
+                batch_cs_features = self.to_device(batch_dict["stock_cs_features"])
+                batch_fund_features = self.to_device(batch_dict["stock_fund_features"])
+                batch_market_features = self.to_device(
+                    batch_dict["market_state_features"]
                 )
+                batch_labels = self.to_device(batch_dict["labels"])
 
-                loss = self.compute_loss(outputs, batch_labels)
+                with torch.no_grad():
+                    outputs = self.model(
+                        batch_ts_features,
+                        batch_cs_features,
+                        batch_market_features,
+                        batch_industry_ids,
+                        batch_fund_features,
+                    )
 
-            total_losses.append(loss.item())
+                    loss = self.compute_loss(outputs, batch_labels)
+
+                if loss is not None:
+                    total_losses.append(loss.item())
+
+        if not total_losses:
+            raise ValueError("Validation dataset contains no valid labels.")
 
         total_loss = np.mean(total_losses)
 
