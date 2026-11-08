@@ -16,8 +16,8 @@ from aiq.utils.logging import get_logger
 from aiq.utils.module import init_instance_by_config
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
+def parse_args(description: str = __doc__) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=description)
     parser.add_argument(
         "--cfg_file", type=Path, required=True, help="Path to the configuration file."
     )
