@@ -10,6 +10,7 @@ class ICLoss(nn.Module):
 
     This loss encourages positive cross-sectional Pearson correlation between
     predicted scores and ground-truth returns by minimizing one minus IC.
+    Targets are winsorized at the 1st and 99th cross-sectional percentiles.
     """
 
     def __init__(self, epsilon: float = 1e-8):
@@ -51,6 +52,9 @@ class ICLoss(nn.Module):
         N = preds.size(0)
         if N <= 1:
             return preds.sum() * 0.0
+
+        lower, upper = torch.quantile(targets, targets.new_tensor([0.01, 0.99]))
+        targets = targets.clamp(min=lower, max=upper)
         if torch.all(targets == targets[0]):
             return preds.sum() * 0.0
 
