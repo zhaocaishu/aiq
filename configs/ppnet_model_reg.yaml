@@ -29,13 +29,10 @@ data_handler:
           factor_cols:
             - "CS_STD(?:5|10|20|30|60)$"
             - "CS_TURN_(?:MA|STD)(?:5|10|20|30|60)$"
-      - class: RobustZScoreNorm
+      - class: CSWinsorize
         module_path: aiq.dataset.processor
         kwargs:
-          fields_group: "feature"
-          clip_outlier: true
-          include_cols:
-            - "^TS_"
+          fields_group: "label"
     market_processors:
       - class: RobustZScoreNorm
         module_path: aiq.dataset.processor

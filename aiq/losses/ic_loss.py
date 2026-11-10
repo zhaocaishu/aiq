@@ -53,11 +53,6 @@ class ICLoss(nn.Module):
         if N <= 1:
             return preds.sum() * 0.0
 
-        lower, upper = torch.quantile(targets, targets.new_tensor([0.01, 0.99]))
-        targets = targets.clamp(min=lower, max=upper)
-        if torch.all(targets == targets[0]):
-            return preds.sum() * 0.0
-
         centered_preds = preds - preds.mean()
         centered_targets = targets - targets.mean()
         pred_var = centered_preds.square().mean()
