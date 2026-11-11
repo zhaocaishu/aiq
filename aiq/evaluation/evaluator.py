@@ -137,9 +137,22 @@ class Evaluator:
         inst_features = inst_features.loc[
             inst_features[self.date_col].between(self.start_time, self.end_time)
         ].copy()
-        inst_features["VWAP"] = (
-            inst_features["AMount"] / (inst_features["Volume"] + 1e-12) * 10
+        trade_data = (
+            inst_features.reindex(columns=["Volume", "AMount"])
+            .apply(pd.to_numeric, errors="coerce")
+            .astype(float)
         )
+        volume, amount = trade_data["Volume"], trade_data["AMount"]
+        no_trade = volume.eq(0) & amount.eq(0)
+        valid_trade = (
+            np.isfinite(volume) & np.isfinite(amount) & volume.gt(0) & amount.gt(0)
+        )
+        vwap = amount / volume.where(valid_trade) * 10
+        invalid_vwap = ~no_trade & (~np.isfinite(vwap) | vwap.le(0))
+        if invalid_vwap.any():
+            date, instrument = inst_features.loc[invalid_vwap, key_cols].iloc[0]
+            raise ValueError(f"{date} {instrument}: 成交量或成交额无效，无法计算 VWAP")
+        inst_features["VWAP"] = vwap
         inst_features = inst_features[
             [
                 self.date_col,
