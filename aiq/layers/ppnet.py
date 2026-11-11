@@ -421,10 +421,10 @@ class PPNet(nn.Module):
         )
 
         # Inter-Stock Attention
-        spatial_states = self.spatial_encoder(fused_states)
+        # spatial_states = self.spatial_encoder(fused_states)
 
         # Final Prediction on Spatial Representations
         predictions = torch.cat(
-            [head(spatial_states) for head in self.prediction_heads], dim=-1
+            [head(fused_states) for head in self.prediction_heads], dim=-1
         )
         return predictions

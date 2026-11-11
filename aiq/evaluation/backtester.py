@@ -1,7 +1,8 @@
-"""TopK-Dropout backtester with fixes for daily returns, prices, and sizing."""
+"""TopK-Dropout backtester with raw-price trading and adjusted-share valuation."""
 
 import logging
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -9,6 +10,33 @@ import pandas as pd
 
 from aiq.utils.exchange import Exchange
 from aiq.utils.decision import Order
+
+
+@dataclass(frozen=True)
+class HoldingSnapshot:
+    """一只股票的日终估值结果；权重使用小数比例。"""
+
+    instrument: str
+    adjusted_shares: float
+    adjusted_close: float
+    market_value: float
+    weight: float
+    price_fallback: bool
+
+
+@dataclass(frozen=True)
+class DailySnapshot:
+    """单个交易日的完整日终记录。"""
+
+    date: Any
+    total_asset: float
+    daily_return: float
+    buy_value: float
+    sell_value: float
+    turnover: float
+    cash: float
+    position_value: float
+    holdings: Tuple[HoldingSnapshot, ...]
 
 
 class BaseBacktester(ABC):
@@ -21,6 +49,7 @@ class BaseBacktester(ABC):
         instrument_col: str = "Instrument",
         up_limit_col: str = "Up_limit",
         down_limit_col: str = "Down_limit",
+        adj_factor_col: str = "Adj_factor",
         score_col: str = "PRED_RET_5D",
         trading_calendar: Optional[List[str]] = None,
         logger: Optional[logging.Logger] = None,
@@ -31,6 +60,7 @@ class BaseBacktester(ABC):
         self.instrument_col = instrument_col
         self.up_limit_col = up_limit_col
         self.down_limit_col = down_limit_col
+        self.adj_factor_col = adj_factor_col
         self.score_col = score_col
         self.trading_calendar = trading_calendar
         self.logger = logger or logging.getLogger(__name__)
@@ -42,7 +72,7 @@ class BaseBacktester(ABC):
 
     @staticmethod
     def _valid_price(value: Any) -> bool:
-        """Accept only finite, strictly positive numeric prices."""
+        """Accept only finite, strictly positive numeric prices or factors."""
         try:
             return bool(np.isfinite(value) and value > 0)
         except (TypeError, ValueError):
@@ -58,7 +88,7 @@ class BaseBacktester(ABC):
 
     def _print_table_header(
         self,
-        *cols: str,
+        *cols: Any,
         widths: Optional[List[int]] = None,
         aligns: Optional[List[str]] = None,
         indent: int = 4,
@@ -79,72 +109,46 @@ class BaseBacktester(ABC):
         line = " ".join(f"{v:{a}{w}}" for v, a, w in zip(vals, aligns, widths))
         self.logger.info(f"{' ' * indent}{line}")
 
-    def _log_daily_holdings(
-        self,
-        date: Any,
-        positions: Dict[str, int],
-        daily_dict: Dict[str, Dict[str, Any]],
-        prev_prices: Optional[Dict[str, float]] = None,
-    ) -> None:
-        self.logger.info(f"📅 交易日：{date}")
-        rows = []
-        total_mv = 0.0
-        prev_prices = prev_prices or {}
-        for inst, shares in positions.items():
-            price = daily_dict.get(inst, {}).get("Close")
-            fallback = not self._valid_price(price)
-            if fallback:
-                price = prev_prices.get(inst)
-            if not self._valid_price(price):
-                raise ValueError(f"{date}: 持仓 {inst} 缺少有效估值价格")
-            mv = shares * price
-            total_mv += mv
-            rows.append((inst, shares, price, mv, fallback))
-        rows.sort(key=lambda x: x[3], reverse=True)
-
-        col_widths = {
-            "code": 12,
-            "shares": 10,
-            "price": 10,
-            "mv": 14,
-            "wt": 8,
-            "note": 8,
-        }
-        total_width = sum(col_widths.values()) + len(col_widths) * 3 - 1
-        sep = "  " + "─" * total_width
-        header = (
-            f"  {'股票代码':<{col_widths['code']}}   "
-            f"{'股数':>{col_widths['shares']}}   "
-            f"{'收盘价':>{col_widths['price']}}   "
-            f"{'持仓市值':>{col_widths['mv']}}   "
-            f"{'权重%':>{col_widths['wt']}}   "
-            f"{'备注':<{col_widths['note']}}"
-        )
-        self.logger.info(header)
-        self.logger.info(sep)
-        for inst, shares, price, mv, fallback in rows:
-            weight = mv / total_mv * 100 if total_mv > 0 else 0.0
-            note = "价格回退" if fallback else ""
-            self.logger.info(
-                f"  {inst:<{col_widths['code']}}   "
-                f"{shares:>{col_widths['shares']},}   "
-                f"{price:>{col_widths['price']}.2f}   "
-                f"{mv:>{col_widths['mv']},.2f}   "
-                f"{weight:>{col_widths['wt']}.2f}   "
-                f"{note:<{col_widths['note']}}"
-            )
-        self.logger.info(sep)
-        sum_shares = f"{len(positions):,}"
-        sum_mv = f"{total_mv:,.2f}"
+    def _log_daily_holdings(self, snapshot: DailySnapshot) -> None:
+        """输出日终交易摘要和持仓快照"""
         self.logger.info(
-            f"  {'合计':<{col_widths['code']}}   "
-            f"{sum_shares:>{col_widths['shares']}}   "
-            f"{'':>{col_widths['price']}}   "
-            f"{sum_mv:>{col_widths['mv']}}   "
-            f"{'100.00':>{col_widths['wt']}}   "
-            f"{'':<{col_widths['note']}}"
+            f"📅 {snapshot.date} | 总资产 {snapshot.total_asset:,.2f} | "
+            f"日收益 {snapshot.daily_return:+.2%}"
         )
-        self.logger.info("")
+        self.logger.info(
+            f"  买入 {snapshot.buy_value:,.2f} | 卖出 {snapshot.sell_value:,.2f} | "
+            f"换手 {snapshot.turnover:.2%}"
+        )
+        self.logger.info(
+            f"  持仓 {len(snapshot.holdings)} 只 | "
+            f"持仓市值 {snapshot.position_value:,.2f} | 可用现金 {snapshot.cash:,.2f}"
+        )
+        if not snapshot.holdings:
+            return
+
+        widths, aligns = self._print_table_header(
+            "股票代码",
+            "复权份额",
+            "后复权收盘价",
+            "持仓市值",
+            "持仓内权重",
+            "备注",
+            widths=[12, 14, 14, 14, 10, 10],
+            aligns=["<", ">", ">", ">", ">", "<"],
+            indent=2,
+        )
+        for holding in snapshot.holdings:
+            self._print_table_row(
+                holding.instrument,
+                f"{holding.adjusted_shares:,.6f}",
+                f"{holding.adjusted_close:.2f}",
+                f"{holding.market_value:,.2f}",
+                f"{holding.weight:.2%}",
+                "价格回退" if holding.price_fallback else "",
+                widths=widths,
+                aligns=aligns,
+                indent=2,
+            )
 
 
 class TopKDropoutBacktester(BaseBacktester):
@@ -164,7 +168,9 @@ class TopKDropoutBacktester(BaseBacktester):
         forbid_all_trade_at_limit: bool = False,
     ) -> Dict[str, float]:
         cash = initial_capital
-        positions: Dict[str, int] = {}
+        # positions stores synthetic adjusted shares: raw shares / entry adj_factor.
+        # Raw prices still drive lot sizing, order values and exchange limit checks.
+        positions: Dict[str, float] = {}
         hold_start: Dict[str, Any] = {}
         prev_prices: Dict[str, float] = {}
 
@@ -194,6 +200,15 @@ class TopKDropoutBacktester(BaseBacktester):
             return {}
 
         df = df.copy()
+        if self.adj_factor_col not in df.columns:
+            raise ValueError(f"缺少复权因子列: {self.adj_factor_col}")
+        df[self.adj_factor_col] = pd.to_numeric(
+            df[self.adj_factor_col], errors="coerce"
+        )
+        raw_close = pd.to_numeric(df["Close"], errors="coerce")
+        valid_close = raw_close.gt(0) & df[self.adj_factor_col].gt(0)
+        df["_AdjClose"] = (raw_close * df[self.adj_factor_col]).where(valid_close)
+
         if self.universe_col is not None:
             if self.universe_col not in df.columns:
                 raise ValueError(f"缺少每日股票池标记列: {self.universe_col}")
@@ -223,30 +238,68 @@ class TopKDropoutBacktester(BaseBacktester):
             buy_value: float,
             sell_value: float,
             opening: bool = False,
-        ) -> None:
-            """统一日终估值、收益记录；无效收盘价使用上一有效估值价。"""
+        ) -> DailySnapshot:
+            """完成日终估值、绩效统计，并生成只读的交易与持仓快照。"""
             position_value = 0.0
-            for inst, shares in positions.items():
-                price = daily_dict.get(inst, {}).get("Close")
-                if self._valid_price(price):
-                    price = float(price)
-                    prev_prices[inst] = price
-                else:
-                    price = prev_prices.get(inst)
-                    if not self._valid_price(price):
+            valued_holdings = []
+            for inst, adjusted_shares in positions.items():
+                adjusted_close = daily_dict.get(inst, {}).get("_AdjClose")
+                price_fallback = not self._valid_price(adjusted_close)
+                if price_fallback:
+                    adjusted_close = prev_prices.get(inst)
+                    if not self._valid_price(adjusted_close):
                         raise ValueError(
-                            f"{date}: 持仓 {inst} 缺少有效收盘价及历史估值价格"
+                            f"{date}: 持仓 {inst} 缺少有效后复权收盘价及历史估值价格"
                         )
-                position_value += shares * price
+                else:
+                    adjusted_close = float(adjusted_close)
+                    prev_prices[inst] = adjusted_close
+
+                market_value = adjusted_shares * adjusted_close
+                position_value += market_value
+                valued_holdings.append(
+                    (
+                        inst,
+                        adjusted_shares,
+                        adjusted_close,
+                        market_value,
+                        price_fallback,
+                    )
+                )
+
+            valued_holdings.sort(key=lambda holding: holding[3], reverse=True)
+            holdings = tuple(
+                HoldingSnapshot(
+                    instrument=inst,
+                    adjusted_shares=adjusted_shares,
+                    adjusted_close=adjusted_close,
+                    market_value=market_value,
+                    weight=market_value / position_value if position_value > 0 else 0.0,
+                    price_fallback=price_fallback,
+                )
+                for inst, adjusted_shares, adjusted_close, market_value, price_fallback in valued_holdings
+            )
 
             total_asset = cash + position_value
-            daily_returns.append(total_asset / nav_series[-1] - 1.0)
+            daily_return = total_asset / nav_series[-1] - 1.0
+            daily_returns.append(daily_return)
             nav_series.append(total_asset)
 
-            # 保留本次请求之外的原有换手口径。
+            # 建仓日按买入金额计换手；其余日期沿用买卖金额均值口径。
             trade_value = buy_value if opening else (buy_value + sell_value) / 2
-            turnover_series.append(
-                trade_value / total_asset if total_asset > 0 else 0.0
+            turnover = trade_value / total_asset if total_asset > 0 else 0.0
+            turnover_series.append(turnover)
+
+            return DailySnapshot(
+                date=date,
+                total_asset=total_asset,
+                daily_return=daily_return,
+                buy_value=buy_value,
+                sell_value=sell_value,
+                turnover=turnover,
+                cash=cash,
+                position_value=position_value,
+                holdings=holdings,
             )
 
         for date in calendar:
@@ -258,9 +311,11 @@ class TopKDropoutBacktester(BaseBacktester):
             daily_dict = daily.set_index(self.instrument_col).to_dict(orient="index")
 
             def _is_tradable(inst_id: str, direction: Optional[int] = None) -> bool:
-                # 实际成交价有效，才进入原有停牌和涨跌停检查。
+                # 成交、整手计算和涨跌停使用原始价格，复权因子用于份额换算。
                 row = daily_dict.get(inst_id)
                 if row is None or not self._valid_price(row.get("VWAP")):
+                    return False
+                if not self._valid_price(row.get(self.adj_factor_col)):
                     return False
                 if (
                     direction == Order.BUY
@@ -313,7 +368,10 @@ class TopKDropoutBacktester(BaseBacktester):
                     )
                     for inst in buy_candidates:
                         price = daily_dict[inst].get("VWAP")
-                        if not self._valid_price(price):
+                        adj_factor = daily_dict[inst].get(self.adj_factor_col)
+                        if not self._valid_price(price) or not self._valid_price(
+                            adj_factor
+                        ):
                             continue
                         shares = int((cash_per_stock / price) / 100) * 100
                         if shares < 100:
@@ -329,7 +387,7 @@ class TopKDropoutBacktester(BaseBacktester):
                             comm = max(invest * commission, min_commission)
                         daily_buy_value += invest
                         cash -= invest + comm
-                        positions[inst] = shares
+                        positions[inst] = shares / float(adj_factor)
                         hold_start[inst] = date
                         self._print_table_row(
                             inst,
@@ -342,12 +400,11 @@ class TopKDropoutBacktester(BaseBacktester):
                             indent=4,
                         )
 
-                # 首次建仓、重新建仓、继续空仓都记录该日收益。
-                _record_day(
+                # 无论建仓成功或继续空仓，都记录并展示完整的日终结果。
+                daily_snapshot = _record_day(
                     date, daily_dict, daily_buy_value, daily_sell_value, opening=True
                 )
-                if positions:
-                    self._log_daily_holdings(date, positions, daily_dict, prev_prices)
+                self._log_daily_holdings(daily_snapshot)
                 continue
 
             score_map = {}
@@ -410,11 +467,12 @@ class TopKDropoutBacktester(BaseBacktester):
                 if inst not in positions:
                     continue
                 price = daily_dict[inst].get("VWAP")
-                if not self._valid_price(price):
+                adj_factor = daily_dict[inst].get(self.adj_factor_col)
+                if not self._valid_price(price) or not self._valid_price(adj_factor):
                     continue
-                # 校验成交价后，才修改持仓。
-                shares = positions.pop(inst)
-                sell_value = shares * price
+                # 卖出全部复权份额，等价于按当日原始 VWAP 卖出换算后的股数。
+                adj_shares = positions.pop(inst)
+                sell_value = adj_shares * float(price) * float(adj_factor)
                 daily_sell_value += sell_value
                 comm = max(sell_value * commission, min_commission)
                 tax = sell_value * stamp_tax
@@ -465,7 +523,10 @@ class TopKDropoutBacktester(BaseBacktester):
                 )
                 for inst in buy_queue:
                     price = daily_dict[inst].get("VWAP")
-                    if not self._valid_price(price):
+                    adj_factor = daily_dict[inst].get(self.adj_factor_col)
+                    if not self._valid_price(price) or not self._valid_price(
+                        adj_factor
+                    ):
                         continue
                     shares = int((cash_per_stock / price) / 100) * 100
                     if shares < 100:
@@ -481,7 +542,7 @@ class TopKDropoutBacktester(BaseBacktester):
                         comm = max(invest * commission, min_commission)
                     daily_buy_value += invest
                     cash -= invest + comm
-                    positions[inst] = shares
+                    positions[inst] = shares / float(adj_factor)
                     hold_start[inst] = date
                     self._print_table_row(
                         inst,
@@ -494,8 +555,10 @@ class TopKDropoutBacktester(BaseBacktester):
                         indent=4,
                     )
 
-            _record_day(date, daily_dict, daily_buy_value, daily_sell_value)
-            self._log_daily_holdings(date, positions, daily_dict, prev_prices)
+            daily_snapshot = _record_day(
+                date, daily_dict, daily_buy_value, daily_sell_value
+            )
+            self._log_daily_holdings(daily_snapshot)
 
         rets = np.array(daily_returns)
         nav = np.array(nav_series)
