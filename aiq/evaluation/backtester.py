@@ -51,9 +51,9 @@ class BaseBacktester(ABC):
         down_limit_col: str = "Down_limit",
         adj_factor_col: str = "Adj_factor",
         score_col: str = "PRED_RET_5D",
+        universe_col: Optional[str] = None,
         trading_calendar: Optional[List[str]] = None,
         logger: Optional[logging.Logger] = None,
-        universe_col: Optional[str] = None,
     ):
         self.top_k = top_k
         self.date_col = date_col
@@ -62,9 +62,9 @@ class BaseBacktester(ABC):
         self.down_limit_col = down_limit_col
         self.adj_factor_col = adj_factor_col
         self.score_col = score_col
+        self.universe_col = universe_col
         self.trading_calendar = trading_calendar
         self.logger = logger or logging.getLogger(__name__)
-        self.universe_col = universe_col
 
     @abstractmethod
     def run(self, df: pd.DataFrame, **kwargs) -> Dict[str, float]:
