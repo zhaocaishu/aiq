@@ -150,6 +150,7 @@ class Evaluator:
                 "High",
                 "Low",
                 "VWAP",
+                "Adj_factor",
             ]
         ]
 
