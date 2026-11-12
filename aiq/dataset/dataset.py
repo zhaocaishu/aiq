@@ -9,7 +9,6 @@ from aiq.dataset.loader import DataLoader
 from aiq.utils.functional import (
     fillna,
     zscore,
-    robust_zscore,
 )
 
 
@@ -251,9 +250,9 @@ class TSDataset(Dataset):
         market_state_features = features[:, :, self.market_feature_indices]
 
         # Data Normalization Pipeline
-        stock_ts_features = robust_zscore(stock_ts_features)
-        stock_cs_features = robust_zscore(stock_cs_features)
-        stock_fund_features = robust_zscore(stock_fund_features)
+        stock_ts_features = zscore(stock_ts_features, clip_outlier=True)
+        stock_cs_features = zscore(stock_cs_features, clip_outlier=True)
+        stock_fund_features = zscore(stock_fund_features, clip_outlier=True)
 
         # Impute missing values (NaNs) with zero
         stock_ts_features = fillna(stock_ts_features, fill_value=0.0)

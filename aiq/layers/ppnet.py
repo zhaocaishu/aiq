@@ -181,15 +181,17 @@ class FusionBlock(nn.Module):
         super().__init__()
         self.temporal_norm = nn.LayerNorm(d_temporal)
 
-        d_in = d_temporal + d_cs
+        # d_in = d_temporal + d_cs
+        d_in = d_cs
         self.proj = nn.Linear(d_in, d_model) if d_in != d_model else nn.Identity()
         self.norm = nn.LayerNorm(d_model)
         self.mlp = MLP(hidden_size=d_model, intermediate_size=d_model * 2)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, temporal_features, cs_features):
-        temporal_features = self.temporal_norm(temporal_features)
-        x = torch.cat([temporal_features, cs_features], dim=-1)
+        # temporal_features = self.temporal_norm(temporal_features)
+        # x = torch.cat([temporal_features, cs_features], dim=-1)
+        x = cs_features
         x = self.proj(x)
         return x + self.dropout(self.mlp(self.norm(x)))
 
