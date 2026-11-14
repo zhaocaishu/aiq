@@ -767,7 +767,7 @@ class Alpha158(DataHandler):
         open_complete = len(open_group) == 6 and open_returns.notna().all()
         tail_complete = len(tail_group) == 6 and tail_returns.notna().all()
         day_complete = len(group) == 48 and len(returns) == 48
-        illiquidity = np.abs(returns) / (amounts + 1e-12)
+        illiquidity = np.abs(returns) / amounts.replace(0, np.nan)
 
         # Align amounts with valid intraday returns before computing direction.
         return_amounts = group.loc[returns.index, "AMount"].fillna(0.0)
