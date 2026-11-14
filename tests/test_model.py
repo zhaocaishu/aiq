@@ -22,18 +22,18 @@ if __name__ == "__main__":
     dummy_industry_ids = (
         torch.zeros(100, 2).to("cuda" if torch.cuda.is_available() else "cpu").long()
     )
-    dummy_stock_ts_features = torch.zeros(100, 20, 28).to(
+    dummy_stock_ts_features = torch.zeros(
+        100, cfg.dataset.kwargs.seq_len, cfg.model.kwargs.d_ts_feat
+    ).to("cuda" if torch.cuda.is_available() else "cpu")
+    dummy_stock_cs_features = torch.zeros(100, cfg.model.kwargs.d_cs_feat).to(
         "cuda" if torch.cuda.is_available() else "cpu"
     )
-    dummy_stock_cs_features = torch.zeros(100, 132).to(
+    dummy_stock_fund_features = torch.zeros(100, cfg.model.kwargs.d_fund_feat).to(
         "cuda" if torch.cuda.is_available() else "cpu"
     )
-    dummy_stock_fund_features = torch.zeros(100, 4).to(
-        "cuda" if torch.cuda.is_available() else "cpu"
-    )
-    dummy_market_features = torch.zeros(100, 20, 63).to(
-        "cuda" if torch.cuda.is_available() else "cpu"
-    )
+    dummy_market_features = torch.zeros(
+        100, cfg.dataset.kwargs.seq_len, cfg.model.kwargs.d_mkt_feat
+    ).to("cuda" if torch.cuda.is_available() else "cpu")
     output = model.model(
         dummy_stock_ts_features,
         dummy_stock_cs_features,

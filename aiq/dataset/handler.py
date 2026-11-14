@@ -310,7 +310,7 @@ class Alpha158(DataHandler):
         mfd_inflow_vol_ratio = df["Mfd_inflow_vol_ratio"]
         mfd_large_amount_ratio = df["Mfd_large_amount_ratio"]
 
-        # K-bar
+        # Daily stock state
         features = [
             ind_class_l1,
             ind_class_l2,
@@ -344,24 +344,24 @@ class Alpha158(DataHandler):
             "FUND_EP",
             "FUND_BP",
             "FUND_SP",
-            "TS_KLEN",
-            "TS_KMID1",
-            "TS_KMID2",
-            "TS_KUP1",
-            "TS_KUP2",
-            "TS_KLOW1",
-            "TS_KLOW2",
-            "TS_KSFT1",
-            "TS_KSFT2",
-            "TS_RET_1D",
-            "TS_GAP",
-            "TS_HIGH0",
-            "TS_LOW0",
-            "TS_VWAP0",
-            "TS_AMT_MA20_RATIO",
-            "TS_TURN_RATE",
-            "TS_MFD_INFLOW_VOL_RATIO",
-            "TS_MFD_LARGE_AMT_RATIO",
+            "CS_KLEN",
+            "CS_KMID1",
+            "CS_KMID2",
+            "CS_KUP1",
+            "CS_KUP2",
+            "CS_KLOW1",
+            "CS_KLOW2",
+            "CS_KSFT1",
+            "CS_KSFT2",
+            "CS_RET_1D",
+            "CS_GAP",
+            "CS_HIGH0",
+            "CS_LOW0",
+            "CS_VWAP0",
+            "CS_AMT_MA20_RATIO",
+            "CS_TURN_RATE",
+            "CS_MFD_INFLOW_VOL_RATIO",
+            "CS_MFD_LARGE_AMT_RATIO",
         ]
 
         # Rolling features
@@ -642,6 +642,26 @@ class Alpha158(DataHandler):
             axis=1,
         )
 
+        # Retain price changes, trading activity and moneyflow as daily paths.
+        for name in [
+            "CS_RET_1D",
+            "CS_GAP",
+            "CS_AMT_MA20_RATIO",
+            "CS_TURN_RATE",
+            "CS_MFD_INFLOW_VOL_RATIO",
+            "CS_MFD_LARGE_AMT_RATIO",
+        ]:
+            ts_name = "TS_" + name[3:]
+            feature_df[ts_name] = feature_df[name]
+            self.feature_names.append(ts_name)
+
+        # Summarize raw moneyflow before cross-sectional preprocessing.
+        mean_name = "CS_MFD_LARGE_AMT_RATIO_MA5"
+        feature_df[mean_name] = (
+            mfd_large_amount_ratio.rolling(5, min_periods=5).mean().astype("float32")
+        )
+        self.feature_names.append(mean_name)
+
         # 根据List_date过滤上市前3个月的数据
         if "List_date" in df.columns:
             list_date = pd.to_datetime(df["List_date"].iloc[0])
@@ -699,16 +719,16 @@ class Alpha158(DataHandler):
     def _aggregate_daily_hf_features(self, group: pd.DataFrame) -> pd.Series:
         # Define feature names
         self.hf_feature_names = [
-            "TS_HF_RV",
-            "TS_HF_SKEW",
-            "TS_HF_KURT",
-            "TS_HF_UP_VAR",
-            "TS_HF_DOWN_VAR",
-            "TS_HF_TAIL_RET",
-            "TS_HF_AMIHUD",
-            "TS_HF_SIGNED_AMT_IMB",
-            "TS_HF_TREND_EFF",
-            "TS_HF_TAIL_AMT_RATIO",
+            "CS_HF_RV",
+            "CS_HF_SKEW",
+            "CS_HF_KURT",
+            "CS_HF_UP_VAR",
+            "CS_HF_DOWN_VAR",
+            "CS_HF_TAIL_RET",
+            "CS_HF_AMIHUD",
+            "CS_HF_SIGNED_AMT_IMB",
+            "CS_HF_TREND_EFF",
+            "CS_HF_TAIL_AMT_RATIO",
         ]
 
         # Aggregate one trading day's 5-minute bars into daily HF features
@@ -820,12 +840,34 @@ class Alpha158(DataHandler):
             if feature_name not in self.feature_names
         )
 
-        return pd.merge(
+        feature_df = pd.merge(
             feature_df,
             hf_feature_df,
             on=["Date", "Instrument"],
             how="left",
-        )
+        ).sort_values(["Instrument", "Date"])
+
+        # Track the persistence of intraday direction and tail participation.
+        for name in [
+            "CS_HF_TAIL_RET",
+            "CS_HF_SIGNED_AMT_IMB",
+            "CS_HF_TAIL_AMT_RATIO",
+        ]:
+            ts_name = "TS_" + name[3:]
+            feature_df[ts_name] = feature_df[name]
+            self.feature_names.append(ts_name)
+
+        # Aggregate raw signals on the aligned calendar before preprocessing.
+        for name in ["CS_HF_TAIL_RET", "CS_HF_SIGNED_AMT_IMB"]:
+            mean_name = name + "_MA5"
+            feature_df[mean_name] = (
+                feature_df.groupby("Instrument")[name]
+                .transform(lambda values: values.rolling(5, min_periods=5).mean())
+                .astype("float32")
+            )
+            self.feature_names.append(mean_name)
+
+        return feature_df
 
     def extract_instrument_labels(self, df):
         df = df.sort_values("Date").copy()

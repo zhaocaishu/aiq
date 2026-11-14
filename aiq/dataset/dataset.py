@@ -250,7 +250,7 @@ class TSDataset(Dataset):
         market_state_features = features[:, :, self.market_feature_indices]
 
         # Data Normalization Pipeline
-        stock_ts_features = zscore(stock_ts_features, clip_outlier=True)
+        # TS scales are prepared by the handler; retain them across dates and pools.
         stock_cs_features = zscore(stock_cs_features, clip_outlier=True)
         stock_fund_features = zscore(stock_fund_features, clip_outlier=True)
 
