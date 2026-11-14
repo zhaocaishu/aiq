@@ -295,7 +295,7 @@ class Rsquare(Rolling):
         else:
             series = pd.Series(rolling_rsquare(feature.values, N), index=feature.index)
             series.loc[
-                np.isclose(series.rolling(N, min_periods=1).std(), 0, atol=2e-05)
+                np.isclose(feature.rolling(N, min_periods=1).std(), 0, atol=2e-05)
             ] = np.nan
         return series
 

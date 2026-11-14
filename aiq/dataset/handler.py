@@ -624,6 +624,18 @@ class Alpha158(DataHandler):
             )
             feature_names.append("CS_RISK_ADJ_RET5")
 
+        # Daily liquidity: price impact per yuan and average trading capacity.
+        if use("CS_AMIHUD"):
+            illiquidity = returns.abs() / amount.replace(0, np.nan)
+            features.append(
+                np.log1p(illiquidity.rolling(20, min_periods=20).mean() * 1e8)
+            )
+            feature_names.append("CS_AMIHUD20")
+
+        if use("CS_LOG_AMT"):
+            features.append(np.log1p(amount.rolling(20, min_periods=20).mean()))
+            feature_names.append("CS_LOG_AMT20")
+
         # Feature names
         self.feature_names = feature_names
 
@@ -729,6 +741,12 @@ class Alpha158(DataHandler):
             "CS_HF_SIGNED_AMT_IMB",
             "CS_HF_TREND_EFF",
             "CS_HF_TAIL_AMT_RATIO",
+            "CS_HF_OPEN_RET",
+            "CS_HF_OPEN_AMT_RATIO",
+            "CS_HF_UP_VOL_RATIO",
+            "CS_HF_DOWN_VOL_RATIO",
+            "CS_HF_OPEN_RV_RATIO",
+            "CS_HF_TAIL_RV_RATIO",
         ]
 
         # Aggregate one trading day's 5-minute bars into daily HF features
@@ -741,8 +759,14 @@ class Alpha158(DataHandler):
 
         positive_returns = returns[returns > 0]
         negative_returns = returns[returns < 0]
-        tail_group = group.tail(6)
+        # Bars use interval-end timestamps: 09:35-10:00 and 14:35-15:00.
+        open_group = group[group["Bar_minute"].between(575, 600)]
+        tail_group = group[group["Bar_minute"].between(875, 900)]
+        open_returns = open_group["Ret_5m"]
         tail_returns = tail_group["Ret_5m"]
+        open_complete = len(open_group) == 6 and open_returns.notna().all()
+        tail_complete = len(tail_group) == 6 and tail_returns.notna().all()
+        day_complete = len(group) == 48 and len(returns) == 48
         illiquidity = np.abs(returns) / (amounts + 1e-12)
 
         # Align amounts with valid intraday returns before computing direction.
@@ -750,18 +774,58 @@ class Alpha158(DataHandler):
         total_return_amount = return_amounts.sum()
         total_amount = group["AMount"].fillna(0.0).sum()
         tail_amount = tail_group["AMount"].fillna(0.0).sum()
+        amount_complete = (
+            day_complete and group["AMount"].notna().all() and total_amount > 0
+        )
+
+        # Compare conditional mean volume with the daily mean, not volume shares.
+        return_volumes = group.loc[returns.index, "Volume"]
+        mean_volume = return_volumes.mean()
+        volume_complete = (
+            day_complete and return_volumes.notna().all() and mean_volume > 0
+        )
+        up_vol_ratio = (
+            return_volumes[returns > 0].mean() / mean_volume
+            if volume_complete
+            else np.nan
+        )
+        down_vol_ratio = (
+            return_volumes[returns < 0].mean() / mean_volume
+            if volume_complete
+            else np.nan
+        )
+        realized_variance = np.sum(returns**2)
+        variance_complete = day_complete and realized_variance > 0
 
         features = [
-            np.sum(returns**2),
+            realized_variance,
             returns.skew(),
             returns.kurtosis(),
             np.sum(positive_returns**2),
             np.sum(negative_returns**2),
-            np.prod(1 + tail_returns.fillna(0)) - 1,
+            np.prod(1 + tail_returns) - 1 if tail_complete else np.nan,
             np.log1p(np.mean(illiquidity) * 1e8),
             ((np.sign(returns) * return_amounts).sum() / (total_return_amount + 1e-12)),
             returns.sum() / (returns.abs().sum() + 1e-12),
-            tail_amount / (total_amount + 1e-12),
+            tail_amount / total_amount if amount_complete and tail_complete else np.nan,
+            np.prod(1 + open_returns) - 1 if open_complete else np.nan,
+            (
+                open_group["AMount"].sum() / total_amount
+                if amount_complete and open_complete
+                else np.nan
+            ),
+            up_vol_ratio,
+            down_vol_ratio,
+            (
+                np.sum(open_returns**2) / realized_variance
+                if variance_complete and open_complete
+                else np.nan
+            ),
+            (
+                np.sum(tail_returns**2) / realized_variance
+                if variance_complete and tail_complete
+                else np.nan
+            ),
         ]
         return pd.Series(features, index=self.hf_feature_names, dtype="float32")
 
@@ -774,15 +838,35 @@ class Alpha158(DataHandler):
         prepared_df = hf_df.copy()
         prepared_df[timestamp_col] = pd.to_datetime(prepared_df[timestamp_col])
         prepared_df["Date"] = prepared_df[timestamp_col].dt.normalize()
+        prepared_df["Bar_minute"] = (
+            prepared_df[timestamp_col].dt.hour * 60
+            + prepared_df[timestamp_col].dt.minute
+        )
         prepared_df["Adj_close"] = prepared_df["Close"] * prepared_df["Adj_factor"]
 
         # Sorting must precede pct_change so returns remain strictly intraday.
         prepared_df = prepared_df.sort_values(timestamp_col)
-        prepared_df["Ret_5m"] = (
-            prepared_df.groupby("Date")["Adj_close"]
-            .pct_change(fill_method=None)
-            .astype("float32")
+        prepared_df["Ret_5m"] = prepared_df.groupby("Date")["Adj_close"].pct_change(
+            fill_method=None
         )
+        previous_minute = prepared_df.groupby("Date")["Bar_minute"].shift()
+        minute = prepared_df["Bar_minute"]
+        regular_bar = (
+            minute.between(575, 690) | minute.between(785, 900)
+        ) & minute.mod(5).eq(0)
+        # Bridge the lunch break, but never treat a missing bar as a 5-minute return.
+        consecutive = minute.sub(previous_minute).eq(5) | (
+            minute.eq(785) & previous_minute.eq(690)
+        )
+        prepared_df["Ret_5m"] = prepared_df["Ret_5m"].where(regular_bar & consecutive)
+
+        # Include 09:30-09:35 from its own open, without adding an overnight return.
+        opening_bar = minute.eq(575) & prepared_df.groupby("Date").cumcount().eq(0)
+        prepared_df.loc[opening_bar, "Ret_5m"] = (
+            prepared_df.loc[opening_bar, "Close"] / prepared_df.loc[opening_bar, "Open"]
+            - 1
+        )
+        prepared_df["Ret_5m"] = prepared_df["Ret_5m"].astype("float32")
 
         daily_feature_df = (
             prepared_df.groupby("Date")

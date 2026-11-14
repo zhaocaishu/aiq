@@ -71,7 +71,7 @@ model:
   module_path: aiq.models.ppnet
   kwargs:
     d_ts_feat: 9
-    d_cs_feat: 163
+    d_cs_feat: 171
     d_fund_feat: 4
     d_mkt_feat: 63
     d_emb: 16
