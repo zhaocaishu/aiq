@@ -23,6 +23,9 @@ from tools.eval import ensemble_predict, prepare_predictions
 from tools.train import parse_args, set_random_seed, train_and_save_model
 
 
+LABEL_HORIZON = 5
+
+
 def build_month_configs(
     config: dict,
     calendar: Sequence[str],
@@ -34,45 +37,51 @@ def build_month_configs(
     )
     month = pd.Period(month, freq="M")
     segments = config["dataset"]["kwargs"]["segments"]
-    train_start, train_end = map(pd.Timestamp, segments["train"])
+    base_train_start, base_train_end = map(pd.Timestamp, segments["train"])
     test_start, test_end = map(pd.Timestamp, segments["test"])
-    if train_start > train_end or test_start > test_end:
+    if base_train_start > base_train_end or test_start > test_end:
         raise ValueError("Training and test date ranges must be increasing.")
     if config["dataset"]["kwargs"]["label_names"] != ["RET_5D"]:
         raise ValueError("Monthly rolling training requires the RET_5D label.")
 
-    train_months = (train_end.year - train_start.year) * 12
-    train_months += train_end.month - train_start.month + 1
-    history = train_start - pd.Timestamp(config["data_handler"]["kwargs"]["start_time"])
-    if history < pd.Timedelta(0):
+    train_months = (base_train_end.year - base_train_start.year) * 12
+    train_months += base_train_end.month - base_train_start.month + 1
+    warmup_history = base_train_start - pd.Timestamp(
+        config["data_handler"]["kwargs"]["start_time"]
+    )
+    if warmup_history < pd.Timedelta(0):
         raise ValueError("Handler history must start before the training window.")
 
     prediction_start = max(test_start, month.start_time.normalize())
     prediction_end = min(test_end, month.end_time.normalize())
-    first_prediction = calendar.searchsorted(prediction_start, side="left")
-    last_prediction = calendar.searchsorted(prediction_end, side="right") - 1
-    cutoff = calendar.searchsorted(month.start_time, side="left") - 1
-    if prediction_start > prediction_end or first_prediction > last_prediction:
+    first_prediction_index = calendar.searchsorted(prediction_start, side="left")
+    last_prediction_index = calendar.searchsorted(prediction_end, side="right") - 1
+    label_end_index = last_prediction_index + LABEL_HORIZON
+    cutoff_index = calendar.searchsorted(month.start_time, side="left") - 1
+    if (
+        prediction_start > prediction_end
+        or first_prediction_index > last_prediction_index
+    ):
         raise ValueError(f"{month}: prediction month contains no trading days.")
-    if cutoff < 5 or last_prediction + 5 >= len(calendar):
+    if cutoff_index < LABEL_HORIZON or label_end_index >= len(calendar):
         raise ValueError(
             f"{month}: calendar does not cover the five-day label horizon."
         )
 
     # A signal at t uses prices at t+1 and t+5; both must be known at cutoff.
-    rolling_start = month.start_time.normalize() - pd.DateOffset(months=train_months)
-    rolling_end = calendar[cutoff - 5]
-    if rolling_start > rolling_end or rolling_start < calendar[0]:
+    train_start = month.start_time.normalize() - pd.DateOffset(months=train_months)
+    train_end = calendar[cutoff_index - LABEL_HORIZON]
+    if train_start > train_end or train_start < calendar[0]:
         raise ValueError(f"{month}: calendar does not cover the training window.")
 
     train_config = copy.deepcopy(config)
-    handler = train_config["data_handler"]["kwargs"]
-    handler["start_time"] = (rolling_start - history).strftime("%Y-%m-%d")
-    handler["end_time"] = calendar[cutoff].strftime("%Y-%m-%d")
-    handler["fit_start_time"] = rolling_start.strftime("%Y-%m-%d")
-    handler["fit_end_time"] = rolling_end.strftime("%Y-%m-%d")
+    handler_kwargs = train_config["data_handler"]["kwargs"]
+    handler_kwargs["start_time"] = (train_start - warmup_history).strftime("%Y-%m-%d")
+    handler_kwargs["end_time"] = calendar[cutoff_index].strftime("%Y-%m-%d")
+    handler_kwargs["fit_start_time"] = train_start.strftime("%Y-%m-%d")
+    handler_kwargs["fit_end_time"] = train_end.strftime("%Y-%m-%d")
     train_config["dataset"]["kwargs"]["segments"] = {
-        "train": [handler["fit_start_time"], handler["fit_end_time"]],
+        "train": [handler_kwargs["fit_start_time"], handler_kwargs["fit_end_time"]],
         "test": [
             prediction_start.strftime("%Y-%m-%d"),
             prediction_end.strftime("%Y-%m-%d"),
@@ -86,9 +95,78 @@ def build_month_configs(
     predict_config = copy.deepcopy(train_config)
     # Extra quotes are used only for offline labels, never for fitting statistics.
     predict_config["data_handler"]["kwargs"]["end_time"] = calendar[
-        last_prediction + 5
+        label_end_index
     ].strftime("%Y-%m-%d")
     return train_config, predict_config
+
+
+def slice_raw_data(
+    raw_data: dict,
+    calendar: Sequence[str],
+    segment: Sequence[str],
+    seq_len: int,
+) -> dict:
+    """Keep sample dates and sequence context without discarding factor history."""
+    start, end = segment
+    calendar = pd.DatetimeIndex(pd.to_datetime(calendar)).unique().sort_values()
+    first_sample = calendar.searchsorted(pd.Timestamp(start))
+    context_start = calendar[max(0, first_sample - seq_len + 1)].strftime("%Y-%m-%d")
+    data = dict(raw_data)
+    for name in ("instrument", "market"):
+        if name in data:
+            data[name] = data[name].loc[context_start:end]
+    return data
+
+
+def prepare_dataset(
+    handler: Any,
+    raw_data: dict,
+    dataset_config: dict,
+    data_dir: Path,
+    split: str,
+) -> Any:
+    """Apply window preprocessing and construct the requested dataset."""
+    dataset_kwargs = dataset_config["kwargs"]
+    window_data = slice_raw_data(
+        raw_data,
+        handler.calendar,
+        dataset_kwargs["segments"][split],
+        dataset_kwargs["seq_len"],
+    )
+    data = handler.process_data(window_data, mode=split)
+    return init_instance_by_config(
+        dataset_config,
+        data=data,
+        data_dir=str(data_dir),
+        feature_names=handler.feature_names,
+        split=split,
+    )
+
+
+def prepare_raw_data(
+    handler_config: dict,
+    month_configs: Sequence[tuple[pd.Period, dict, dict]],
+    data_dir: Path,
+    data_seed: int,
+    logger: Logger,
+) -> dict:
+    """Extract one raw cache covering every monthly window and offline label."""
+    raw_config = copy.deepcopy(handler_config)
+    handler_kwargs = raw_config["kwargs"]
+    handler_kwargs["start_time"] = min(
+        train["data_handler"]["kwargs"]["start_time"] for _, train, _ in month_configs
+    )
+    handler_kwargs["end_time"] = max(
+        predict["data_handler"]["kwargs"]["end_time"] for _, _, predict in month_configs
+    )
+    set_random_seed(data_seed)
+    handler = init_instance_by_config(Config(raw_config), data_dir=str(data_dir))
+    logger.info(
+        "Extracting raw factors once for %s to %s.",
+        handler_kwargs["start_time"],
+        handler_kwargs["end_time"],
+    )
+    return handler.fetch_data()
 
 
 def run_month(
@@ -99,6 +177,7 @@ def run_month(
     seeds: Sequence[int],
     data_seed: int,
     logger: Logger,
+    raw_data: dict,
 ) -> pd.DataFrame:
     """Train fresh models, then predict one month with their fitted preprocessors."""
     save_dir.mkdir(parents=True, exist_ok=True)
@@ -114,13 +193,8 @@ def run_month(
     cfg.from_config(Config(train_config))
     set_random_seed(data_seed)
     handler = init_instance_by_config(cfg.data_handler, data_dir=str(data_dir))
-    data = handler.setup_data(mode="train")
-    train_dataset = init_instance_by_config(
-        cfg.dataset,
-        data=data,
-        data_dir=str(data_dir),
-        feature_names=handler.feature_names,
-        split="train",
+    train_dataset = prepare_dataset(
+        handler, raw_data, cfg.dataset, data_dir, split="train"
     )
     if len(train_dataset) == 0:
         raise ValueError(f"{save_dir.name}: training dataset is empty.")
@@ -136,19 +210,14 @@ def run_month(
         logger.info("Training seed %d (%d/%d)", seed, index, len(seeds))
         set_random_seed(seed)
         train_and_save_model(train_dataset, None, save_dir, seed, logger)
-    del train_dataset, data, handler
+    del train_dataset, handler
 
     cfg.from_config(Config(predict_config))
     set_random_seed(data_seed)
     handler = init_instance_by_config(cfg.data_handler, data_dir=str(data_dir))
     handler.load(str(handler_path))
-    data = handler.setup_data(mode="test")
-    test_dataset = init_instance_by_config(
-        cfg.dataset,
-        data=data,
-        data_dir=str(data_dir),
-        feature_names=handler.feature_names,
-        split="test",
+    test_dataset = prepare_dataset(
+        handler, raw_data, cfg.dataset, data_dir, split="test"
     )
     if len(test_dataset) == 0:
         raise ValueError(f"{save_dir.name}: prediction dataset is empty.")
@@ -188,9 +257,17 @@ def run_rolling(
         )
     )
     save_dir.mkdir(parents=True, exist_ok=True)
+    month_configs = [
+        (month, *build_month_configs(config, calendar, month))
+        for month in pd.period_range(start=start, end=end, freq="M")
+    ]
+
+    raw_data = prepare_raw_data(
+        config["data_handler"], month_configs, data_dir, data_seed, logger
+    )
+
     monthly_predictions = []
-    for month in pd.period_range(start=start, end=end, freq="M"):
-        train_config, predict_config = build_month_configs(config, calendar, month)
+    for month, train_config, predict_config in month_configs:
         segments = train_config["dataset"]["kwargs"]["segments"]
         logger.info(
             "Month %s | train %s | predict %s",
@@ -207,8 +284,11 @@ def run_rolling(
                 seeds,
                 data_seed,
                 logger,
+                raw_data,
             )
         )
+
+    del raw_data
 
     labels = config["dataset"]["kwargs"]["label_names"]
     predictions = (

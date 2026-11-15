@@ -6,12 +6,12 @@ import pandas as pd
 import pytest
 import yaml
 
-from tools import train_rolling
+from tools import rolling_train
 
 
 @pytest.fixture
 def config():
-    path = Path(__file__).resolve().parents[1] / "configs" / "ppnet_model_reg.yaml"
+    path = Path(__file__).resolve().parents[1] / "configs" / "ppnet_model_rolling.yaml"
     with path.open() as stream:
         return yaml.safe_load(stream)
 
@@ -32,7 +32,7 @@ def test_monthly_windows_use_trading_day_label_gap(config, calendar):
     }
 
     for month, (start, end, asof, label_end) in expected.items():
-        train, predict = train_rolling.build_month_configs(
+        train, predict = rolling_train.build_month_configs(
             config, calendar, pd.Period(month, freq="M")
         )
         segments = train["dataset"]["kwargs"]["segments"]
@@ -52,10 +52,10 @@ def test_monthly_windows_use_trading_day_label_gap(config, calendar):
 
 def test_partial_prediction_month_respects_requested_dates(config, calendar):
     config["dataset"]["kwargs"]["segments"]["test"] = ["2023-01-15", "2023-02-10"]
-    _, january = train_rolling.build_month_configs(
+    _, january = rolling_train.build_month_configs(
         config, calendar, pd.Period("2023-01", freq="M")
     )
-    _, february = train_rolling.build_month_configs(
+    _, february = rolling_train.build_month_configs(
         config, calendar, pd.Period("2023-02", freq="M")
     )
 
@@ -75,8 +75,13 @@ def test_run_rolling_combines_year_and_evaluates_once(
 ):
     calls = []
     evaluations = []
+    extractions = []
+    cached_data = {"instrument": pd.DataFrame()}
 
-    def run_month(train, predict, data_dir, save_dir, seeds, data_seed, logger):
+    def run_month(
+        train, predict, data_dir, save_dir, seeds, data_seed, logger, raw_data
+    ):
+        assert raw_data is cached_data
         calls.append((train, predict, list(seeds)))
         start, end = predict["dataset"]["kwargs"]["segments"]["test"]
         dates = [day for day in calendar if start <= day <= end]
@@ -94,18 +99,27 @@ def test_run_rolling_combines_year_and_evaluates_once(
             evaluations.append(predictions.copy())
             return "rolling metrics"
 
+    class Handler:
+        def fetch_data(self):
+            extractions.append(True)
+            return cached_data
+
     def init_evaluator(evaluator_config, **kwargs):
+        if evaluator_config["class"] == "MarketAlpha158":
+            assert evaluator_config["kwargs"]["start_time"] == "2016-07-01"
+            assert evaluator_config["kwargs"]["end_time"] == "2024-01-08"
+            return Handler()
         assert evaluator_config["class"] == "Evaluator"
         assert evaluator_config["kwargs"]["start_time"] == "2023-01-01"
         assert evaluator_config["kwargs"]["end_time"] == "2023-12-31"
         return Evaluator()
 
-    monkeypatch.setattr(train_rolling, "run_month", run_month)
+    monkeypatch.setattr(rolling_train, "run_month", run_month)
     monkeypatch.setattr(
-        train_rolling.DataLoader, "load_calendar", lambda *args, **kwargs: calendar
+        rolling_train.DataLoader, "load_calendar", lambda *args, **kwargs: calendar
     )
-    monkeypatch.setattr(train_rolling, "init_instance_by_config", init_evaluator)
-    predictions = train_rolling.run_rolling(
+    monkeypatch.setattr(rolling_train, "init_instance_by_config", init_evaluator)
+    predictions = rolling_train.run_rolling(
         config,
         tmp_path / "data",
         tmp_path,
@@ -115,6 +129,7 @@ def test_run_rolling_combines_year_and_evaluates_once(
     )
 
     assert len(calls) == 12
+    assert len(extractions) == 1
     assert len(evaluations) == 1
     assert len(predictions) == len(
         [day for day in calendar if "2023-01-01" <= day <= "2023-12-31"]
@@ -141,14 +156,22 @@ def test_run_rolling_rejects_duplicate_prediction_keys(
         }
     )
     monkeypatch.setattr(
-        train_rolling, "run_month", lambda *args, **kwargs: duplicate.copy()
+        rolling_train, "run_month", lambda *args, **kwargs: duplicate.copy()
     )
     monkeypatch.setattr(
-        train_rolling.DataLoader, "load_calendar", lambda *args, **kwargs: calendar
+        rolling_train.DataLoader, "load_calendar", lambda *args, **kwargs: calendar
+    )
+
+    class Handler:
+        def fetch_data(self):
+            return {}
+
+    monkeypatch.setattr(
+        rolling_train, "init_instance_by_config", lambda *args, **kwargs: Handler()
     )
 
     with pytest.raises(ValueError):
-        train_rolling.run_rolling(
+        rolling_train.run_rolling(
             config,
             tmp_path / "data",
             tmp_path,
@@ -161,18 +184,51 @@ def test_run_rolling_rejects_duplicate_prediction_keys(
 def test_run_month_trains_without_validation_and_reloads_preprocessor(
     config, calendar, tmp_path, monkeypatch
 ):
-    train, predict = train_rolling.build_month_configs(
+    train, predict = rolling_train.build_month_configs(
         config, calendar, pd.Period("2023-01", freq="M")
     )
     setups = []
     fitted = []
     loaded = []
+    index = pd.MultiIndex.from_product(
+        [calendar, ["stock"]], names=["Date", "Instrument"]
+    )
+    raw_data = {
+        "instrument": pd.DataFrame({"TS_TEST": 1.0, "RET_5D": 0.1}, index=index),
+        "market": pd.DataFrame(
+            {"MKT_TEST": 1.0}, index=pd.Index(calendar, name="Date")
+        ),
+    }
+    original = copy.deepcopy(raw_data)
 
     class Handler:
         feature_names = ["TS_TEST"]
 
-        def setup_data(self, mode):
+        def __init__(self):
+            self.calendar = calendar
+
+        def process_data(self, data, mode):
             setups.append(mode)
+            if mode == "train":
+                first = pd.Index(calendar).searchsorted("2017-01-01")
+                context_start = calendar[
+                    first - config["dataset"]["kwargs"]["seq_len"] + 1
+                ]
+                dates = data["instrument"].index.get_level_values("Date")
+                assert dates.min() == context_start
+                assert dates.max() == "2022-12-23"
+                assert data["market"].index.min() == context_start
+                assert data["market"].index.max() == "2022-12-23"
+            else:
+                first = calendar.index("2023-01-03")
+                context_start = calendar[
+                    first - config["dataset"]["kwargs"]["seq_len"] + 1
+                ]
+                dates = data["instrument"].index.get_level_values("Date")
+                assert dates.min() == context_start
+                assert dates.max() == "2023-01-31"
+                assert data["market"].index.min() == context_start
+                assert data["market"].index.max() == "2023-01-31"
             date = "2022-12-23" if mode == "train" else "2023-01-03"
             index = pd.MultiIndex.from_tuples(
                 [(date, "stock")], names=["Date", "Instrument"]
@@ -222,10 +278,10 @@ def test_run_month_trains_without_validation_and_reloads_preprocessor(
             }
         )
 
-    monkeypatch.setattr(train_rolling, "init_instance_by_config", initialize)
-    monkeypatch.setattr(train_rolling, "train_and_save_model", train_model)
-    monkeypatch.setattr(train_rolling, "ensemble_predict", ensemble)
-    predictions = train_rolling.run_month(
+    monkeypatch.setattr(rolling_train, "init_instance_by_config", initialize)
+    monkeypatch.setattr(rolling_train, "train_and_save_model", train_model)
+    monkeypatch.setattr(rolling_train, "ensemble_predict", ensemble)
+    predictions = rolling_train.run_month(
         train,
         predict,
         tmp_path / "data",
@@ -233,9 +289,12 @@ def test_run_month_trains_without_validation_and_reloads_preprocessor(
         [1234, 2024],
         1234,
         logging.getLogger("rolling-test"),
+        raw_data,
     )
 
     assert setups == ["train", "test"]
     assert fitted == [1234, 2024]
     assert len(predictions) == 1
     assert (tmp_path / "2023-01" / "predictions.csv").is_file()
+    for name in raw_data:
+        pd.testing.assert_frame_equal(raw_data[name], original[name])

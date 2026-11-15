@@ -1,4 +1,4 @@
-from typing import List, Union
+from typing import List, Optional, Union
 import pickle
 
 import pandas as pd
@@ -67,7 +67,7 @@ class DataHandler:
         self.label_names = ["RET_5D"]
         self.processors = [init_instance_by_config(proc) for proc in processors]
 
-    def setup_data(self, mode="train") -> pd.DataFrame:
+    def setup_data(self, mode: str = "train") -> pd.DataFrame:
         raise NotImplementedError
 
     def load(self, filepath: str):
@@ -280,7 +280,7 @@ class Alpha158(DataHandler):
             .reset_index(drop=True)
         )
 
-    def extract_instrument_features(self, df):
+    def extract_instrument_features(self, df: pd.DataFrame) -> pd.DataFrame:
         # Fundamental data
         ind_class_l1 = df["Ind_class_l1"]
         ind_class_l2 = df["Ind_class_l2"]
@@ -953,7 +953,7 @@ class Alpha158(DataHandler):
 
         return feature_df
 
-    def extract_instrument_labels(self, df):
+    def extract_instrument_labels(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.sort_values("Date").copy()
         adj_factor = df["Adj_factor"]
 
@@ -997,7 +997,7 @@ class Alpha158(DataHandler):
         label_names: List[str] = [],
         processors: List[Processor] = [],
         mode: str = "train",
-    ):
+    ) -> pd.DataFrame:
         column_tuples = [("feature", feature_name) for feature_name in feature_names]
         if label_names:
             column_tuples.extend([("label", label_name) for label_name in label_names])
@@ -1029,24 +1029,40 @@ class Alpha158(DataHandler):
         df.columns = df.columns.droplevel()
         return df
 
-    def setup_data(self, mode="train") -> pd.DataFrame:
-        # Load data
+    def fetch_data(self) -> dict:
+        """Extract reusable stock factors and labels without fitting processors.
+
+        Industry factors depend on the current handler's universe, so they are
+        calculated by ``process_data`` after selecting that handler's window.
+        The returned frames must be treated as immutable by callers.
+        """
         df = DataLoader.load_instruments_features(
             self.data_dir, self.instruments, self.start_time, self.end_time
         )
+        quotes = df[["Date", "Instrument"]].copy()
+        quotes["Date"] = pd.to_datetime(quotes["Date"], errors="coerce").dt.strftime(
+            "%Y-%m-%d"
+        )
+        quote_index = pd.MultiIndex.from_frame(quotes.dropna()).unique()
 
         # Align each stock to the common market calendar before calculating any
         # rolling feature or forward label. Missing whole rows are treated as
         # suspension days and filled according to market semantics.
         df = self.align_instruments_to_calendar(df)
+        daily = df.set_index(["Date", "Instrument"]).sort_index()
+        turnover = daily["Turnover_rate_f"]
 
         # Extract feature and label from data
         feature_df = df.groupby("Instrument", group_keys=False).apply(
             self.extract_instrument_features
         )
-        feature_df = self._merge_industry_features(feature_df)
+        industry_feature_offset = len(self.feature_names)
+        hf = None
         if self.use_hf_features:
             feature_df = self._merge_hf_features(feature_df)
+            hf = feature_df.set_index(["Date", "Instrument"])[
+                ["CS_HF_TAIL_RET", "CS_HF_SIGNED_AMT_IMB"]
+            ].sort_index()
         label_df = df.groupby("Instrument", group_keys=False).apply(
             lambda group: self.extract_instrument_labels(group)
         )
@@ -1058,8 +1074,187 @@ class Alpha158(DataHandler):
             ["Date", "Instrument"]
         ).sort_index()
 
-        # Instrument-level feature processing
-        feature_label_df = self.process(
+        return {
+            "instrument": feature_label_df,
+            "feature_names": list(self.feature_names),
+            "label_names": list(self.label_names),
+            "industry_feature_offset": industry_feature_offset,
+            "quote_index": quote_index,
+            "turnover": turnover,
+            "daily": daily,
+            "hf": hf,
+        }
+
+    def _get_quote_bounds(self, quotes: pd.DataFrame) -> pd.DataFrame:
+        """Find each stock's actual quotation range within this handler's window."""
+        mask = quotes["Instrument"].isin(self.instruments)
+        if self.start_time:
+            mask &= quotes["Date"] >= pd.Timestamp(self.start_time)
+        if self.end_time:
+            mask &= quotes["Date"] <= pd.Timestamp(self.end_time)
+        return quotes.loc[mask].groupby("Instrument")["Date"].agg(["min", "max"])
+
+    def _select_instrument_window(
+        self,
+        data: Union[pd.DataFrame, pd.Series],
+        quote_bounds: pd.DataFrame,
+    ) -> Union[pd.DataFrame, pd.Series]:
+        """Copy this window, excluding alignment beyond its actual quotations."""
+        dates = pd.to_datetime(data.index.get_level_values("Date"))
+        instruments = data.index.get_level_values("Instrument")
+        bounds = quote_bounds.reindex(instruments)
+        mask = instruments.isin(self.instruments)
+        if self.start_time:
+            mask &= dates >= pd.Timestamp(self.start_time)
+        if self.end_time:
+            mask &= dates <= pd.Timestamp(self.end_time)
+        mask &= dates >= bounds["min"].to_numpy()
+        mask &= dates <= bounds["max"].to_numpy()
+        return data.loc[mask].copy(deep=True)
+
+    def _restart_daily_features(
+        self,
+        feature_df: pd.DataFrame,
+        raw_data: dict,
+        quote_bounds: pd.DataFrame,
+        quotes: pd.DataFrame,
+    ) -> pd.DataFrame:
+        """Restore daily rolling initialization where a monthly restart matters.
+
+        A stock can resume trading long after the handler's warmup starts. Its
+        first 61 observations must then use that first actual monthly quote as
+        their origin, rather than suspension rows inherited from the cache.
+        """
+        daily = raw_data.get("daily")
+        if daily is None or feature_df.empty:
+            return feature_df
+
+        calendar = self._get_calendar_index()
+        cache_start = quotes.groupby("Instrument")["Date"].min()
+        output_dates = feature_df.index.to_frame(index=False)
+        output_dates["Date"] = pd.to_datetime(output_dates["Date"])
+        output_start = output_dates.groupby("Instrument")["Date"].min()
+        repair_bounds = quote_bounds.copy()
+        positions = calendar.searchsorted(repair_bounds["min"]) + 60
+        repair_bounds["max"] = calendar[np.minimum(positions, len(calendar) - 1)]
+        affected = repair_bounds["min"].ne(cache_start.reindex(repair_bounds.index))
+        affected &= output_start.reindex(repair_bounds.index).le(repair_bounds["max"])
+        repair_bounds = repair_bounds.loc[affected]
+        if repair_bounds.empty:
+            return feature_df
+
+        repair_data = self._select_instrument_window(daily, repair_bounds)
+        feature_names = list(self.feature_names)
+        try:
+            repaired = (
+                repair_data.reset_index()
+                .groupby("Instrument", group_keys=False)
+                .apply(self.extract_instrument_features)
+            )
+        finally:
+            # Extraction normally initializes the feature name list.
+            self.feature_names = feature_names
+        repaired = repaired.set_index(["Date", "Instrument"])
+        overlap = feature_df.index.intersection(repaired.index)
+        base_names = raw_data["feature_names"][: raw_data["industry_feature_offset"]]
+        feature_df.loc[overlap, base_names] = repaired.loc[overlap, base_names]
+        return feature_df
+
+    def _restart_hf_means(
+        self,
+        feature_df: pd.DataFrame,
+        hf: Optional[pd.DataFrame],
+        quote_bounds: pd.DataFrame,
+    ) -> pd.DataFrame:
+        """Restart the first five HF rolling means using the full HF source."""
+        # HF aggregation itself is reusable; only the first five rolling means
+        # can retain observations preceding this window's first eligible row.
+        # Use the complete HF source, even if prediction factors were sliced to
+        # just a short sequence context by the caller.
+        if hf is None or hf.empty:
+            return feature_df
+
+        hf = self._select_instrument_window(hf, quote_bounds)
+        initial = hf.groupby(level="Instrument").head(5)
+        overlap = feature_df.index.intersection(initial.index)
+        if overlap.empty:
+            return feature_df
+
+        for name in ["CS_HF_TAIL_RET", "CS_HF_SIGNED_AMT_IMB"]:
+            mean_name = name + "_MA5"
+            values = initial.groupby(level="Instrument")[name].transform(
+                lambda group: group.rolling(5, min_periods=5).mean()
+            )
+            feature_df.loc[overlap, mean_name] = values.reindex(overlap).astype(
+                "float32"
+            )
+        return feature_df
+
+    def _restart_turnover_ema(
+        self,
+        feature_df: pd.DataFrame,
+        turnover: pd.Series,
+        quote_bounds: pd.DataFrame,
+    ) -> pd.DataFrame:
+        """Restart EMA at the monthly boundary, before the listing filter."""
+        # EMA has an unbounded history, so the complete window is required.
+        turnover = self._select_instrument_window(turnover, quote_bounds)
+        for window in [5, 10, 20, 30, 60]:
+            name = f"CS_TURN_MA{window}"
+            if name in feature_df.columns:
+                values = turnover.groupby(level="Instrument").transform(
+                    lambda group: EMA(group, window)
+                )
+                feature_df[name] = values.reindex(feature_df.index).astype("float32")
+        return feature_df
+
+    def process_data(self, raw_data: dict, mode: str = "train") -> pd.DataFrame:
+        """Fit/apply this handler's processors to a private view of raw data."""
+        self.feature_names = list(raw_data["feature_names"])
+        self.label_names = list(raw_data["label_names"])
+
+        # A full-period cache may contain trailing suspension rows whose next
+        # actual quotation falls after this monthly handler's end date.
+        quotes = raw_data["quote_index"].to_frame(index=False)
+        quotes["Date"] = pd.to_datetime(quotes["Date"])
+        quote_bounds = self._get_quote_bounds(quotes)
+        feature_label_df = self._select_instrument_window(
+            raw_data["instrument"], quote_bounds
+        )
+        feature_label_df = self._restart_daily_features(
+            feature_label_df, raw_data, quote_bounds, quotes
+        )
+        feature_label_df = self._restart_hf_means(
+            feature_label_df, raw_data.get("hf"), quote_bounds
+        )
+        feature_label_df = self._restart_turnover_ema(
+            feature_label_df, raw_data["turnover"], quote_bounds
+        )
+
+        # Industry peers and cross-sectional processor reference masks must
+        # always reflect this month's universe, never the cache's union.
+        feature_label_df = self._merge_industry_features(feature_label_df.reset_index())
+        industry_names = self.feature_names[len(raw_data["feature_names"]) :]
+        offset = raw_data["industry_feature_offset"]
+        self.feature_names = (
+            list(raw_data["feature_names"][:offset])
+            + industry_names
+            + list(raw_data["feature_names"][offset:])
+        )
+        feature_label_df = feature_label_df.set_index(["Date", "Instrument"])[
+            self.feature_names + self.label_names
+        ].sort_index()
+
+        # Cached forward returns must not reveal quotations beyond this
+        # handler's end date, even when those quotations exist in the cache.
+        calendar = self._get_calendar_index()
+        dates = pd.to_datetime(feature_label_df.index.get_level_values("Date"))
+        unavailable = np.ones(len(dates), dtype=bool)
+        if len(calendar) >= 6:
+            unavailable = dates > calendar[-6]
+        feature_label_df.loc[unavailable, self.label_names] = np.nan
+
+        return self.process(
             df=feature_label_df,
             feature_names=self.feature_names,
             label_names=self.label_names,
@@ -1067,7 +1262,8 @@ class Alpha158(DataHandler):
             mode=mode,
         ).astype("float32")
 
-        return feature_label_df
+    def setup_data(self, mode: str = "train") -> pd.DataFrame:
+        return self.process_data(self.fetch_data(), mode=mode)
 
 
 class MarketAlpha158(Alpha158):
@@ -1254,12 +1450,8 @@ class MarketAlpha158(Alpha158):
             ),
         )
 
-    def setup_data(self, mode="train") -> pd.DataFrame:
-        # Load instrument data and extract instrument-level features & labels
-        feature_label_df = super().setup_data(mode=mode)
-        feature_label_df = feature_label_df.reset_index()
-
-        # Load market data and extract market-level features
+    def fetch_data(self) -> dict:
+        raw_data = super().fetch_data()
         market_df = DataLoader.load_markets_features(
             self.data_dir,
             self.market_names,
@@ -1285,7 +1477,24 @@ class MarketAlpha158(Alpha158):
         market_feature_df = self._add_cross_index_spreads(market_feature_df)
 
         self.market_feature_names = market_feature_df.columns.tolist()
-        self.feature_names.extend(self.market_feature_names)
+        raw_data["market"] = market_feature_df
+        raw_data["market_feature_names"] = list(self.market_feature_names)
+        return raw_data
+
+    def process_data(self, raw_data: dict, mode: str = "train") -> pd.DataFrame:
+        feature_label_df = super().process_data(raw_data, mode=mode).reset_index()
+        self.market_feature_names = list(raw_data["market_feature_names"])
+
+        # Keep one observation per date when fitting market statistics. Merging
+        # first would weight each date by the number of stocks in the universe.
+        market_feature_df = raw_data["market"]
+        dates = pd.to_datetime(market_feature_df.index.get_level_values("Date"))
+        mask = np.ones(len(dates), dtype=bool)
+        if self.start_time:
+            mask &= dates >= pd.Timestamp(self.start_time)
+        if self.end_time:
+            mask &= dates <= pd.Timestamp(self.end_time)
+        market_feature_df = market_feature_df.loc[mask].copy(deep=True)
 
         # Process market features (Normalization, etc.)
         market_feature_df = self.process(
@@ -1313,6 +1522,7 @@ class MarketAlpha158(Alpha158):
             feature_label_df.shape[0] == market_feature_label_df.shape[0]
         ), "Mismatch in row counts after merging."
 
+        self.feature_names.extend(self.market_feature_names)
         return market_feature_label_df
 
     def load(self, filepath: str):
