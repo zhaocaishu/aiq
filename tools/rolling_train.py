@@ -15,12 +15,9 @@ if not __package__:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from aiq.dataset.loader import DataLoader
-from aiq.utils.config import Config, config as cfg
 from aiq.utils.logging import get_logger
 from aiq.utils.module import init_instance_by_config
-
-from tools.eval import ensemble_predict, prepare_predictions
-from tools.train import parse_args, set_random_seed, train_and_save_model
+from aiq.utils import workflow
 
 
 LABEL_HORIZON = 5
@@ -87,11 +84,6 @@ def build_month_configs(
             prediction_end.strftime("%Y-%m-%d"),
         ],
     }
-    train_config["evaluator"]["kwargs"].update(
-        start_time=prediction_start.strftime("%Y-%m-%d"),
-        end_time=prediction_end.strftime("%Y-%m-%d"),
-    )
-
     predict_config = copy.deepcopy(train_config)
     # Extra quotes are used only for offline labels, never for fitting statistics.
     predict_config["data_handler"]["kwargs"]["end_time"] = calendar[
@@ -134,12 +126,8 @@ def prepare_dataset(
         dataset_kwargs["seq_len"],
     )
     data = handler.process_data(window_data, mode=split)
-    return init_instance_by_config(
-        dataset_config,
-        data=data,
-        data_dir=str(data_dir),
-        feature_names=handler.feature_names,
-        split=split,
+    return workflow.create_dataset(
+        dataset_config, data, data_dir, handler.feature_names, split=split
     )
 
 
@@ -159,8 +147,8 @@ def prepare_raw_data(
     handler_kwargs["end_time"] = max(
         predict["data_handler"]["kwargs"]["end_time"] for _, _, predict in month_configs
     )
-    set_random_seed(data_seed)
-    handler = init_instance_by_config(Config(raw_config), data_dir=str(data_dir))
+    workflow.set_random_seed(data_seed)
+    handler = init_instance_by_config(raw_config, data_dir=str(data_dir))
     logger.info(
         "Extracting raw factors once for %s to %s.",
         handler_kwargs["start_time"],
@@ -180,6 +168,7 @@ def run_month(
     raw_data: dict,
 ) -> pd.DataFrame:
     """Train fresh models, then predict one month with their fitted preprocessors."""
+    workflow.validate_seeds(seeds, data_seed)
     save_dir.mkdir(parents=True, exist_ok=True)
     for name, config in [
         ("train_config.yaml", train_config),
@@ -190,45 +179,35 @@ def run_month(
             encoding="utf-8",
         )
 
-    cfg.from_config(Config(train_config))
-    set_random_seed(data_seed)
-    handler = init_instance_by_config(cfg.data_handler, data_dir=str(data_dir))
-    train_dataset = prepare_dataset(
-        handler, raw_data, cfg.dataset, data_dir, split="train"
+    workflow.set_random_seed(data_seed)
+    handler = init_instance_by_config(
+        train_config["data_handler"], data_dir=str(data_dir)
     )
-    if len(train_dataset) == 0:
-        raise ValueError(f"{save_dir.name}: training dataset is empty.")
+    train_dataset = prepare_dataset(
+        handler, raw_data, train_config["dataset"], data_dir, split="train"
+    )
     logger.info(
         "Training on %d daily cross-sections without validation.", len(train_dataset)
     )
-    handler_path = save_dir / "data_handler.pkl"
-    handler.save(str(handler_path))
-    if not handler_path.is_file():
-        raise OSError(f"Failed to save preprocessing statistics: {handler_path}")
-
-    for index, seed in enumerate(seeds, start=1):
-        logger.info("Training seed %d (%d/%d)", seed, index, len(seeds))
-        set_random_seed(seed)
-        train_and_save_model(train_dataset, None, save_dir, seed, logger)
+    handler_path = workflow.save_handler(handler, save_dir)
+    model_names = workflow.train_models(
+        train_config["model"], train_dataset, None, save_dir, seeds, logger
+    )
     del train_dataset, handler
 
-    cfg.from_config(Config(predict_config))
-    set_random_seed(data_seed)
-    handler = init_instance_by_config(cfg.data_handler, data_dir=str(data_dir))
+    workflow.validate_model_files(save_dir, model_names)
+    workflow.set_random_seed(data_seed)
+    handler = init_instance_by_config(
+        predict_config["data_handler"], data_dir=str(data_dir)
+    )
     handler.load(str(handler_path))
     test_dataset = prepare_dataset(
-        handler, raw_data, cfg.dataset, data_dir, split="test"
+        handler, raw_data, predict_config["dataset"], data_dir, split="test"
     )
-    if len(test_dataset) == 0:
-        raise ValueError(f"{save_dir.name}: prediction dataset is empty.")
-    predictions = ensemble_predict(
-        test_dataset, save_dir, [f"model_seed_{seed}.pth" for seed in seeds], logger
+    predictions = workflow.ensemble_predict(
+        predict_config["model"], test_dataset, save_dir, model_names, logger
     )
-    labels = list(test_dataset.label_names)
-    columns = ["Instrument", "Date"] + labels + [f"PRED_{name}" for name in labels]
-    predictions = predictions[columns].sort_values(["Date", "Instrument"])
-    predictions.to_csv(save_dir / "predictions.csv", index=False)
-    return predictions
+    return workflow.save_predictions(predictions, test_dataset.label_names, save_dir)
 
 
 def run_rolling(
@@ -239,9 +218,8 @@ def run_rolling(
     data_seed: int,
     logger: Logger,
 ) -> pd.DataFrame:
-    """Combine monthly predictions and evaluate one continuous test period."""
-    if not seeds or len(seeds) != len(set(seeds)):
-        raise ValueError("Seeds must be non-empty and unique.")
+    """Train monthly models and save predictions for the complete test period."""
+    workflow.validate_seeds(seeds, data_seed)
     start, end = config["dataset"]["kwargs"]["segments"]["test"]
     calendar_end = max(
         pd.Timestamp(config["data_handler"]["kwargs"]["end_time"]),
@@ -291,35 +269,21 @@ def run_rolling(
     del raw_data
 
     labels = config["dataset"]["kwargs"]["label_names"]
-    predictions = (
-        prepare_predictions(
-            pd.concat(monthly_predictions, ignore_index=True),
-            labels,
-            "rolling predictions",
-        )
-        .reset_index()
-        .sort_values(["Date", "Instrument"])
-        .reset_index(drop=True)
-    )
+    predictions = workflow.prepare_predictions(
+        pd.concat(monthly_predictions, ignore_index=True),
+        labels,
+        "rolling predictions",
+    ).reset_index()
     expected_dates = {date for date in calendar if start <= date <= end}
     if set(predictions["Date"]) != expected_dates:
         raise ValueError("Rolling predictions do not cover every test trading day.")
-    predictions.to_csv(save_dir / "predictions.csv", index=False)
-
-    evaluation_config = copy.deepcopy(config)
-    evaluation_config["evaluator"]["kwargs"].update(start_time=start, end_time=end)
-    cfg.from_config(Config(evaluation_config))
-    evaluator = init_instance_by_config(
-        cfg.evaluator, data_dir=str(data_dir), logger=logger
-    )
-    metrics = evaluator.evaluate(predictions)
-    (save_dir / "metrics.txt").write_text(str(metrics), encoding="utf-8")
-    logger.info("Rolling evaluation metrics:\n%s", metrics)
+    predictions = workflow.save_predictions(predictions, labels, save_dir)
+    logger.info("Rolling predictions saved: %s", save_dir / "predictions.csv")
     return predictions
 
 
 def main() -> None:
-    args = parse_args(description=__doc__)
+    args = workflow.parse_training_args(description=__doc__)
     config: dict[str, Any] = yaml.safe_load(args.cfg_file.read_text(encoding="utf-8"))
     logger = get_logger("ROLLING_TRAINING")
     run_rolling(

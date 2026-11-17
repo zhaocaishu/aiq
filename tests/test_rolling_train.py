@@ -6,7 +6,9 @@ import pandas as pd
 import pytest
 import yaml
 
+from aiq.utils import workflow
 from tools import rolling_train
+from tools import test as evaluation
 
 
 @pytest.fixture
@@ -70,9 +72,13 @@ def test_partial_prediction_month_respects_requested_dates(config, calendar):
     assert february["data_handler"]["kwargs"]["end_time"] == "2023-02-17"
 
 
-def test_run_rolling_combines_year_and_evaluates_once(
+def test_run_rolling_combines_year_for_separate_evaluation(
     config, calendar, tmp_path, monkeypatch
 ):
+    original_config = copy.deepcopy(config)
+    training_config = copy.deepcopy(config)
+    training_config.pop("evaluator")
+    original_training_config = copy.deepcopy(training_config)
     calls = []
     evaluations = []
     extractions = []
@@ -82,9 +88,10 @@ def test_run_rolling_combines_year_and_evaluates_once(
         train, predict, data_dir, save_dir, seeds, data_seed, logger, raw_data
     ):
         assert raw_data is cached_data
+        assert "evaluator" not in train and "evaluator" not in predict
         calls.append((train, predict, list(seeds)))
         start, end = predict["dataset"]["kwargs"]["segments"]["test"]
-        dates = [day for day in calendar if start <= day <= end]
+        dates = [day for day in reversed(calendar) if start <= day <= end]
         return pd.DataFrame(
             {
                 "Instrument": ["stock"] * len(dates),
@@ -104,11 +111,13 @@ def test_run_rolling_combines_year_and_evaluates_once(
             extractions.append(True)
             return cached_data
 
+    def init_handler(handler_config, **kwargs):
+        assert handler_config["class"] == "MarketAlpha158"
+        assert handler_config["kwargs"]["start_time"] == "2016-07-01"
+        assert handler_config["kwargs"]["end_time"] == "2024-01-08"
+        return Handler()
+
     def init_evaluator(evaluator_config, **kwargs):
-        if evaluator_config["class"] == "MarketAlpha158":
-            assert evaluator_config["kwargs"]["start_time"] == "2016-07-01"
-            assert evaluator_config["kwargs"]["end_time"] == "2024-01-08"
-            return Handler()
         assert evaluator_config["class"] == "Evaluator"
         assert evaluator_config["kwargs"]["start_time"] == "2023-01-01"
         assert evaluator_config["kwargs"]["end_time"] == "2023-12-31"
@@ -118,29 +127,54 @@ def test_run_rolling_combines_year_and_evaluates_once(
     monkeypatch.setattr(
         rolling_train.DataLoader, "load_calendar", lambda *args, **kwargs: calendar
     )
-    monkeypatch.setattr(rolling_train, "init_instance_by_config", init_evaluator)
-    predictions = rolling_train.run_rolling(
-        config,
-        tmp_path / "data",
-        tmp_path,
-        [1234, 2024],
-        1234,
-        logging.getLogger("rolling-test"),
-    )
+    monkeypatch.setattr(rolling_train, "init_instance_by_config", init_handler)
+    monkeypatch.setattr(workflow, "init_instance_by_config", init_evaluator)
+
+    def fail_evaluation(*args, **kwargs):
+        pytest.fail("Rolling training must only train and save predictions")
+
+    with monkeypatch.context() as context:
+        context.setattr(workflow, "evaluate_predictions", fail_evaluation)
+        predictions = rolling_train.run_rolling(
+            training_config,
+            tmp_path / "data",
+            tmp_path,
+            [1234, 2024],
+            1234,
+            logging.getLogger("rolling-test"),
+        )
 
     assert len(calls) == 12
     assert len(extractions) == 1
-    assert len(evaluations) == 1
-    assert len(predictions) == len(
-        [day for day in calendar if "2023-01-01" <= day <= "2023-12-31"]
-    )
+    assert evaluations == []
+    expected_dates = [day for day in calendar if "2023-01-01" <= day <= "2023-12-31"]
+    assert predictions["Date"].tolist() == expected_dates
     assert not predictions.duplicated(["Instrument", "Date"]).any()
     assert pd.to_datetime(predictions["Date"]).dt.to_period("M").nunique() == 12
-    pd.testing.assert_frame_equal(predictions, evaluations[0])
-    saved = pd.read_csv(tmp_path / "predictions.csv")
-    pd.testing.assert_frame_equal(saved, predictions, check_dtype=False)
-    assert (tmp_path / "metrics.txt").read_text().strip() == "rolling metrics"
+    saved = workflow.load_predictions(tmp_path / "predictions.csv", ["RET_5D"])
+    pd.testing.assert_frame_equal(saved, predictions, check_exact=True)
+    assert saved["RET_5D"].eq(0.01).all()
+    assert saved["PRED_RET_5D"].eq(0.1).all()
+    assert not (tmp_path / "metrics.txt").exists()
     assert all(seeds == [1234, 2024] for _, _, seeds in calls)
+    assert training_config == original_training_config
+
+    metrics = evaluation.run_evaluation(
+        config,
+        tmp_path / "data",
+        tmp_path / "evaluation",
+        tmp_path / "predictions.csv",
+        "test",
+        logging.getLogger("rolling-test"),
+    )
+
+    assert metrics == "rolling metrics"
+    assert len(evaluations) == 1
+    pd.testing.assert_frame_equal(evaluations[0], predictions, check_exact=True)
+    assert len(calls) == 12 and len(extractions) == 1
+    assert (tmp_path / "evaluation" / "metrics.txt").read_text() == metrics
+    assert not (tmp_path / "metrics.txt").exists()
+    assert config == original_config
 
 
 def test_run_rolling_rejects_duplicate_prediction_keys(
@@ -200,6 +234,7 @@ def test_run_month_trains_without_validation_and_reloads_preprocessor(
         ),
     }
     original = copy.deepcopy(raw_data)
+    seed_events = []
 
     class Handler:
         feature_names = ["TS_TEST"]
@@ -251,20 +286,27 @@ def test_run_month_trains_without_validation_and_reloads_preprocessor(
         def __len__(self):
             return 1
 
+    class Model:
+        def fit(self, train_dataset, val_dataset):
+            assert train_dataset.split == "train"
+            assert val_dataset is None
+            fitted.append(seed_events[-1])
+
+        def save(self, model_name):
+            (tmp_path / "2023-01" / model_name).write_text("model")
+
     def initialize(component, **kwargs):
         if component["class"] == "MarketAlpha158":
             return Handler()
+        if component["class"] == "PPNetModel":
+            assert component == train["model"]
+            return Model()
         assert component["class"] == "TSDataset"
         assert kwargs["split"] in {"train", "test"}
         return Dataset(kwargs["split"], kwargs["feature_names"])
 
-    def train_model(train_dataset, val_dataset, save_dir, seed, logger):
-        assert train_dataset.split == "train"
-        assert val_dataset is None
-        fitted.append(seed)
-        (save_dir / ("model_seed_%s.pth" % seed)).write_text("model")
-
-    def ensemble(dataset, model_dir, model_names, logger):
+    def ensemble(model_config, dataset, model_dir, model_names, logger):
+        assert model_config == predict["model"]
         assert dataset.split == "test"
         assert len(loaded) == 1
         assert list(model_names) == ["model_seed_1234.pth", "model_seed_2024.pth"]
@@ -279,8 +321,9 @@ def test_run_month_trains_without_validation_and_reloads_preprocessor(
         )
 
     monkeypatch.setattr(rolling_train, "init_instance_by_config", initialize)
-    monkeypatch.setattr(rolling_train, "train_and_save_model", train_model)
-    monkeypatch.setattr(rolling_train, "ensemble_predict", ensemble)
+    monkeypatch.setattr(workflow, "init_instance_by_config", initialize)
+    monkeypatch.setattr(workflow, "set_random_seed", seed_events.append)
+    monkeypatch.setattr(workflow, "ensemble_predict", ensemble)
     predictions = rolling_train.run_month(
         train,
         predict,
@@ -294,6 +337,7 @@ def test_run_month_trains_without_validation_and_reloads_preprocessor(
 
     assert setups == ["train", "test"]
     assert fitted == [1234, 2024]
+    assert seed_events == [1234, 1234, 2024, 1234]
     assert len(predictions) == 1
     assert (tmp_path / "2023-01" / "predictions.csv").is_file()
     for name in raw_data:
