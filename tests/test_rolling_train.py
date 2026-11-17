@@ -8,7 +8,7 @@ import yaml
 
 from aiq.utils import workflow
 from tools import rolling_train
-from tools import test as evaluation
+from tools import eval as evaluation
 
 
 @pytest.fixture

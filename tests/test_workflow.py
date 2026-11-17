@@ -10,7 +10,7 @@ import pytest
 import yaml
 
 from aiq.utils import workflow
-from tools import test as evaluation
+from tools import eval as evaluation
 from tools import train
 
 
@@ -433,7 +433,7 @@ def test_testing_cli_predicts_saves_and_evaluates_without_training(
         sys,
         "argv",
         [
-            "test.py",
+            "eval.py",
             "--cfg_file",
             str(config_file),
             "--data_dir",
@@ -492,7 +492,7 @@ def test_existing_csv_cli_does_not_load_or_predict_models(
         sys,
         "argv",
         [
-            "test.py",
+            "eval.py",
             "--cfg_file",
             str(config_file),
             "--data_dir",
@@ -563,7 +563,7 @@ def test_testing_cli_defaults_to_checkpoint_prediction(tmp_path, monkeypatch):
         sys,
         "argv",
         [
-            "test.py",
+            "eval.py",
             "--cfg_file",
             str(tmp_path / "config.yaml"),
             "--data_dir",
@@ -589,7 +589,7 @@ def test_testing_cli_rejects_csv_and_checkpoint_arguments(
         sys,
         "argv",
         [
-            "test.py",
+            "eval.py",
             "--cfg_file",
             str(tmp_path / "config.yaml"),
             "--data_dir",
