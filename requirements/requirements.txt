@@ -9,3 +9,5 @@ transformers
 pytest
 tabulate
 mysql-connector-python
+matplotlib
+seaborn
