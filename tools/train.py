@@ -9,9 +9,6 @@ from typing import Sequence
 
 import yaml
 
-if not __package__:
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
 from aiq.utils import workflow
 from aiq.utils.logging import get_logger
 from aiq.utils.module import init_instance_by_config
