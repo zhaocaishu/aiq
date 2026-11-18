@@ -52,15 +52,27 @@ def test_monthly_windows_use_trading_day_label_gap(config, calendar):
     assert config == original
 
 
-def test_partial_prediction_month_respects_requested_dates(config, calendar):
+def test_partial_prediction_month_respects_requested_dates(config, calendar, monkeypatch):
+    monkeypatch.setattr(rolling_train, "TRAIN_MONTHS", 12)
+    config["data_handler"]["kwargs"]["start_time"] = "2021-12-01"
     config["dataset"]["kwargs"]["segments"]["test"] = ["2023-01-15", "2023-02-10"]
-    _, january = rolling_train.build_month_configs(
+    january_train, january = rolling_train.build_month_configs(
         config, calendar, pd.Period("2023-01", freq="M")
     )
-    _, february = rolling_train.build_month_configs(
+    february_train, february = rolling_train.build_month_configs(
         config, calendar, pd.Period("2023-02", freq="M")
     )
 
+    assert january_train["dataset"]["kwargs"]["segments"]["train"] == [
+        "2022-01-01",
+        "2022-12-23",
+    ]
+    assert february_train["dataset"]["kwargs"]["segments"]["train"] == [
+        "2022-02-01",
+        "2023-01-17",
+    ]
+    assert january_train["data_handler"]["kwargs"]["start_time"] == "2021-12-01"
+    assert february_train["data_handler"]["kwargs"]["start_time"] == "2022-01-01"
     assert tuple(january["dataset"]["kwargs"]["segments"]["test"]) == (
         "2023-01-15",
         "2023-01-31",
@@ -78,6 +90,7 @@ def test_run_rolling_combines_year_for_separate_evaluation(
     original_config = copy.deepcopy(config)
     training_config = copy.deepcopy(config)
     training_config.pop("evaluator")
+    training_config["data_handler"]["kwargs"]["end_time"] = "2024-01-12"
     original_training_config = copy.deepcopy(training_config)
     calls = []
     evaluations = []
@@ -123,10 +136,12 @@ def test_run_rolling_combines_year_for_separate_evaluation(
         assert evaluator_config["kwargs"]["end_time"] == "2023-12-31"
         return Evaluator()
 
+    def load_calendar(data_dir, start_time, end_time):
+        assert (start_time, end_time) == ("2016-07-01", "2024-01-12")
+        return [day for day in calendar if start_time <= day <= end_time]
+
     monkeypatch.setattr(rolling_train, "run_month", run_month)
-    monkeypatch.setattr(
-        rolling_train.DataLoader, "load_calendar", lambda *args, **kwargs: calendar
-    )
+    monkeypatch.setattr(rolling_train.DataLoader, "load_calendar", load_calendar)
     monkeypatch.setattr(rolling_train, "init_instance_by_config", init_handler)
     monkeypatch.setattr(workflow, "init_instance_by_config", init_evaluator)
 

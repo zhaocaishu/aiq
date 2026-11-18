@@ -17,6 +17,7 @@ from aiq.utils.module import init_instance_by_config
 from aiq.utils import workflow
 
 
+TRAIN_MONTHS = 72
 LABEL_HORIZON = 5
 
 
@@ -31,16 +32,14 @@ def build_month_configs(
     )
     month = pd.Period(month, freq="M")
     segments = config["dataset"]["kwargs"]["segments"]
-    base_train_start, base_train_end = map(pd.Timestamp, segments["train"])
     test_start, test_end = map(pd.Timestamp, segments["test"])
-    if base_train_start > base_train_end or test_start > test_end:
-        raise ValueError("Training and test date ranges must be increasing.")
+    if test_start > test_end:
+        raise ValueError("Test date range must be increasing.")
     if config["dataset"]["kwargs"]["label_names"] != ["RET_5D"]:
         raise ValueError("Monthly rolling training requires the RET_5D label.")
 
-    train_months = (base_train_end.year - base_train_start.year) * 12
-    train_months += base_train_end.month - base_train_start.month + 1
-    warmup_history = base_train_start - pd.Timestamp(
+    first_train_start = (test_start.to_period("M") - TRAIN_MONTHS).start_time
+    warmup_history = first_train_start - pd.Timestamp(
         config["data_handler"]["kwargs"]["start_time"]
     )
     if warmup_history < pd.Timedelta(0):
@@ -63,7 +62,7 @@ def build_month_configs(
         )
 
     # A signal at t uses prices at t+1 and t+5; both must be known at cutoff.
-    train_start = month.start_time.normalize() - pd.DateOffset(months=train_months)
+    train_start = (month - TRAIN_MONTHS).start_time
     train_end = calendar[cutoff_index - LABEL_HORIZON]
     if train_start > train_end or train_start < calendar[0]:
         raise ValueError(f"{month}: calendar does not cover the training window.")
@@ -218,16 +217,13 @@ def run_rolling(
     """Train monthly models and save predictions for the complete test period."""
     workflow.validate_seeds(seeds, data_seed)
     start, end = config["dataset"]["kwargs"]["segments"]["test"]
-    calendar_end = max(
-        pd.Timestamp(config["data_handler"]["kwargs"]["end_time"]),
-        pd.Timestamp(end) + pd.DateOffset(months=1),
-    ).strftime("%Y-%m-%d")
+    handler_kwargs = config["data_handler"]["kwargs"]
     calendar = sorted(
         set(
             DataLoader.load_calendar(
                 str(data_dir),
-                start_time=config["data_handler"]["kwargs"]["start_time"],
-                end_time=calendar_end,
+                start_time=handler_kwargs["start_time"],
+                end_time=handler_kwargs["end_time"],
             )
         )
     )

@@ -96,7 +96,9 @@ python3 tools/rolling_train.py \
     --save_dir ./output/rolling_2023
 ```
 
-当前滚动配置预测 2023 年，训练窗口约 6 年，逐月平移；不设置验证集，使用固定训练轮数，并保留 5 个交易日的标签隔离。该配置由 `rolling_train.py` 运行。
+训练窗口由 `tools/rolling_train.py` 中的 `TRAIN_MONTHS` 指定，当前为 72 个月。`dataset.kwargs.segments.test` 指定滚动预测区间（示例为 2023 年）。每月训练和预处理拟合区间按交易日历推算，保留 5 个交易日的标签隔离，使用固定训练轮数，无需配置验证集。
+
+`data_handler.kwargs.start_time` 和 `end_time` 是可用数据的边界。起点需要给首月训练留出特征预热历史；终点需覆盖最后一个预测交易日之后的 5 个交易日，以便计算离线标签。
 
 每次运行只提取一次共享原始因子并在内存中复用，各月独立拟合预处理参数、训练模型并预测。输出结构如下：
 
