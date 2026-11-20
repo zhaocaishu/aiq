@@ -89,8 +89,7 @@ class MarginRankingLoss(nn.Module):
         pair_j = pair_j[pair_mask]
         y = diff_r[pair_mask].sign()
 
-        # Average ranks are unnecessary for the sign, and exact ties are
-        # excluded above. Rank distance avoids domination by extreme returns.
+        # Rank distance avoids domination by extreme returns.
         weights = (target_ranks[pair_i] - target_ranks[pair_j]).abs()
         diff_s = preds[pair_i] - preds[pair_j]
         loss = F.softplus((self.margin - y * diff_s) / self.tau)
@@ -131,13 +130,13 @@ class MarginRankingLoss(nn.Module):
 
         global_i, global_j, head_i, head_j = self._sample_pairs(preds)
 
-        # Cross-sectional ranks in [0, 1]. Exact target ties receive different
-        # ordinal ranks but their pairs are excluded by diff_r == 0.
-        order = torch.argsort(targets, stable=True)
-        target_ranks = torch.empty_like(targets)
-        target_ranks[order] = torch.arange(
-            n, device=targets.device, dtype=targets.dtype
-        ) / float(n - 1)
+        # Equal returns share the midpoint of their cross-sectional ranks.
+        _, groups, counts = torch.unique(
+            targets, sorted=True, return_inverse=True, return_counts=True
+        )
+        first_ranks = counts.cumsum(dim=0) - counts
+        midranks = first_ranks + (counts - 1).to(dtype) / 2
+        target_ranks = midranks[groups] / (n - 1)
 
         centered_preds = preds - preds.mean()
         if n > 2:

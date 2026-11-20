@@ -29,7 +29,7 @@ class ICLoss(nn.Module):
 
         Returns:
             torch.Tensor: Scalar one-minus-IC loss. Non-finite pairs are ignored;
-            fewer than two valid stocks or constant targets produce zero loss.
+            fewer than two valid stocks produce zero loss.
         """
         preds = preds.reshape(-1)
         targets = targets.reshape(-1)
@@ -53,6 +53,8 @@ class ICLoss(nn.Module):
         if N <= 1:
             return preds.sum() * 0.0
 
+        limits = torch.quantile(targets, targets.new_tensor([0.01, 0.99]))
+        targets = targets.clamp(min=limits[0], max=limits[1])
         centered_preds = preds - preds.mean()
         centered_targets = targets - targets.mean()
         pred_var = centered_preds.square().mean()
