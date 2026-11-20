@@ -108,9 +108,7 @@ class RegimeEncoder(nn.Module):
             nn.Linear(d_hidden, d_regime),
         )
 
-        self.skip_proj = nn.Linear(
-            d_mkt, d_regime, bias=False
-        )
+        self.skip_proj = nn.Linear(d_mkt, d_regime, bias=False)
 
         self.output_norm = nn.LayerNorm(d_regime)
         self.regime_scale = nn.Parameter(torch.tensor(0.01))
@@ -337,12 +335,6 @@ class PPNet(nn.Module):
         )
 
         # Regime-Conditioned Feature Modulation
-        self.ts_film = MarketFiLM(
-            d_regime=d_regime,
-            d_feat=self.d_temporal_hidden,
-            d_hidden=64,
-        )
-
         self.cs_film = MarketFiLM(
             d_regime=d_regime,
             d_feat=d_cs_feat,
@@ -408,7 +400,6 @@ class PPNet(nn.Module):
 
         # Intra-Stock Temporal Modeling (Daily)
         stock_temporal_embeds = self.data_embedding(stock_ts_features)
-        stock_temporal_embeds = self.ts_film(stock_temporal_embeds, regime_embedding)
         stock_temporal_states = self.temporal_layers(stock_temporal_embeds)
         stock_temporal_features = self.temporal_attn(
             stock_temporal_states, regime_current
@@ -421,10 +412,10 @@ class PPNet(nn.Module):
         )
 
         # Inter-Stock Attention
-        # spatial_states = self.spatial_encoder(fused_states)
+        spatial_states = self.spatial_encoder(fused_states)
 
         # Final Prediction on Spatial Representations
         predictions = torch.cat(
-            [head(fused_states) for head in self.prediction_heads], dim=-1
+            [head(spatial_states) for head in self.prediction_heads], dim=-1
         )
         return predictions
