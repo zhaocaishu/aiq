@@ -10,9 +10,9 @@ class MarginRankingLoss(nn.Module):
     """Rank-distance-weighted pairwise loss for one daily cross-section.
 
     Global pairs and predicted-TopK-to-rest pairs are averaged separately and
-    then combined with a fixed head_weight. Both use target-rank distances.
-    Head pairs also weight the unselected stock by (top_k / predicted_rank)^2,
-    emphasizing stocks just outside the cutoff.
+    then combined with a fixed head_weight. Pair weights use cross-sectional
+    target-rank distances rather than raw return magnitudes, limiting the
+    influence of extreme returns.
     """
 
     def __init__(
@@ -52,7 +52,7 @@ class MarginRankingLoss(nn.Module):
     @torch.no_grad()
     def _sample_pairs(
         self, preds: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         n = preds.numel()
         if self.num_pairs is None or n * (n - 1) // 2 <= self.num_pairs:
             global_i, global_j = torch.triu_indices(n, n, offset=1, device=preds.device)
@@ -63,16 +63,11 @@ class MarginRankingLoss(nn.Module):
 
         empty = torch.empty(0, dtype=torch.long, device=preds.device)
         head_i, head_j = empty, empty
-        head_weights = preds.new_empty(0)
         if 0 < self.top_k < n:
             order = torch.argsort(preds, descending=True, stable=True)
             head_i = order[: self.top_k].repeat_interleave(n - self.top_k)
             head_j = order[self.top_k :].repeat(self.top_k)
-            tail_ranks = torch.arange(
-                self.top_k + 1, n + 1, dtype=preds.dtype, device=preds.device
-            )
-            head_weights = (self.top_k / tail_ranks).square().repeat(self.top_k)
-        return global_i, global_j, head_i, head_j, head_weights
+        return global_i, global_j, head_i, head_j
 
     def _pair_loss(
         self,
@@ -81,7 +76,6 @@ class MarginRankingLoss(nn.Module):
         preds: torch.Tensor,
         targets: torch.Tensor,
         target_ranks: torch.Tensor,
-        pair_weights: Optional[torch.Tensor] = None,
     ) -> Optional[torch.Tensor]:
         if pair_i.numel() == 0:
             return None
@@ -97,8 +91,6 @@ class MarginRankingLoss(nn.Module):
 
         # Rank distance avoids domination by extreme returns.
         weights = (target_ranks[pair_i] - target_ranks[pair_j]).abs()
-        if pair_weights is not None:
-            weights = weights * pair_weights[pair_mask]
         diff_s = preds[pair_i] - preds[pair_j]
         loss = F.softplus((self.margin - y * diff_s) / self.tau)
         weight_sum = weights.sum()
@@ -136,7 +128,7 @@ class MarginRankingLoss(nn.Module):
         if torch.all(targets == targets[0]):
             return preds.sum() * 0.0
 
-        global_i, global_j, head_i, head_j, head_weights = self._sample_pairs(preds)
+        global_i, global_j, head_i, head_j = self._sample_pairs(preds)
 
         # Equal returns share the midpoint of their cross-sectional ranks.
         _, groups, counts = torch.unique(
@@ -156,9 +148,7 @@ class MarginRankingLoss(nn.Module):
             preds = centered_preds
 
         global_loss = self._pair_loss(global_i, global_j, preds, targets, target_ranks)
-        head_loss = self._pair_loss(
-            head_i, head_j, preds, targets, target_ranks, head_weights
-        )
+        head_loss = self._pair_loss(head_i, head_j, preds, targets, target_ranks)
 
         if global_loss is None and head_loss is None:
             return preds.sum() * 0.0
