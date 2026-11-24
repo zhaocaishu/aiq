@@ -297,7 +297,12 @@ def test_csv_evaluation_rejects_invalid_predictions(
         )
 
 
-def test_training_prepares_once_and_seeds_each_model(config, tmp_path, monkeypatch):
+@pytest.mark.parametrize("native_seed", [False, True])
+def test_training_prepares_once_and_seeds_each_model(
+    config, tmp_path, monkeypatch, native_seed
+):
+    if native_seed:
+        config["model"]["kwargs"]["seed"] = 0
     original = copy.deepcopy(config)
     events = []
     seeds = []
@@ -342,7 +347,10 @@ def test_training_prepares_once_and_seeds_each_model(config, tmp_path, monkeypat
             assert kwargs["data"] is prepared
             events.append(kwargs["split"])
             return Dataset(kwargs["split"])
-        assert component == config["model"]
+        expected = copy.deepcopy(config["model"])
+        if native_seed:
+            expected["kwargs"]["seed"] = seeds[-1]
+        assert component == expected
         assert kwargs["feature_names"] == ["CS_TEST"]
         return Model()
 

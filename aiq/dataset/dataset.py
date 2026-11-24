@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import List, Dict, Tuple
+from typing import List, Dict, Sequence, Tuple
 
 import torch
 import numpy as np
@@ -41,6 +41,63 @@ class Dataset(torch.utils.data.Dataset):
 
     def __len__(self):
         return self.data.shape[0]
+
+    def get_training_data(self, feature_names=None, label_names=None):
+        feature_names = self.feature_names if feature_names is None else feature_names
+        label_names = self.label_names if label_names is None else label_names
+        return self.data[feature_names].to_numpy(), self.data[label_names].to_numpy()
+
+
+class CSDataset(Dataset):
+    """Tabular inputs matching PPNet's daily CS features and eligible stocks."""
+
+    def __init__(
+        self,
+        data: pd.DataFrame,
+        segments: Dict[str, Tuple[str, str]],
+        universe: str,
+        seq_len: int,
+        data_dir: str = "",
+        feature_names: Sequence[str] = (),
+        label_names: Sequence[str] = (),
+        split: str = "train",
+    ):
+        self.feature_names = [name for name in feature_names if name.startswith("CS_")]
+        self.label_names = list(label_names)
+        self.data_dir = data_dir
+        if not self.feature_names or seq_len < 1:
+            raise ValueError("CSDataset requires CS_ features and a positive seq_len.")
+
+        start, end = segments[split]
+        if not data.index.is_monotonic_increasing:
+            data = data.sort_index()
+        # Count history before slicing the split or filtering daily membership.
+        history = data.groupby(level="Instrument", sort=False).cumcount().loc[start:end]
+        window = data.loc[start:end]
+        members = DataLoader.load_instruments(data_dir, universe, start, end)
+        member_index = pd.MultiIndex.from_frame(members[["Date", "Instrument"]])
+        eligible = (history >= seq_len - 1) & window.index.isin(member_index)
+        self.data = window.loc[eligible, self.feature_names + self.label_names].copy()
+
+        cs = slice(0, len(self.feature_names))
+        for rows in self.data.groupby(level="Date", sort=False).indices.values():
+            features = self.data.iloc[rows, cs].to_numpy()
+            self.data.iloc[rows, cs] = fillna(zscore(features, clip_outlier=True))
+
+    def get_training_data(self, feature_names=None, label_names=None):
+        """Standardize targets for fitting while keeping raw returns for evaluation."""
+        feature_names = self.feature_names if feature_names is None else feature_names
+        label_names = self.label_names if label_names is None else label_names
+        if not set(feature_names).issubset(self.feature_names):
+            raise ValueError("CSDataset only supports its configured CS features.")
+        raw = self.data[label_names].to_numpy()
+        labels = np.empty_like(raw, dtype=np.result_type(raw.dtype, np.float32))
+        for rows in self.data.groupby(level="Date", sort=False).indices.values():
+            labels[rows] = zscore(raw[rows])
+        valid = np.isfinite(labels).all(axis=1)
+        if not valid.any():
+            raise ValueError("No finite training labels in this split.")
+        return self.data.loc[valid, feature_names].to_numpy(), labels[valid]
 
 
 class TSDataset(Dataset):

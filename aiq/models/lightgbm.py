@@ -18,47 +18,38 @@ class LGBModel(BaseModel):
         num_boost_round=1000,
         early_stopping_rounds=50,
         verbose_eval=20,
-        eval_results=dict(),
+        eval_results=None,
     ):
-        train_df = train_dataset.data
-        x_train, y_train = (
-            train_df[self.feature_names].values,
-            train_df[self.label_names].values,
+        if eval_results is None:
+            eval_results = {}
+        x_train, y_train = train_dataset.get_training_data(
+            self.feature_names, self.label_names
         )
-        dtrain = lgb.Dataset(x_train, label=y_train)
+        dtrain = lgb.Dataset(x_train, label=y_train.ravel())
         evals = [dtrain]
+        valid_names = ["train"]
+        callbacks = [
+            lgb.log_evaluation(period=verbose_eval),
+            lgb.record_evaluation(eval_results),
+        ]
 
         if val_dataset is not None:
-            valid_df = val_dataset.data
-            x_valid, y_valid = (
-                valid_df[self.feature_names].values,
-                valid_df[self.label_names].values,
+            x_valid, y_valid = val_dataset.get_training_data(
+                self.feature_names, self.label_names
             )
-            dvalid = lgb.Dataset(x_valid, label=y_valid)
+            dvalid = lgb.Dataset(x_valid, label=y_valid.ravel())
             evals.append(dvalid)
-
-        early_stopping_callback = lgb.early_stopping(
-            self.early_stopping_rounds
-            if early_stopping_rounds is None
-            else early_stopping_rounds
-        )
-        # NOTE: if you encounter error here. Please upgrade your lightgbm
-        verbose_eval_callback = lgb.log_evaluation(period=verbose_eval)
-        evals_result_callback = lgb.record_evaluation(eval_results)
+            valid_names.append("valid")
+            if early_stopping_rounds:
+                callbacks.append(lgb.early_stopping(early_stopping_rounds))
 
         self.model = lgb.train(
             self.model_params,
             train_set=dtrain,
-            num_boost_round=(
-                self.num_boost_round if num_boost_round is None else num_boost_round
-            ),
+            num_boost_round=num_boost_round,
             valid_sets=evals,
-            valid_names=["train", "valid"],
-            callbacks=[
-                early_stopping_callback,
-                verbose_eval_callback,
-                evals_result_callback,
-            ],
+            valid_names=valid_names,
+            callbacks=callbacks,
         )
 
     def predict(self, test_dataset: Dataset):
@@ -66,7 +57,7 @@ class LGBModel(BaseModel):
             raise ValueError("model is not fitted yet!")
         x_test = test_dataset.data[self.feature_names].values
         preds = self.model.predict(x_test)
-        pred_df = test_dataset.data
+        pred_df = test_dataset.data.copy(deep=False)
         pred_df[f"PRED_{self.label_names[0]}"] = preds
         return pred_df
 

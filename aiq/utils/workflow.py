@@ -120,8 +120,11 @@ def train_models(
     for index, seed in enumerate(seeds, start=1):
         logger.info("Training model %d/%d with seed %d", index, len(seeds), seed)
         set_random_seed(seed)
+        run_config = copy.deepcopy(model_config)
+        if "seed" in run_config["kwargs"]:
+            run_config["kwargs"]["seed"] = seed
         model = init_instance_by_config(
-            model_config,
+            run_config,
             feature_names=train_dataset.feature_names,
             label_names=train_dataset.label_names,
             save_dir=str(save_dir),

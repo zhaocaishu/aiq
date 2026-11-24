@@ -15,8 +15,9 @@ if __name__ == "__main__":
     train_dataset = init_instance_by_config(
         cfg.dataset,
         data=data,
+        data_dir="./data",
         feature_names=data_handler.feature_names,
-        mode="train",
+        split="train",
     )
 
     data_dict = train_dataset[0]

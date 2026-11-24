@@ -18,21 +18,19 @@ class XGBModel(BaseModel):
         num_boost_round=1000,
         early_stopping_rounds=50,
         verbose_eval=20,
-        eval_results=dict(),
+        eval_results=None,
     ):
-        train_df = train_dataset.data
-        x_train, y_train = (
-            train_df[self.feature_names].values,
-            train_df[self.label_names].values,
+        if eval_results is None:
+            eval_results = {}
+        x_train, y_train = train_dataset.get_training_data(
+            self.feature_names, self.label_names
         )
         dtrain = xgb.DMatrix(x_train, label=y_train)
         evals = [(dtrain, "train")]
 
         if val_dataset is not None:
-            valid_df = val_dataset.data
-            x_valid, y_valid = (
-                valid_df[self.feature_names].values,
-                valid_df[self.label_names].values,
+            x_valid, y_valid = val_dataset.get_training_data(
+                self.feature_names, self.label_names
             )
             dvalid = xgb.DMatrix(x_valid, label=y_valid)
             evals.append((dvalid, "valid"))
@@ -42,7 +40,9 @@ class XGBModel(BaseModel):
             dtrain=dtrain,
             num_boost_round=num_boost_round,
             evals=evals,
-            early_stopping_rounds=early_stopping_rounds,
+            early_stopping_rounds=(
+                early_stopping_rounds if val_dataset is not None else None
+            ),
             verbose_eval=verbose_eval,
             evals_result=eval_results,
         )
@@ -55,8 +55,11 @@ class XGBModel(BaseModel):
             raise ValueError("model is not fitted yet!")
         test_df = test_dataset.data[self.feature_names]
         dtest = xgb.DMatrix(test_df.values)
-        preds = self.model.predict(dtest)
-        pred_df = test_dataset.data
+        # The native booster retains trees grown after the best validation round.
+        best_iteration = self.model.attr("best_iteration")
+        end = int(best_iteration) + 1 if best_iteration is not None else 0
+        preds = self.model.predict(dtest, iteration_range=(0, end))
+        pred_df = test_dataset.data.copy(deep=False)
         pred_df[f"PRED_{self.label_names[0]}"] = preds
         return pred_df
 
