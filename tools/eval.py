@@ -77,6 +77,14 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
+def _prediction_dataset(config: dict) -> dict:
+    dataset = config["dataset"]
+    if dataset["class"] != "TSDataset":
+        return dataset
+    kwargs = dataset["kwargs"]
+    return {**dataset, "kwargs": {**kwargs, "label_names": kwargs["label_names"][:1]}}
+
+
 def run_prediction(
     config: dict,
     data_dir: Path,
@@ -98,7 +106,7 @@ def run_prediction(
     # Evaluation of train/valid also uses inference preprocessing and raw labels.
     data = handler.setup_data(mode="test")
     dataset = workflow.create_dataset(
-        config["dataset"], data, data_dir, handler.feature_names, split=split
+        _prediction_dataset(config), data, data_dir, handler.feature_names, split=split
     )
     logger.info("Loaded %d %s samples.", len(dataset), split)
     return workflow.ensemble_predict(
@@ -115,7 +123,7 @@ def run_evaluation(
     logger: Logger,
 ) -> Any:
     """Read saved raw-label predictions and evaluate the requested interval."""
-    dataset_kwargs = config["dataset"]["kwargs"]
+    dataset_kwargs = _prediction_dataset(config)["kwargs"]
     if split not in dataset_kwargs["segments"]:
         raise ValueError(f"Dataset configuration has no {split!r} segment.")
     predictions = workflow.load_predictions(pred_file, dataset_kwargs["label_names"])
@@ -144,7 +152,7 @@ def run_test(
         config, data_dir, model_dir, model_names, split, data_seed, logger
     )
     workflow.save_predictions(
-        predictions, config["dataset"]["kwargs"]["label_names"], save_dir
+        predictions, _prediction_dataset(config)["kwargs"]["label_names"], save_dir
     )
     return run_evaluation(
         config, data_dir, save_dir, save_dir / "predictions.csv", split, logger

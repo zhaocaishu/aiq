@@ -64,7 +64,7 @@ class DataHandler:
         self.fit_end_time = fit_end_time
         self.label_price = label_price
         self.feature_names = []
-        self.label_names = ["RET_5D"]
+        self.label_names = ["RET_5D", "RET_1D"]
         self.processors = [init_instance_by_config(proc) for proc in processors]
 
     def setup_data(self, mode: str = "train") -> pd.DataFrame:
@@ -83,6 +83,8 @@ class DataHandler:
 
 
 class Alpha158(DataHandler):
+    LABEL_EXIT_OFFSETS = {"RET_5D": 5, "RET_1D": 2}
+
     def __init__(
         self,
         data_dir: str,
@@ -971,16 +973,15 @@ class Alpha158(DataHandler):
         else:
             raise ValueError("label_price must be one of {'close', 'vwap'}")
 
-        signal_valid = tradable
-        entry_valid = tradable.shift(-1, fill_value=False)
-        exit_valid = tradable.shift(-5, fill_value=False)
-
-        label_valid = signal_valid & entry_valid & exit_valid
-
-        ret_5d = price.shift(-5) / price.shift(-1) - 1
-        ret_5d = ret_5d.where(label_valid, np.nan)
-
-        return df[["Instrument", "Date"]].assign(RET_5D=ret_5d.astype("float32"))
+        entry = price.shift(-1)
+        entry_valid = tradable & tradable.shift(-1, fill_value=False)
+        labels = df[["Instrument", "Date"]].copy()
+        for name in self.label_names:
+            offset = self.LABEL_EXIT_OFFSETS[name]
+            valid = entry_valid & tradable.shift(-offset, fill_value=False)
+            ret = price.shift(-offset) / entry - 1
+            labels[name] = ret.where(valid).astype("float32")
+        return labels
 
     def process(
         self,
@@ -1241,10 +1242,9 @@ class Alpha158(DataHandler):
         # handler's end date, even when those quotations exist in the cache.
         calendar = self._get_calendar_index()
         dates = pd.to_datetime(feature_label_df.index.get_level_values("Date"))
-        unavailable = np.ones(len(dates), dtype=bool)
-        if len(calendar) >= 6:
-            unavailable = dates > calendar[-6]
-        feature_label_df.loc[unavailable, self.label_names] = np.nan
+        for name in self.label_names:
+            offset = self.LABEL_EXIT_OFFSETS[name]
+            feature_label_df.loc[dates.isin(calendar[-offset:]), name] = np.nan
 
         return self.process(
             df=feature_label_df,

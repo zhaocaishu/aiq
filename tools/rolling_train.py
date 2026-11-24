@@ -35,8 +35,9 @@ def build_month_configs(
     test_start, test_end = map(pd.Timestamp, segments["test"])
     if test_start > test_end:
         raise ValueError("Test date range must be increasing.")
-    if config["dataset"]["kwargs"]["label_names"] != ["RET_5D"]:
-        raise ValueError("Monthly rolling training requires the RET_5D label.")
+    labels = config["dataset"]["kwargs"]["label_names"]
+    if labels not in (["RET_5D"], ["RET_5D", "RET_1D"]):
+        raise ValueError("Monthly rolling training supports RET_5D with optional RET_1D.")
 
     first_train_start = (test_start.to_period("M") - TRAIN_MONTHS).start_time
     warmup_history = first_train_start - pd.Timestamp(
@@ -81,6 +82,7 @@ def build_month_configs(
         ],
     }
     predict_config = copy.deepcopy(train_config)
+    predict_config["dataset"]["kwargs"]["label_names"] = labels[:1]
     # Extra quotes are used only for offline labels, never for fitting statistics.
     predict_config["data_handler"]["kwargs"]["end_time"] = calendar[
         label_end_index
@@ -261,7 +263,7 @@ def run_rolling(
 
     del raw_data
 
-    labels = config["dataset"]["kwargs"]["label_names"]
+    labels = config["dataset"]["kwargs"]["label_names"][:1]
     predictions = workflow.prepare_predictions(
         pd.concat(monthly_predictions, ignore_index=True),
         labels,

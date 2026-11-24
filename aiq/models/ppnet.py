@@ -207,7 +207,7 @@ class PPNetModel(BaseModel):
         total_loss = None
         total_weight = 0.0
 
-        for label_idx in range(self.num_labels):
+        for label_idx in range(labels.size(1)):
             preds_i = outputs[:, label_idx : label_idx + 1]
             labels_i = labels[:, label_idx : label_idx + 1]
             valid_mask = torch.isfinite(labels_i).squeeze(-1)
@@ -459,7 +459,7 @@ class PPNetModel(BaseModel):
                         batch_fund_features,
                     )
 
-                    loss = self.compute_loss(outputs, batch_labels)
+                    loss = self.compute_loss(outputs, batch_labels[:, :1])
 
                 if loss is not None:
                     total_losses.append(loss.item())
@@ -504,7 +504,8 @@ class PPNetModel(BaseModel):
         preds = np.concatenate(preds, axis=0)
 
         pred_df = test_dataset.data.iloc[indices].copy()
-        pred_df[[f"PRED_{name}" for name in self.label_names]] = preds
+        for name in test_dataset.label_names:
+            pred_df[f"PRED_{name}"] = preds[:, self.label_names.index(name)]
 
         return pred_df
 
