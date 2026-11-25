@@ -64,7 +64,7 @@ class DataHandler:
         self.fit_end_time = fit_end_time
         self.label_price = label_price
         self.feature_names = []
-        self.label_names = ["RET_5D", "RET_1D"]
+        self.label_names = []
         self.processors = [init_instance_by_config(proc) for proc in processors]
 
     def setup_data(self, mode: str = "train") -> pd.DataFrame:
@@ -108,6 +108,7 @@ class Alpha158(DataHandler):
             processors,
         )
 
+        self.label_names = list(self.LABEL_EXIT_OFFSETS)
         self.use_hf_features = use_hf_features
         self.hf_feature_names = []
 
