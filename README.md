@@ -24,10 +24,10 @@ pip3 install .
 
 | 配置文件 | 适用流程 |
 |:---------|:---------|
-| `configs/ppnet_model_reg.yaml` | PPNet 普通训练、预测与评测 |
-| `configs/ppnet_model_rolling.yaml` | PPNet 滚动训练、预测及合并结果评测 |
-| `configs/lightgbm_model_reg.yaml` | LightGBM 普通训练、预测与评测 |
-| `configs/xgboost_model_reg.yaml` | XGBoost 普通训练、预测与评测 |
+| `configs/ppnet.yaml` | PPNet 普通训练、预测与评测 |
+| `configs/ppnet_rolling.yaml` | PPNet 滚动训练、预测及合并结果评测 |
+| `configs/lightgbm.yaml` | LightGBM 普通训练、预测与评测 |
+| `configs/xgboost.yaml` | XGBoost 普通训练、预测与评测 |
 
 ## 普通训练与评测
 
@@ -35,7 +35,7 @@ pip3 install .
 
 ```bash
 python3 tools/train.py \
-    --cfg_file ./configs/ppnet_model_reg.yaml \
+    --cfg_file ./configs/ppnet.yaml \
     --data_dir ./data \
     --seeds 1234 2024 3407 \
     --data_seed 1234 \
@@ -53,7 +53,7 @@ python3 tools/train.py \
 
 ```bash
 python3 tools/eval.py \
-    --cfg_file ./configs/ppnet_model_reg.yaml \
+    --cfg_file ./configs/ppnet.yaml \
     --data_dir ./data \
     --model_dir ./output/ppnet \
     --model_names model_seed_1234.pth model_seed_2024.pth model_seed_3407.pth \
@@ -74,7 +74,7 @@ python3 tools/eval.py \
 
 ```bash
 python3 tools/eval.py \
-    --cfg_file ./configs/ppnet_model_reg.yaml \
+    --cfg_file ./configs/ppnet.yaml \
     --data_dir ./data \
     --pred_file ./output/ppnet/test/predictions.csv \
     --split test \
@@ -89,7 +89,7 @@ python3 tools/eval.py \
 
 ```bash
 python3 tools/rolling_train.py \
-    --cfg_file ./configs/ppnet_model_rolling.yaml \
+    --cfg_file ./configs/ppnet_rolling.yaml \
     --data_dir ./data \
     --seeds 1234 2024 3407 \
     --data_seed 1234 \
@@ -122,7 +122,7 @@ output/rolling_2023/
 
 ```bash
 python3 tools/eval.py \
-    --cfg_file ./configs/ppnet_model_rolling.yaml \
+    --cfg_file ./configs/ppnet_rolling.yaml \
     --data_dir ./data \
     --pred_file ./output/rolling_2023/predictions.csv \
     --split test \

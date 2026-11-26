@@ -7,7 +7,7 @@ from aiq.utils.logging import get_logger
 
 if __name__ == "__main__":
     # config
-    cfg.from_file("./configs/ppnet_model_reg.yaml")
+    cfg.from_file("./configs/ppnet.yaml")
 
     # logger
     logger = get_logger("MODEL")

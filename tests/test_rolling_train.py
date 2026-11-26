@@ -13,7 +13,7 @@ from tools import eval as evaluation
 
 @pytest.fixture
 def config():
-    path = Path(__file__).resolve().parents[1] / "configs" / "ppnet_model_rolling.yaml"
+    path = Path(__file__).resolve().parents[1] / "configs" / "ppnet_rolling.yaml"
     with path.open() as stream:
         return yaml.safe_load(stream)
 

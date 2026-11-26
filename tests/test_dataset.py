@@ -4,7 +4,7 @@ from aiq.utils.module import init_instance_by_config
 
 if __name__ == "__main__":
     # config
-    cfg.from_file("./configs/xgboost_model_reg.yaml")
+    cfg.from_file("./configs/xgboost.yaml")
 
     # data handler
     data_handler = init_instance_by_config(cfg.data_handler, data_dir="./data")

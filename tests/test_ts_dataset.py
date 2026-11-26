@@ -5,7 +5,7 @@ from aiq.dataset.dataset import TSDataset
 
 if __name__ == "__main__":
     # config
-    cfg.from_file("./configs/ppnet_model_reg.yaml")
+    cfg.from_file("./configs/ppnet.yaml")
 
     # data handler
     data_handler = init_instance_by_config(cfg.data_handler, data_dir="./data")
