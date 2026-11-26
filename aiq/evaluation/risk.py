@@ -199,7 +199,7 @@ class RiskEvaluator:
             TopStocks=int(top.sum()),
             PoolCoverage=valid.mean(),
             TopCoverage=valid.loc[selected].mean(),
-            PoolExcess=np.nan,
+            PoolExcessReturn=np.nan,
             RawRankIC=np.nan,
             ResidualRankIC=np.nan,
             ReconstructionError=np.nan,
@@ -226,7 +226,7 @@ class RiskEvaluator:
         offset = 1 + industry.shape[1]
         result.update(
             Status="ok",
-            PoolExcess=y[top].mean() - y.mean(),
+            PoolExcessReturn=y[top].mean() - y.mean(),
             Industry=contributions[1:offset].sum(),
             Residual=residual[top].mean() - residual.mean(),
             RawRankIC=self._corr(pool[self.pred_col], pool[self.label_col]),
@@ -238,7 +238,7 @@ class RiskEvaluator:
         )
         result.update({name: 0.0 for name in self.FACTORS})
         result.update(dict(zip(active, contributions[offset:])))
-        result["ReconstructionError"] = result["PoolExcess"] - sum(
+        result["ReconstructionError"] = result["PoolExcessReturn"] - sum(
             result[name] for name in self.CONTRIBUTIONS
         )
         return result
@@ -309,7 +309,7 @@ class RiskEvaluator:
             count_cols = {
                 "exposures": ["Exposure", "ScoreCorr"],
                 "groups": ["RankIC", "HighExcess", "HighLow"],
-                "attribution": ["PoolExcess", "RawRankIC", "ResidualRankIC"],
+                "attribution": ["PoolExcessReturn", "RawRankIC", "ResidualRankIC"],
             }[name]
             for column in count_cols:
                 summary[column + "Days"] = grouped[column].count()
@@ -379,19 +379,19 @@ class RiskEvaluator:
         )
         attribution_columns = [
             "Period",
-            "PoolExcess",
+            "PoolExcessReturn",
             *self.CONTRIBUTIONS,
             "RawRankIC",
             "ResidualRankIC",
             "PoolCoverage",
             "TopCoverage",
             "Days",
-            "PoolExcessDays",
+            "PoolExcessReturnDays",
         ]
         attribution = render(
             yearly["attribution"],
             attribution_columns,
-            ("PoolExcess", *self.CONTRIBUTIONS, "PoolCoverage", "TopCoverage"),
+            ("PoolExcessReturn", *self.CONTRIBUTIONS, "PoolCoverage", "TopCoverage"),
         )
         status = tables["attribution"]
         status_text = (
@@ -407,7 +407,7 @@ class RiskEvaluator:
             f"同风险组内评估（分位组1最低；组内高/低分各20%，同分并列）\n{groups}\n\n"
             f"Top{self.top_k} 收益归因（按年汇总每日均值，未扣费、未年化）\n{attribution}\n\n"
             f"归因日期状态：{status_text}\n"
-            "归因在风险和标签完整的共同样本上计算，可能与全池 PoolExcess 不同；"
+            "归因在风险和标签完整的共同样本上计算，可能与全池 PoolExcessReturn 不同；"
             "TopK 先选后过滤，缺失不补选。Pool/TopCoverage 在暴露表指风险覆盖率，"
             "在归因表指风险及标签共同覆盖率。\n"
             "行业贡献依赖所选风险模型，Residual 不是纯 alpha；本报告不归因实际持仓收益，"

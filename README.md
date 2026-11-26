@@ -175,17 +175,17 @@ python3 tools/eval.py \
 | 指标 | 含义 |
 |:-----|:-----|
 | `RankIC` / `RankICIR` | 每日 Spearman 相关系数的均值，以及均值除以标准差；RankICIR 未年化 |
-| `HitRate` / `WorstHit` | 预测 TopK 中，标签可观测股票命中真实最好 / 最差 K 只股票的比例 |
+| `TopHitRate` / `WorstHitRate` | 预测 TopK 中，标签可观测股票命中真实最好 / 最差 K 只股票的比例 |
 | `WinRate` | 预测 TopK 中，标签收益高于同期指数基准收益的比例；仅统计股票与基准收益均可观测的样本 |
 | `TopReturn` | 预测 TopK 的平均标签收益 |
-| `ExcessReturn` | TopK 标签收益相对同期指数基准的超额收益 |
-| `PoolExcess` | TopK 标签收益相对当日有效预测池等权收益的超额收益 |
+| `IndexExcessReturn` | TopK 标签收益相对同期指数基准的超额收益 |
+| `PoolExcessReturn` | TopK 标签收益相对当日有效预测池等权收益的超额收益 |
 | `LabelCoverage` | 已选 TopK 中标签可观测的比例 |
 | `Q1` ～ `Q10` | 从最低预测分到最高预测分的十分组收益；同分股票保持同组 |
 | `Q10-Q1` | 每日最高分组与最低分组收益差的均值 |
 | 月度 `RankIC` | 按月汇总每日 RankIC，`Days` 为有效日期数 |
 
-TopK 先按预测分数选定，再统计可观测标签，缺失不补选。真实尾部排名使用标签可观测的候选股票；候选不足 `2K` 或标签全相同时，`HitRate` 和 `WorstHit` 无法计算。十分组表中的 `Days` 为对应组收益有效的日期数。
+TopK 先按预测分数选定，再统计可观测标签，缺失不补选。真实尾部排名使用标签可观测的候选股票；候选不足 `2K` 或标签全相同时，`TopHitRate` 和 `WorstHitRate` 无法计算。十分组表中的 `Days` 为对应组收益有效的日期数。
 
 ### 策略回测指标
 
@@ -216,6 +216,6 @@ TopK 先按预测分数选定，再统计可观测标签，缺失不补选。真
 - 同风险组内不强行拆分相同风险值或相同分数的样本；分位边界重复时合并，分组不足 30 只时不计算表现。
 - 归因至少需要 100 只且不少于 `2K` 只完整样本，回归须满秩且有剩余自由度，否则报告跳过原因。
 
-**结果解读：** TopK 在过滤风险和标签前选定，缺失不补选。归因基于风险及标签完整的共同样本，其 `PoolExcess` 可能不同于全池指标。因子贡献是事后统计解释，残差不等于纯 alpha；该报告不解释实际轮换持仓的回测收益，也不对重叠标签计算独立样本显著性。
+**结果解读：** TopK 在过滤风险和标签前选定，缺失不补选。归因基于风险及标签完整的共同样本，其 `PoolExcessReturn` 可能不同于全池指标。因子贡献是事后统计解释，残差不等于纯 alpha；该报告不解释实际轮换持仓的回测收益，也不对重叠标签计算独立样本显著性。
 
 **程序调用：** `Evaluator.evaluate()` 后，`evaluator.risk_results` 保存 `exposures`、`groups`、`attribution` 三张每日数值表。调用 `evaluator.risk_evaluator.summarize(evaluator.risk_results, period="M")` 或 `period="Y"` 可查看月度、年度结果。风险汇总中的 `Days` 为尝试评估的日期数，各指标的 `*Days` 为实际有效日期数。也可直接使用 `RiskEvaluator.prepare_features()` 和 `evaluate()` 分析已有预测。

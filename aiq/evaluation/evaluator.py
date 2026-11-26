@@ -221,12 +221,12 @@ class Evaluator:
         observed = top_pred.loc[np.isfinite(top_pred[self.label_col])]
         reference = group.loc[np.isfinite(group[self.label_col])]
         stats = {
-            f"HitRate@Top{k}": np.nan,
-            f"WorstHit@Top{k}": np.nan,
+            f"TopHitRate@Top{k}": np.nan,
+            f"WorstHitRate@Top{k}": np.nan,
             f"WinRate@Top{k}": np.nan,
             f"TopReturn@Top{k}": np.nan,
-            f"ExcessReturn@Top{k}": np.nan,
-            f"PoolExcess@Top{k}": np.nan,
+            f"IndexExcessReturn@Top{k}": np.nan,
+            f"PoolExcessReturn@Top{k}": np.nan,
             f"LabelCoverage@Top{k}": (
                 len(observed) / len(top_pred) if len(top_pred) > 0 else np.nan
             ),
@@ -237,10 +237,10 @@ class Evaluator:
         top_return = observed[self.label_col].mean()
         stats[f"TopReturn@Top{k}"] = top_return
         # The pool baseline includes only the day's stocks with finite signals.
-        stats[f"PoolExcess@Top{k}"] = top_return - reference[self.label_col].mean()
+        stats[f"PoolExcessReturn@Top{k}"] = top_return - reference[self.label_col].mean()
 
         benchmark_observed = observed.loc[np.isfinite(observed["BENCH_RET_5D"])]
-        stats[f"ExcessReturn@Top{k}"] = (
+        stats[f"IndexExcessReturn@Top{k}"] = (
             benchmark_observed[self.label_col] - benchmark_observed["BENCH_RET_5D"]
         ).mean()
         stats[f"WinRate@Top{k}"] = (
@@ -253,8 +253,8 @@ class Evaluator:
             ranked = reference.sort_values(self.label_col, kind="stable")
             top_true = set(ranked.tail(k)[self.instrument_col])
             bottom_true = set(ranked.head(k)[self.instrument_col])
-            stats[f"HitRate@Top{k}"] = len(selected & top_true) / len(observed)
-            stats[f"WorstHit@Top{k}"] = len(selected & bottom_true) / len(observed)
+            stats[f"TopHitRate@Top{k}"] = len(selected & top_true) / len(observed)
+            stats[f"WorstHitRate@Top{k}"] = len(selected & bottom_true) / len(observed)
         return stats
 
     def _compute_quantile_returns(self, group: pd.DataFrame) -> dict:
@@ -353,7 +353,7 @@ class Evaluator:
         self.logger.info(
             "标签收益诊断：按日等权平均，未扣费、未年化；"
             "TopK 仅统计已选股票中标签可观测的部分，详见 LabelCoverage；"
-            "HitRate/WorstHit 要求至少 2K 个标签可观测的候选股票。"
+            "TopHitRate/WorstHitRate 要求至少 2K 个标签可观测的候选股票。"
         )
 
         # 3. Portfolio Stats
@@ -398,7 +398,7 @@ class Evaluator:
             f"策略回测（含交易费用）\n{portfolio_table}\n\n"
             f"十分组收益（Q1 最低分，Q10 最高分；未扣费、未年化）\n{quantile_table}\n\n"
             f"月度 RankIC\n{monthly_table}\n\n"
-            "说明：ExcessReturn 相对指数基准，PoolExcess 相对有有效预测的股票池；\n"
+            "说明：IndexExcessReturn 相对指数基准，PoolExcessReturn 相对有有效预测的股票池；\n"
             "LabelCoverage 为已选股票的标签覆盖率，选股统计仅使用其中可观测的标签；\n"
             "Days 为对应指标有效的日期数，-- 表示无法计算。"
         )
