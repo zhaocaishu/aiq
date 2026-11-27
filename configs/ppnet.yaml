@@ -63,7 +63,7 @@ dataset:
       valid: ["2022-01-01", "2022-12-21"]
       test: ["2023-01-01", "2023-12-31"]
     seq_len: 20
-    label_names: ["RET_5D", "RET_1D"]  # Primary target first.
+    label_names: ["RET_5D"]
     use_augmentation: false
 model:
   class: PPNetModel
@@ -79,8 +79,7 @@ model:
     s_nhead: 2
     dropout: 0.5
     beta: 3.0
-    num_labels: 2
-    label_weights: [1.0, 0.2]
+    num_labels: 1
     epochs: 100
     batch_size: 1
     warmup_steps: 500

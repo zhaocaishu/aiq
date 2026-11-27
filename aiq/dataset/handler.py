@@ -83,7 +83,7 @@ class DataHandler:
 
 
 class Alpha158(DataHandler):
-    LABEL_EXIT_OFFSETS = {"RET_5D": 5, "RET_1D": 2}
+    LABEL_EXIT_OFFSETS = {"RET_5D": 5}
 
     def __init__(
         self,
@@ -1205,7 +1205,6 @@ class Alpha158(DataHandler):
     def process_data(self, raw_data: dict, mode: str = "train") -> pd.DataFrame:
         """Fit/apply this handler's processors to a private view of raw data."""
         self.feature_names = list(raw_data["feature_names"])
-        self.label_names = list(raw_data["label_names"])
 
         # A full-period cache may contain trailing suspension rows whose next
         # actual quotation falls after this monthly handler's end date.

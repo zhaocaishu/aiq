@@ -8,16 +8,16 @@ class ICLoss(nn.Module):
     """
     Information Coefficient Loss for Stock Selection.
 
-    This loss encourages positive cross-sectional Pearson correlation between
-    predicted scores and ground-truth returns by minimizing one minus IC.
-    Targets are winsorized at the 1st and 99th cross-sectional percentiles.
+    By default, compute Pearson IC against return percentiles, averaging ties.
+    With rank_targets=False, use returns winsorized at the 1st and 99th percentiles.
     """
 
-    def __init__(self, epsilon: float = 1e-8):
+    def __init__(self, epsilon: float = 1e-8, rank_targets: bool = True):
         super().__init__()
         if not math.isfinite(epsilon) or epsilon <= 0:
             raise ValueError("epsilon must be finite and greater than zero")
         self.epsilon = epsilon
+        self.rank_targets = rank_targets
 
     def forward(self, preds: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         """
@@ -53,8 +53,15 @@ class ICLoss(nn.Module):
         if N <= 1:
             return preds.sum() * 0.0
 
-        limits = torch.quantile(targets, targets.new_tensor([0.01, 0.99]))
-        targets = targets.clamp(min=limits[0], max=limits[1])
+        if self.rank_targets:
+            sorted_targets = targets.sort().values
+            first = torch.searchsorted(sorted_targets, targets)
+            last = torch.searchsorted(sorted_targets, targets, right=True) - 1
+            targets = (first + last).to(dtype) / (2 * (N - 1))
+        else:
+            limits = torch.quantile(targets, targets.new_tensor([0.01, 0.99]))
+            targets = targets.clamp(min=limits[0], max=limits[1])
+
         centered_preds = preds - preds.mean()
         centered_targets = targets - targets.mean()
         pred_var = centered_preds.square().mean()
