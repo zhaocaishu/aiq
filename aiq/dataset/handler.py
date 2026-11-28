@@ -998,17 +998,24 @@ class Alpha158(DataHandler):
         df.columns = pd.MultiIndex.from_tuples(column_tuples)
 
         reference_mask = None
+        fit_instruments = None
         if self.instruments_d is not None and "Instrument" in df.index.names:
             reference_mask = pd.Series(
                 df.index.swaplevel().isin(self.instruments_d), index=df.index
             )
+            if mode == "train" and processors:
+                # Keep the history of all stocks known by the fit cutoff.
+                fit_instruments = {
+                    code for code, date in self.instruments_d if date <= self.fit_end_time
+                }
 
         for proc in processors:
             if mode == "train":
                 dates = df.index.get_level_values("Date")
-                fit_df = df.loc[
-                    (dates >= self.fit_start_time) & (dates <= self.fit_end_time)
-                ]
+                fit_mask = (dates >= self.fit_start_time) & (dates <= self.fit_end_time)
+                if fit_instruments is not None:
+                    fit_mask &= df.index.isin(fit_instruments, level="Instrument")
+                fit_df = df.loc[fit_mask]
                 proc.fit(fit_df)
 
             # Skip label processing for test mode
