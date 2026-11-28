@@ -4,8 +4,8 @@ data_handler:
   module_path: aiq.dataset.handler
   kwargs:
     instruments: *market
-    start_time: "2016-07-01"
-    end_time: "2024-06-30"
+    start_time: "2015-07-01"
+    end_time: "2025-01-08"
     market_names: ["000300.SH", "000905.SH", "000852.SH"]
     label_price: "vwap"
     use_hf_features: true
@@ -57,7 +57,7 @@ dataset:
   kwargs:
     universe: *market
     segments:
-      test: ["2023-01-01", "2023-12-31"]
+      test: ["2022-01-01", "2024-12-31"]
     seq_len: 20
     label_names: ["RET_5D"]
     use_augmentation: false
@@ -90,8 +90,8 @@ evaluator:
   class: Evaluator
   module_path: aiq.evaluation.evaluator
   kwargs:
-    start_time: "2023-01-01"
-    end_time: "2023-12-31"
+    start_time: "2022-01-01"
+    end_time: "2024-12-31"
     benchmark: "000906.SH"
     pred_col: "PRED_RET_5D"
     label_col: "RET_5D"

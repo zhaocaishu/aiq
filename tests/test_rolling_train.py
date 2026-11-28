@@ -87,6 +87,8 @@ def test_partial_prediction_month_respects_requested_dates(config, calendar, mon
 def test_run_rolling_combines_year_for_separate_evaluation(
     config, calendar, tmp_path, monkeypatch
 ):
+    config["dataset"]["kwargs"]["segments"]["test"] = ["2023-01-01", "2023-12-31"]
+    config["data_handler"]["kwargs"]["start_time"] = "2016-07-01"
     original_config = copy.deepcopy(config)
     training_config = copy.deepcopy(config)
     training_config.pop("evaluator")
